@@ -1,4 +1,4 @@
-const CACHE_VERSION = "lift-v3";
+const CACHE_VERSION = "lift-v4";
 const PRECACHE = `${CACHE_VERSION}-precache`;
 const RUNTIME = `${CACHE_VERSION}-runtime`;
 
@@ -17,6 +17,7 @@ const APP_SHELL = [
   "./features/journal.js",
   "./features/cloud.js",
   "./features/library.js",
+  "./features/notifications.js",
   "./manifest.webmanifest",
   "./icons/icon.svg",
   "./icons/icon-192.png",
@@ -57,9 +58,28 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
+  const message = event.data || {};
+  if (message.type === "SKIP_WAITING") {
     self.skipWaiting();
+    return;
   }
+  if (message.type === "LIFT_NOTIF_SHOW") {
+    event.waitUntil(showLiftNotification(message.payload, { silent: false }));
+    return;
+  }
+  if (message.type === "LIFT_NOTIF_UPDATE") {
+    event.waitUntil(showLiftNotification(message.payload, { silent: true }));
+    return;
+  }
+  if (message.type === "LIFT_NOTIF_CLEAR") {
+    event.waitUntil(clearLiftNotification());
+  }
+});
+
+self.addEventListener("notificationclick", (event) => {
+  const action = event.action || "open";
+  event.notification.close();
+  event.waitUntil(handleLiftNotificationClick(action));
 });
 
 self.addEventListener("fetch", (event) => {
@@ -147,4 +167,35 @@ async function cacheFirstStatic(request) {
 
 function isStaticRequest(request, url) {
   return STATIC_DESTINATIONS.has(request.destination) || STATIC_PATH_RE.test(url.pathname);
+}
+
+async function showLiftNotification(payload, options = {}) {
+  if (!payload || !payload.title) return;
+  const actions = Array.isArray(payload.actions) ? payload.actions : [];
+  await self.registration.showNotification(payload.title, {
+    tag: payload.tag || "lift-workout",
+    body: payload.body || "",
+    icon: "./icons/icon-192.png",
+    badge: "./icons/icon-192.png",
+    requireInteraction: true,
+    renotify: false,
+    silent: !!options.silent,
+    data: payload.data || { ts: Date.now() },
+    actions
+  });
+}
+
+async function clearLiftNotification() {
+  const notifications = await self.registration.getNotifications({ tag: "lift-workout" });
+  notifications.forEach((notification) => notification.close());
+}
+
+async function handleLiftNotificationClick(action) {
+  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  const client = clients.find((candidate) => candidate.url.startsWith(self.registration.scope));
+  if (client) {
+    client.postMessage({ type: "LIFT_NOTIF_ACTION", action });
+    return client.focus();
+  }
+  return self.clients.openWindow(`./?notifAction=${encodeURIComponent(action)}`);
 }

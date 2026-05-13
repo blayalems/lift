@@ -23,6 +23,8 @@
     theme: "system",
     haptics: true,
     sound: true,
+    workoutNotifications: true,
+    notifSkipped: false,
     barWeight: 20,
     plates: [25, 20, 15, 10, 5, 2.5, 1.25]
   };
@@ -59,7 +61,9 @@
     importBusy: false,
     summaryDayId: null,
     cycleReview: false,
-    recordsSort: "recency"
+    recordsSort: "recency",
+    lastNotifSig: "",
+    lastNotifSnapshot: null
   };
 
   var state = loadState();
@@ -290,7 +294,7 @@
   }
 
   function idleRest() {
-    return { duration: DEFAULT_SETTINGS.defaultRest, endsAt: 0, pausedRemaining: DEFAULT_SETTINGS.defaultRest, running: false, label: "Rest" };
+    return { duration: DEFAULT_SETTINGS.defaultRest, endsAt: 0, pausedRemaining: DEFAULT_SETTINGS.defaultRest, running: false, label: "Rest", completedAt: 0 };
   }
 
   function allDays() {
@@ -328,6 +332,7 @@
       totalSetCount: totalSetCount,
       totalSetCountForSource: totalSetCountForSource,
       completedSetCount: completedSetCount,
+      exerciseSets: exerciseSets,
       completedVolume: completedVolume,
       workoutElapsed: workoutElapsed,
       formatWeight: formatWeight,
@@ -935,6 +940,8 @@
       fieldNumber("barWeight", "Bar weight (" + unitLabel() + ")", kgToDisplay(s.barWeight), 0, 100, 0.5) +
       fieldSelect("haptics", "Haptics", s.haptics ? "true" : "false", [["true", "On"], ["false", "Off"]]) +
       fieldSelect("sound", "Sound", s.sound ? "true" : "false", [["true", "On"], ["false", "Off"]]) +
+      fieldSelect("workoutNotifications", "Workout notifications", s.workoutNotifications ? "true" : "false", [["true", "On"], ["false", "Off"]]) +
+      notificationSettingsCard() +
       '<div class="sheet-actions">' +
       '<button class="action-btn" data-action="export-data">' + icon("download") + "Export data</button>" +
       '<button class="action-btn secondary" data-action="import-data">' + icon("upload") + "Import data</button>" +
@@ -942,6 +949,16 @@
       "</div>" +
       '<p class="section-sub">Data stays in this browser. Export regularly, especially on iOS where storage can be evicted.</p>' +
       "</div>";
+  }
+
+  function notificationSettingsCard() {
+    var status = "Unavailable in this browser.";
+    if ("Notification" in window) {
+      if (Notification.permission === "granted") status = "Allowed. Lift will keep one live workout notification active while you train.";
+      else if (Notification.permission === "denied") status = "Blocked. Re-enable notifications from Chrome site settings for this app.";
+      else status = state.settings.notifSkipped ? "Off. Turn this on to ask again next time." : "Ask on the next workout start.";
+    }
+    return '<div class="overview-card"><strong>Android live status</strong><p>' + escapeHtml(status) + "</p></div>";
   }
 
   function goalsSheet() {
@@ -1116,9 +1133,14 @@
     }
     ds.startedAt = Date.now();
     ds.finishedAt = null;
+    if (!rest.running) {
+      rest.completedAt = 0;
+      saveRest();
+    }
     saveState();
     haptic([12, 60, 12]);
     requestWakeLock();
+    showWorkoutNotification();
     if (showToast !== false) toast("Workout started.");
   }
 
@@ -1132,6 +1154,7 @@
     }
     saveState();
     releaseWakeLock();
+    clearWorkoutNotification();
     haptic([40, 80, 40]);
     toast("Workout finished.");
     if (completedSetCount(getDay(state.activeDayId), state) > 0) {
@@ -1168,6 +1191,142 @@
       weight: entry.weight != null ? numberOr(entry.weight, plan.weight) : plan.weight,
       reps: entry.reps != null ? numberOr(entry.reps, plan.reps) : plan.reps
     };
+  }
+
+  function findNextPendingSet(day) {
+    if (!day) return null;
+    var ds = dayState(day.id);
+    var exercises = day.exercises || [];
+    for (var exIndex = 0; exIndex < exercises.length; exIndex += 1) {
+      var sets = exerciseSets(day, exIndex);
+      for (var setIndex = 0; setIndex < sets.length; setIndex += 1) {
+        var key = exIndex + "." + setIndex;
+        if (!ds.completed[key]) {
+          var value = getCurrentSetValue(day, exIndex, setIndex);
+          return {
+            ex: exercises[exIndex],
+            exIndex: exIndex,
+            setIndex: setIndex,
+            totalSets: sets.length,
+            value: value
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  function buildNotifSnapshot() {
+    var day = getDay(state.activeDayId);
+    if (!day || !isWorkoutRunning(day.id)) {
+      return { phase: "idle", dayId: state.activeDayId, signature: "idle:" + (state.activeDayId || "") };
+    }
+
+    var next = findNextPendingSet(day);
+    var phase = "set-up-next";
+    var remaining = restRemaining();
+    if (rest.running && remaining > 0) phase = "resting";
+    else if (numberOr(rest.completedAt, 0) > 0 && next) phase = "rest-done";
+
+    var value = next ? next.value : { weight: 0, reps: 0 };
+    var repsText = value.reps > 0 ? String(value.reps) : "failure";
+    var setText = next
+      ? next.ex.name + " - " + formatWeight(value.weight) + " " + unitLabel() + " x " + repsText
+      : "Workout complete";
+    var signature = [
+      phase,
+      day.id,
+      next ? next.exIndex : "done",
+      next ? next.setIndex : "done",
+      phase === "resting" ? remaining : numberOr(rest.completedAt, 0)
+    ].join(":");
+
+    return {
+      phase: phase,
+      dayId: day.id,
+      dayTitle: day.title || "Workout",
+      exName: next ? next.ex.name : "",
+      weight: value.weight,
+      weightText: formatWeight(value.weight),
+      reps: value.reps,
+      repsText: repsText,
+      setIndex: next ? next.setIndex + 1 : 0,
+      totalSets: next ? next.totalSets : 0,
+      pendingExIndex: next ? next.exIndex : null,
+      pendingSetIndex: next ? next.setIndex : null,
+      restRemainingSec: remaining,
+      restLabel: formatDuration(remaining),
+      unitLabel: unitLabel(),
+      setText: setText,
+      signature: signature
+    };
+  }
+
+  function showWorkoutNotification() {
+    var mod = feature("notifications");
+    if (!mod || typeof mod.ensurePermission !== "function" || typeof mod.show !== "function") return;
+    if (state.settings.workoutNotifications === false) return;
+    var ctx = makeCtx();
+    mod.ensurePermission(ctx).then(function (permission) {
+      if (permission !== "granted") return;
+      var snap = buildNotifSnapshot();
+      runtime.lastNotifSig = snap.signature;
+      runtime.lastNotifSnapshot = snap;
+      mod.show(snap);
+    });
+  }
+
+  function updateWorkoutNotification(force) {
+    var mod = feature("notifications");
+    if (!mod || typeof mod.update !== "function") return;
+    if (state.settings.workoutNotifications === false) return;
+    var snap = buildNotifSnapshot();
+    runtime.lastNotifSnapshot = snap;
+    if (snap.phase === "idle") {
+      clearWorkoutNotification();
+      return;
+    }
+    if (!force && snap.signature === runtime.lastNotifSig) return;
+    runtime.lastNotifSig = snap.signature;
+    mod.update(snap);
+  }
+
+  function clearWorkoutNotification() {
+    var mod = feature("notifications");
+    runtime.lastNotifSig = "";
+    runtime.lastNotifSnapshot = null;
+    if (mod && typeof mod.clear === "function") mod.clear();
+  }
+
+  function handleNotifAction(action) {
+    action = action || "open";
+    if (action === "open") return;
+    if (action === "finish") {
+      finishWorkout();
+      return;
+    }
+    if (action === "minus-15") {
+      adjustRest(-15);
+      updateWorkoutNotification(true);
+      return;
+    }
+    if (action === "plus-15") {
+      adjustRest(15);
+      updateWorkoutNotification(true);
+      return;
+    }
+    if (action === "skip") {
+      markRestComplete({ notify: false });
+      toast("Rest skipped.");
+      updateWorkoutNotification(true);
+      return;
+    }
+    if (action === "logged") {
+      var snap = buildNotifSnapshot();
+      if (snap.pendingExIndex != null && snap.pendingSetIndex != null) {
+        toggleSet(snap.pendingExIndex, snap.pendingSetIndex);
+      }
+    }
   }
 
   function updateSetValue(exIndex, setIndex, field, rawValue, isDisplayValue) {
@@ -1208,6 +1367,7 @@
       haptic(5);
       saveState();
       render();
+      updateWorkoutNotification(true);
       return;
     }
     var value = getCurrentSetValue(day, exIndex, setIndex);
@@ -1223,6 +1383,7 @@
     startRest(numberOr(ex.defaultRest, state.settings.defaultRest), ex.name);
     saveState();
     render();
+    updateWorkoutNotification(true);
     requestAnimationFrame(function() {
       var checkBtn = document.querySelector('[data-action="toggle-set"][data-ex="' + exIndex + '"][data-set="' + setIndex + '"]');
       if (checkBtn) {
@@ -1258,6 +1419,7 @@
     startRest(numberOr(ex.defaultRest, state.settings.defaultRest), ex.name);
     saveState();
     render();
+    updateWorkoutNotification(true);
   }
 
   function addSet(exIndex) {
@@ -1266,6 +1428,7 @@
     ds.extraSets[key] = numberOr(ds.extraSets[key], 0) + 1;
     saveState();
     render();
+    updateWorkoutNotification(true);
   }
 
   function removeSet(exIndex) {
@@ -1281,6 +1444,7 @@
     if (ds.extraSets[key] <= 0) delete ds.extraSets[key];
     saveState();
     render();
+    updateWorkoutNotification(true);
   }
 
   function baselineForExercise(name) {
@@ -1316,9 +1480,8 @@
 
   function startRest(seconds, label) {
     var duration = Math.max(1, numberOr(seconds, state.settings.defaultRest));
-    rest = { duration: duration, endsAt: Date.now() + duration * 1000, pausedRemaining: duration, running: true, label: label || "Rest" };
+    rest = { duration: duration, endsAt: Date.now() + duration * 1000, pausedRemaining: duration, running: true, label: label || "Rest", completedAt: 0 };
     saveRest();
-    maybeRequestNotificationPermission();
   }
 
   function restRemaining() {
@@ -1333,6 +1496,7 @@
     else rest.pausedRemaining = remaining;
     saveRest();
     render();
+    updateWorkoutNotification(true);
   }
 
   function toggleRest() {
@@ -1347,42 +1511,41 @@
       rest.pausedRemaining = start;
       rest.endsAt = Date.now() + start * 1000;
       rest.running = true;
+      rest.completedAt = 0;
     }
     saveRest();
     render();
+    updateWorkoutNotification(true);
   }
 
   function presetRest(seconds) {
-    rest = { duration: seconds, pausedRemaining: seconds, endsAt: 0, running: false, label: "Rest" };
+    rest = { duration: seconds, pausedRemaining: seconds, endsAt: 0, running: false, label: "Rest", completedAt: seconds <= 0 ? Date.now() : 0 };
     saveRest();
     render();
+    updateWorkoutNotification(true);
   }
 
   function completeRestIfNeeded() {
     if (!rest.running || restRemaining() > 0) return;
+    markRestComplete({ notify: true });
+  }
+
+  function markRestComplete(options) {
+    options = options || {};
     rest.running = false;
     rest.pausedRemaining = 0;
     rest.endsAt = 0;
+    rest.completedAt = Date.now();
     saveRest();
-    notifyRestDone();
+    if (options.notify !== false) notifyRestDone();
     render();
+    updateWorkoutNotification(true);
   }
 
   function notifyRestDone() {
     if (state.settings.haptics && navigator.vibrate) navigator.vibrate([160, 80, 160]);
     if (state.settings.sound) beep();
-    if ("Notification" in window && Notification.permission === "granted") {
-      try { new Notification("Rest complete", { body: "Next set is ready.", icon: "./icons/icon-192.png" }); } catch (err) {}
-    }
     toast("Rest complete.");
-  }
-
-  function maybeRequestNotificationPermission() {
-    if (!("Notification" in window)) return;
-    if (location.protocol !== "https:" && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") return;
-    if (Notification.permission === "default") {
-      try { Notification.requestPermission(); } catch (err) {}
-    }
   }
 
   function beep() {
@@ -1438,6 +1601,7 @@
     }
     var fab = document.querySelector(".rest-fab");
     if (fab) fab.dataset.active = String(rest.running || remaining < numberOr(rest.duration, state.settings.defaultRest));
+    updateWorkoutNotification(false);
   }
 
   function buildLog(scope) {
@@ -2000,6 +2164,28 @@
       else if (key === "weightStep") state.settings.weightStep = Math.max(0.5, numberOr(value, 2.5));
       else if (key === "barWeight") state.settings.barWeight = displayToKg(value);
       else if (key === "haptics" || key === "sound") state.settings[key] = value === "true";
+      else if (key === "workoutNotifications") {
+        state.settings.workoutNotifications = value === "true";
+        state.settings.notifSkipped = value !== "true";
+        saveState();
+        if (value === "true") {
+          if ("Notification" in window && Notification.permission === "denied") {
+            toast("Notifications are blocked. Re-enable them in Chrome site settings.");
+          } else {
+            var notifications = feature("notifications");
+            if (notifications && typeof notifications.ensurePermission === "function") {
+              notifications.ensurePermission(makeCtx()).then(function (permission) {
+                if (permission === "granted" && isWorkoutRunning(state.activeDayId)) updateWorkoutNotification(true);
+                renderSheet();
+              });
+            }
+          }
+        } else {
+          clearWorkoutNotification();
+        }
+        render();
+        return;
+      }
       else if (key === "goal-weeklySessions") state.goals.weeklySessions = clamp(numberOr(value, DEFAULT_GOALS.weeklySessions), 1, 14);
       else if (key === "goal-weeklyVolumeKg") state.goals.weeklyVolumeKg = displayToKg(value);
       else if (key === "goal-dailySteps") state.goals.dailySteps = clamp(numberOr(value, DEFAULT_GOALS.dailySteps), 100, 100000);
@@ -2030,11 +2216,37 @@
     });
   }
 
+  function bindNotificationActionMessages() {
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.addEventListener("message", function (event) {
+      if (event.data && event.data.type === "LIFT_NOTIF_ACTION") {
+        handleNotifAction(event.data.action);
+      }
+    });
+  }
+
+  function handleColdNotificationAction() {
+    try {
+      var params = new URLSearchParams(location.search);
+      var action = params.get("notifAction");
+      if (!action) return;
+      params.delete("notifAction");
+      var nextSearch = params.toString();
+      var nextUrl = location.pathname + (nextSearch ? "?" + nextSearch : "") + location.hash;
+      history.replaceState(null, "", nextUrl);
+      setTimeout(function () {
+        handleNotifAction(action);
+      }, 0);
+    } catch (err) {}
+  }
+
   function init() {
     applyTheme(state.settings.theme);
     saveState();
     render();
     registerServiceWorker();
+    bindNotificationActionMessages();
+    handleColdNotificationAction();
     setInterval(function () {
       completeRestIfNeeded();
       refreshTimers();

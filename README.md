@@ -62,6 +62,12 @@ Use the app's backup/export workflow before clearing browser data or switching d
 
 The step counter uses browser motion APIs when available. It only counts while the PWA is open and the phone is moving; background step counting is unreliable for web apps. Manual step entry is the reliable fallback and still feeds the Move ring.
 
+## Android Workout Notifications
+
+On Android Chrome, the installed PWA can keep one live workout notification while a workout is running. Start a workout, allow the in-app rationale, then accept the browser permission prompt. The notification updates through the service worker with the current exercise, next set, rest countdown, and quick actions such as `-15s`, `+15s`, skip rest, log the next set, or finish the workout.
+
+If permission is denied, the app still works silently. Re-enable it from Chrome site settings for the installed app, then turn `Workout notifications` back on in Settings. The notification is local only: if Android fully closes the PWA and suspends the service worker, the visible notification may freeze at its last text. The rest timer itself is timestamp-based, so reopening Lift syncs the workout state back to the correct time.
+
 ## Offline Caveat
 
 The app is offline-first after a successful online load has installed the service worker and cached the app shell. The first visit still needs the network, and changed files may require a refresh after the new service worker activates.
