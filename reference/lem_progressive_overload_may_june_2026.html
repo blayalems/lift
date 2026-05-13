@@ -1,0 +1,681 @@
+
+<h2 class="sr-only">Progressive overload training plan for Lem, May 13 to June 14, 2026, organized by week and training day.</h2>
+
+<style>
+:root {
+  --coral: #D85A30;
+  --coral-light: #FAECE7;
+  --coral-text: #993C1D;
+  --teal: #1D9E75;
+  --teal-light: #E1F5EE;
+  --teal-text: #0F6E56;
+  --purple: #7F77DD;
+  --purple-light: #EEEDFE;
+  --purple-text: #3C3489;
+  --amber: #BA7517;
+  --amber-light: #FAEEDA;
+  --amber-text: #854F0B;
+  --gray-light: #F1EFE8;
+  --gray-text: #5F5E5A;
+  --green-light: #EAF3DE;
+  --green-text: #3B6D11;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans); }
+.plan-wrap { padding: 1rem 0; }
+.week-tabs { display: flex; gap: 6px; margin-bottom: 1.25rem; flex-wrap: wrap; }
+.week-tab {
+  padding: 6px 14px;
+  border-radius: var(--border-radius-md);
+  border: 0.5px solid var(--color-border-secondary);
+  background: var(--color-background-primary);
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: all 0.15s;
+}
+.week-tab.active {
+  background: var(--color-background-secondary);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-primary);
+  font-weight: 500;
+}
+.week-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  gap: 8px;
+}
+.week-title { font-size: 16px; font-weight: 500; color: var(--color-text-primary); }
+.week-sub { font-size: 12px; color: var(--color-text-secondary); margin-top: 3px; }
+.phase-badge {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: var(--border-radius-md);
+  white-space: nowrap;
+  font-weight: 500;
+}
+.phase-consolidate { background: var(--amber-light); color: var(--amber-text); }
+.phase-load { background: var(--teal-light); color: var(--teal-text); }
+.phase-deload { background: var(--gray-light); color: var(--gray-text); }
+.phase-test { background: var(--purple-light); color: var(--purple-text); }
+.day-grid { display: flex; flex-direction: column; gap: 8px; }
+.day-card {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+}
+.day-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+}
+.day-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot-legs { background: var(--coral); }
+.dot-pull { background: var(--teal); }
+.dot-rest { background: #D3D1C7; }
+.dot-ham { background: var(--amber); }
+.dot-primer { background: var(--purple); }
+.dot-chest { background: #378ADD; }
+.day-label { font-size: 13px; font-weight: 500; color: var(--color-text-primary); flex: 1; }
+.day-date { font-size: 11px; color: var(--color-text-secondary); }
+.day-chevron { font-size: 14px; color: var(--color-text-secondary); transition: transform 0.2s; }
+.day-chevron.open { transform: rotate(180deg); }
+.day-body { padding: 0 14px 12px; display: none; }
+.day-body.open { display: block; }
+.exercise-list { font-size: 13px; color: var(--color-text-secondary); line-height: 1.9; }
+.ex-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; border-bottom: 0.5px solid var(--color-border-tertiary); padding: 4px 0; }
+.ex-row:last-child { border-bottom: none; }
+.ex-name { color: var(--color-text-primary); font-weight: 500; font-size: 12px; }
+.ex-load { font-size: 12px; color: var(--color-text-secondary); text-align: right; }
+.pr-tag { font-size: 10px; background: var(--green-light); color: var(--green-text); padding: 1px 6px; border-radius: 4px; margin-left: 4px; font-weight: 500; }
+.target-tag { font-size: 10px; background: var(--teal-light); color: var(--teal-text); padding: 1px 6px; border-radius: 4px; margin-left: 4px; font-weight: 500; }
+.note-block { margin-top: 10px; font-size: 12px; color: var(--color-text-secondary); background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 8px 10px; line-height: 1.6; }
+.week-panel { display: none; }
+.week-panel.active { display: block; }
+.baselines-bar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 8px;
+  margin-bottom: 1.25rem;
+}
+.baseline-card {
+  background: var(--color-background-secondary);
+  border-radius: var(--border-radius-md);
+  padding: 10px 12px;
+}
+.baseline-label { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 2px; }
+.baseline-val { font-size: 18px; font-weight: 500; color: var(--color-text-primary); }
+.baseline-unit { font-size: 11px; color: var(--color-text-secondary); margin-left: 2px; }
+.deload-notice {
+  background: var(--gray-light);
+  border-radius: var(--border-radius-lg);
+  padding: 1rem 1.25rem;
+  font-size: 13px;
+  color: var(--gray-text);
+  line-height: 1.7;
+  margin-bottom: 1rem;
+}
+</style>
+
+<div class="plan-wrap">
+  <div class="baselines-bar">
+    <div class="baseline-card">
+      <div class="baseline-label">Incline DB (entering)</div>
+      <div class="baseline-val">25<span class="baseline-unit">kg total</span></div>
+    </div>
+    <div class="baseline-card">
+      <div class="baseline-label">Leg Press (entering)</div>
+      <div class="baseline-val">60<span class="baseline-unit">kg</span></div>
+    </div>
+    <div class="baseline-card">
+      <div class="baseline-label">Machine Chest (entering)</div>
+      <div class="baseline-val">25<span class="baseline-unit">kg</span></div>
+    </div>
+    <div class="baseline-card">
+      <div class="baseline-label">Cable Row (entering)</div>
+      <div class="baseline-val">37.5<span class="baseline-unit">kg</span></div>
+    </div>
+  </div>
+
+  <div class="week-tabs">
+    <button class="week-tab active" onclick="showWeek(0)">Week 1<br><span style="font-size:10px;font-weight:400">May 13–17</span></button>
+    <button class="week-tab" onclick="showWeek(1)">Week 2<br><span style="font-size:10px;font-weight:400">May 18–24</span></button>
+    <button class="week-tab" onclick="showWeek(2)">Week 3<br><span style="font-size:10px;font-weight:400">May 25–31</span></button>
+    <button class="week-tab" onclick="showWeek(3)">Week 4<br><span style="font-size:10px;font-weight:400">Jun 1–7</span></button>
+    <button class="week-tab" onclick="showWeek(4)">Week 5<br><span style="font-size:10px;font-weight:400">Jun 8–14</span></button>
+  </div>
+
+  <div id="week-0" class="week-panel active">
+    <div class="week-header">
+      <div><div class="week-title">Week 1 — Consolidation</div><div class="week-sub">May 13–17 · Own the new baselines</div></div>
+      <span class="phase-badge phase-consolidate">Consolidate</span>
+    </div>
+    <div class="day-grid">
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-legs"></div>
+          <div class="day-label">Quad-Dominant Legs & Core</div>
+          <div class="day-date">Tue May 13</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Machine Leg Press</span><span class="ex-load">60 kg × 3 × 11</span></div>
+            <div class="ex-row"><span class="ex-name">Smith Machine Squats</span><span class="ex-load">30 kg × 3 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Seated Leg Curls</span><span class="ex-load">37.5 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Seated Calf Raises</span><span class="ex-load">27.5 kg × 4 × 20</span></div>
+            <div class="ex-row"><span class="ex-name">Abdominal Machine</span><span class="ex-load">40 kg × 3 × 12</span></div>
+          </div>
+          <div class="note-block">3-sec descent, 1-sec pause on leg press. Primary driver of the session.</div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-pull"></div>
+          <div class="day-label">Back & Biceps (Pull)</div>
+          <div class="day-date">Wed May 14</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Lat Pulldown</span><span class="ex-load">37.5 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Seated Cable Row</span><span class="ex-load">40 kg × 2, 37.5 kg × 1 <span class="target-tag">↑ jump</span></span></div>
+            <div class="ex-row"><span class="ex-name">High Cable Row / Face Pull</span><span class="ex-load">35 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">DB Bicep Curls</span><span class="ex-load">12 kg total × 3 × 10</span></div>
+          </div>
+          <div class="note-block">90-sec rest between cable row sets. If readiness &lt;7 from leg day, drop row to 37.5 kg all 3 sets.</div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-rest"></div>
+          <div class="day-label">Rest / Active Recovery</div>
+          <div class="day-date">Thu May 15</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="note-block">Full rest or light walk only. LISS dropped this week due to compressed schedule.</div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-ham"></div>
+          <div class="day-label">Hamstrings & Glutes</div>
+          <div class="day-date">Fri May 16</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">DB Romanian Deadlift</span><span class="ex-load">30 kg × 3 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">High/Wide Leg Press</span><span class="ex-load">57.5 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Lying Leg Curls</span><span class="ex-load">35 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Walking Lunges</span><span class="ex-load">12.5 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Abdominal Machine</span><span class="ex-load">40 kg × 3</span></div>
+          </div>
+          <div class="note-block">RDL: feel the load in hamstrings, not lower back. Hinge quality over weight.</div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-chest"></div>
+          <div class="day-label">Primer + Chest Consolidation</div>
+          <div class="day-date">Sat May 17</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Primer: Incline DB (warm-up)</span><span class="ex-load">15 kg × 1 × 10 (RPE 5)</span></div>
+            <div class="ex-row"><span class="ex-name">Incline DB Press</span><span class="ex-load">25 / 25 / 22.5 / 22.5 kg</span></div>
+            <div class="ex-row"><span class="ex-name">Machine Chest Press</span><span class="ex-load">25 kg × 3 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Machine Pec Fly</span><span class="ex-load">30 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Assisted Dips</span><span class="ex-load">55 kg assist × 3 × failure</span></div>
+          </div>
+          <div class="note-block">Stretch goal: 25/25/25/22.5. Gauntlet trigger for 15 kg/hand: 4 clean sets at 12.5 kg/hand, no shoulder irritation.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="week-1" class="week-panel">
+    <div class="week-header">
+      <div><div class="week-title">Week 2 — Load</div><div class="week-sub">May 18–24 · First true load jump week</div></div>
+      <span class="phase-badge phase-load">Load</span>
+    </div>
+    <div class="day-grid">
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-legs"></div>
+          <div class="day-label">Quad-Dominant Legs & Core</div>
+          <div class="day-date">Mon May 18</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Machine Leg Press</span><span class="ex-load">62.5 kg × 3 × 10 <span class="target-tag">↑ load</span></span></div>
+            <div class="ex-row"><span class="ex-name">Smith Machine Squats</span><span class="ex-load">32.5 kg × 3 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Seated Leg Curls</span><span class="ex-load">37.5 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Seated Calf Raises</span><span class="ex-load">30 kg × 4 × 20</span></div>
+            <div class="ex-row"><span class="ex-name">Abdominal Machine</span><span class="ex-load">42.5 kg × 3 × 12</span></div>
+          </div>
+          <div class="note-block">First load jump on leg press. If 62.5 unavailable use 60 kg × 3 × 12 as alternative progression.</div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-pull"></div>
+          <div class="day-label">Back & Biceps (Pull)</div>
+          <div class="day-date">Tue May 19</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Lat Pulldown</span><span class="ex-load">40 kg × 3 × 10 <span class="target-tag">↑ jump</span></span></div>
+            <div class="ex-row"><span class="ex-name">Seated Cable Row</span><span class="ex-load">40 kg × 3 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">High Cable Row / Face Pull</span><span class="ex-load">37.5 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">DB Bicep Curls</span><span class="ex-load">12 kg × 3 × 12</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-rest"></div>
+          <div class="day-label">LISS + Core</div>
+          <div class="day-date">Wed May 20</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="note-block">30–40 min incline walk. Light abdominal work. Recovery day restored this week.</div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-ham"></div>
+          <div class="day-label">Hamstrings & Glutes</div>
+          <div class="day-date">Thu May 21</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">DB Romanian Deadlift</span><span class="ex-load">32.5 kg × 3 × 10 <span class="target-tag">↑ load</span></span></div>
+            <div class="ex-row"><span class="ex-name">High/Wide Leg Press</span><span class="ex-load">60 kg × 3 × 12 <span class="target-tag">↑ load</span></span></div>
+            <div class="ex-row"><span class="ex-name">Lying Leg Curls</span><span class="ex-load">37.5 kg × 3 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Walking Lunges</span><span class="ex-load">12.5 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Abdominal Machine</span><span class="ex-load">42.5 kg × 3</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-primer"></div>
+          <div class="day-label">Push Primer</div>
+          <div class="day-date">Fri May 22</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Incline DB Press</span><span class="ex-load">17.5 kg × 2 × 10 (RPE 6)</span></div>
+            <div class="ex-row"><span class="ex-name">DB Shoulder Press</span><span class="ex-load">12 kg × 2 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Cable Lateral Raises</span><span class="ex-load">5 kg × 2 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Rear Delt Fly</span><span class="ex-load">15 kg × 2 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Tricep Pushdowns</span><span class="ex-load">22.5 kg × 2 × 12</span></div>
+          </div>
+          <div class="note-block">2 rounds restored. Cap at RPE 6–7. Stop if shoulder fatigue appears.</div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-chest"></div>
+          <div class="day-label">Chest — Load Week</div>
+          <div class="day-date">Sat May 23</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Incline DB Press</span><span class="ex-load">25 / 25 / 25 / 22.5 kg <span class="target-tag">↑ sets</span></span></div>
+            <div class="ex-row"><span class="ex-name">Machine Chest Press</span><span class="ex-load">27.5 kg × 3 × 8 <span class="target-tag">↑ load</span></span></div>
+            <div class="ex-row"><span class="ex-name">Machine Pec Fly</span><span class="ex-load">32.5 kg × 3 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Assisted Dips</span><span class="ex-load">50 kg assist × 3 × failure</span></div>
+          </div>
+          <div class="note-block">Incline DB target: 3 sets at full 25 kg (12.5 kg/hand). Machine Chest load jump to 27.5 kg.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="week-2" class="week-panel">
+    <div class="week-header">
+      <div><div class="week-title">Week 3 — Load +</div><div class="week-sub">May 25–31 · Second load accumulation week</div></div>
+      <span class="phase-badge phase-load">Load +</span>
+    </div>
+    <div class="day-grid">
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-legs"></div>
+          <div class="day-label">Quad-Dominant Legs & Core</div>
+          <div class="day-date">Mon May 25</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Machine Leg Press</span><span class="ex-load">65 kg × 3 × 10 <span class="target-tag">↑ load</span></span></div>
+            <div class="ex-row"><span class="ex-name">Smith Machine Squats</span><span class="ex-load">32.5 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Seated Leg Curls</span><span class="ex-load">40 kg × 3 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Seated Calf Raises</span><span class="ex-load">30 kg × 4 × 20</span></div>
+            <div class="ex-row"><span class="ex-name">Abdominal Machine</span><span class="ex-load">42.5 kg × 3 × 12</span></div>
+          </div>
+          <div class="note-block">Second load jump on leg press. Confirm 62.5 was clean before attempting 65.</div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-pull"></div>
+          <div class="day-label">Back & Biceps (Pull)</div>
+          <div class="day-date">Tue May 26</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Lat Pulldown</span><span class="ex-load">40 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Seated Cable Row</span><span class="ex-load">42.5 kg × 3 × 8 <span class="target-tag">↑ load</span></span></div>
+            <div class="ex-row"><span class="ex-name">High Cable Row / Face Pull</span><span class="ex-load">37.5 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">DB Bicep Curls</span><span class="ex-load">14 kg total × 3 × 10</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-rest"></div>
+          <div class="day-label">LISS + Core</div>
+          <div class="day-date">Wed May 27</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="note-block">30–40 min incline walk. Light core. This becomes critical as weekly volume accumulates.</div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-ham"></div>
+          <div class="day-label">Hamstrings & Glutes</div>
+          <div class="day-date">Thu May 28</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">DB Romanian Deadlift</span><span class="ex-load">35 kg × 3 × 8 <span class="target-tag">↑ load</span></span></div>
+            <div class="ex-row"><span class="ex-name">High/Wide Leg Press</span><span class="ex-load">62.5 kg × 3 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Lying Leg Curls</span><span class="ex-load">37.5 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Walking Lunges</span><span class="ex-load">15 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Abdominal Machine</span><span class="ex-load">42.5 kg × 3</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-primer"></div>
+          <div class="day-label">Push Primer</div>
+          <div class="day-date">Fri May 29</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Incline DB Press</span><span class="ex-load">20 kg × 2 × 10 (RPE 6)</span></div>
+            <div class="ex-row"><span class="ex-name">DB Shoulder Press</span><span class="ex-load">14 kg × 2 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Cable Lateral Raises</span><span class="ex-load">7.5 kg × 2 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Rear Delt Fly</span><span class="ex-load">17.5 kg × 2 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Tricep Pushdowns</span><span class="ex-load">25 kg × 2 × 12</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-chest"></div>
+          <div class="day-label">Chest — Gauntlet Attempt</div>
+          <div class="day-date">Sat May 30</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Incline DB Press</span><span class="ex-load">25 / 25 / 25 / 25 kg <span class="pr-tag">PR target</span></span></div>
+            <div class="ex-row"><span class="ex-name">Machine Chest Press</span><span class="ex-load">27.5 kg × 3 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Machine Pec Fly</span><span class="ex-load">32.5 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Assisted Dips</span><span class="ex-load">50 kg assist × 3 × failure</span></div>
+          </div>
+          <div class="note-block">Target: 4 × 10 at 25 kg total (12.5 kg/hand) all clean. If achieved, Week 5 attempts 30 kg total (15 kg/hand).</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="week-3" class="week-panel">
+    <div class="week-header">
+      <div><div class="week-title">Week 4 — Deload</div><div class="week-sub">Jun 1–7 · Planned recovery week</div></div>
+      <span class="phase-badge phase-deload">Deload</span>
+    </div>
+    <div class="deload-notice">
+      <strong>Deload week.</strong> This is not optional — 3 weeks of progressive loading require a recovery week before the next mesocycle. Volume drops 30–40%, loads drop 10–15%. You will feel like you're undertraining. That feeling is adaptation happening. Same split, same exercises, reduced intensity.
+    </div>
+    <div class="day-grid">
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-legs"></div>
+          <div class="day-label">Legs & Core (Deload)</div>
+          <div class="day-date">Mon Jun 1</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Machine Leg Press</span><span class="ex-load">52.5 kg × 2 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Smith Machine Squats</span><span class="ex-load">25 kg × 2 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Seated Leg Curls</span><span class="ex-load">30 kg × 2 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Seated Calf Raises</span><span class="ex-load">22.5 kg × 3 × 15</span></div>
+            <div class="ex-row"><span class="ex-name">Abdominal Machine</span><span class="ex-load">35 kg × 2 × 12</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-pull"></div>
+          <div class="day-label">Back & Biceps (Deload)</div>
+          <div class="day-date">Tue Jun 2</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Lat Pulldown</span><span class="ex-load">32.5 kg × 2 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Seated Cable Row</span><span class="ex-load">35 kg × 2 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">High Cable Row / Face Pull</span><span class="ex-load">30 kg × 2 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">DB Bicep Curls</span><span class="ex-load">10 kg × 2 × 12</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-rest"></div>
+          <div class="day-label">Full Rest</div>
+          <div class="day-date">Wed Jun 3</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="note-block">Full rest. Sleep quality is the training stimulus this day.</div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-ham"></div>
+          <div class="day-label">Hamstrings & Glutes (Deload)</div>
+          <div class="day-date">Thu Jun 4</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">DB Romanian Deadlift</span><span class="ex-load">25 kg × 2 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">High/Wide Leg Press</span><span class="ex-load">50 kg × 2 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Lying Leg Curls</span><span class="ex-load">30 kg × 2 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Walking Lunges</span><span class="ex-load">10 kg × 2 × 10</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-rest"></div>
+          <div class="day-label">Rest</div>
+          <div class="day-date">Fri Jun 5</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="note-block">No primer this week. Let the shoulders and chest recover ahead of Week 5 gauntlet.</div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-chest"></div>
+          <div class="day-label">Chest (Deload)</div>
+          <div class="day-date">Sat Jun 6</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Incline DB Press</span><span class="ex-load">20 kg × 3 × 10 (easy)</span></div>
+            <div class="ex-row"><span class="ex-name">Machine Chest Press</span><span class="ex-load">20 kg × 2 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Machine Pec Fly</span><span class="ex-load">25 kg × 2 × 12</span></div>
+          </div>
+          <div class="note-block">RPE should feel like 5–6 max. These are flush sets, not working sets.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="week-4" class="week-panel">
+    <div class="week-header">
+      <div><div class="week-title">Week 5 — Test Week</div><div class="week-sub">Jun 8–14 · New bracket assault</div></div>
+      <span class="phase-badge phase-test">Test</span>
+    </div>
+    <div class="day-grid">
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-legs"></div>
+          <div class="day-label">Quad-Dominant Legs & Core</div>
+          <div class="day-date">Mon Jun 8</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Machine Leg Press</span><span class="ex-load">67.5 kg × 3 × 10 <span class="pr-tag">PR attempt</span></span></div>
+            <div class="ex-row"><span class="ex-name">Smith Machine Squats</span><span class="ex-load">35 kg × 3 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Seated Leg Curls</span><span class="ex-load">40 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Seated Calf Raises</span><span class="ex-load">32.5 kg × 4 × 20</span></div>
+            <div class="ex-row"><span class="ex-name">Abdominal Machine</span><span class="ex-load">45 kg × 3 × 12</span></div>
+          </div>
+          <div class="note-block">Post-deload, your legs will feel fresh. 67.5 kg is the Week 5 leg press target. Don't hold back.</div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-pull"></div>
+          <div class="day-label">Back & Biceps (Pull)</div>
+          <div class="day-date">Tue Jun 9</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Lat Pulldown</span><span class="ex-load">42.5 kg × 3 × 8 <span class="pr-tag">PR attempt</span></span></div>
+            <div class="ex-row"><span class="ex-name">Seated Cable Row</span><span class="ex-load">45 kg × 3 × 8 <span class="pr-tag">PR attempt</span></span></div>
+            <div class="ex-row"><span class="ex-name">High Cable Row / Face Pull</span><span class="ex-load">40 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">DB Bicep Curls</span><span class="ex-load">14 kg × 3 × 12</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-rest"></div>
+          <div class="day-label">LISS + Core</div>
+          <div class="day-date">Wed Jun 10</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="note-block">30–40 min incline walk. Light core only. Recovery between the two test days.</div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-ham"></div>
+          <div class="day-label">Hamstrings & Glutes</div>
+          <div class="day-date">Thu Jun 11</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">DB Romanian Deadlift</span><span class="ex-load">35 kg × 3 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">High/Wide Leg Press</span><span class="ex-load">65 kg × 3 × 10 <span class="pr-tag">PR attempt</span></span></div>
+            <div class="ex-row"><span class="ex-name">Lying Leg Curls</span><span class="ex-load">40 kg × 3 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Walking Lunges</span><span class="ex-load">15 kg × 3 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Abdominal Machine</span><span class="ex-load">45 kg × 3</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-primer"></div>
+          <div class="day-label">Push Primer</div>
+          <div class="day-date">Fri Jun 12</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Incline DB Press</span><span class="ex-load">20 kg × 2 × 10 (RPE 5–6)</span></div>
+            <div class="ex-row"><span class="ex-name">DB Shoulder Press</span><span class="ex-load">14 kg × 2 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Cable Lateral Raises</span><span class="ex-load">7.5 kg × 2 × 12</span></div>
+            <div class="ex-row"><span class="ex-name">Tricep Pushdowns</span><span class="ex-load">25 kg × 2 × 12</span></div>
+          </div>
+          <div class="note-block">Keep this genuinely light. Saturday is the most important session of the cycle.</div>
+        </div>
+      </div>
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot dot-chest"></div>
+          <div class="day-label">Chest — New Bracket Gauntlet</div>
+          <div class="day-date">Sat Jun 13</div>
+          <i class="ti ti-chevron-down day-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="day-body">
+          <div class="exercise-list">
+            <div class="ex-row"><span class="ex-name">Incline DB Press</span><span class="ex-load">30 kg total (15 kg/hand) × Sets 1–2 <span class="pr-tag">New bracket</span></span></div>
+            <div class="ex-row"><span class="ex-name">Incline DB Press</span><span class="ex-load">25 kg total × Sets 3–4 (back-off)</span></div>
+            <div class="ex-row"><span class="ex-name">Machine Chest Press</span><span class="ex-load">30 kg × 3 × 8 <span class="pr-tag">PR attempt</span></span></div>
+            <div class="ex-row"><span class="ex-name">Machine Pec Fly</span><span class="ex-load">35 kg × 3 × 10</span></div>
+            <div class="ex-row"><span class="ex-name">Assisted Dips</span><span class="ex-load">45 kg assist × 3 × failure</span></div>
+          </div>
+          <div class="note-block">This is the May 9 moment for the next bracket. 15 kg/hand is the new frontier. Attempt Sets 1–2 only; back off to 12.5 kg/hand for Sets 3–4. Condition: only attempt if May 30 gauntlet confirmed 4 × 10 at 12.5 kg/hand cleanly.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showWeek(n) {
+  document.querySelectorAll('.week-panel').forEach((p,i) => {
+    p.classList.toggle('active', i === n);
+  });
+  document.querySelectorAll('.week-tab').forEach((t,i) => {
+    t.classList.toggle('active', i === n);
+  });
+}
+function toggleDay(header) {
+  const body = header.nextElementSibling;
+  const chevron = header.querySelector('.day-chevron');
+  const open = body.classList.toggle('open');
+  chevron.classList.toggle('open', open);
+}
+</script>
