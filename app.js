@@ -1964,6 +1964,15 @@
     });
   }
 
+  function goToday() {
+    var selection = chooseInitialSelection(state);
+    state.activeWeekId = selection.weekId;
+    state.activeDayId = selection.dayId;
+    saveState();
+    closeSheet();
+    render();
+  }
+
   function handleClick(event) {
     var btn = event.target.closest("[data-action]");
     if (!btn) return;
@@ -1987,11 +1996,7 @@
       closeSheet();
       render();
     } else if (action === "today") {
-      var selection = chooseInitialSelection(state);
-      state.activeWeekId = selection.weekId;
-      state.activeDayId = selection.dayId;
-      saveState();
-      render();
+      goToday();
     } else if (action === "cycle-theme") {
       var current = state.settings.theme === "dark" ? "light" : state.settings.theme === "light" ? "system" : "dark";
       state.settings.theme = current;
@@ -2239,6 +2244,30 @@
     } catch (err) {}
   }
 
+  function handleLaunchParams() {
+    try {
+      var params = new URLSearchParams(location.search);
+      var shortcut = params.get("shortcut");
+      if (!shortcut) return;
+      params.delete("shortcut");
+      var nextSearch = params.toString();
+      var nextUrl = location.pathname + (nextSearch ? "?" + nextSearch : "") + location.hash;
+      history.replaceState(null, "", nextUrl);
+
+      if (shortcut === "today") {
+        goToday();
+        return;
+      }
+
+      var sheetByShortcut = {
+        records: "prs",
+        library: "library",
+        backup: "backup"
+      };
+      if (sheetByShortcut[shortcut]) openSheet(sheetByShortcut[shortcut]);
+    } catch (err) {}
+  }
+
   function init() {
     applyTheme(state.settings.theme);
     saveState();
@@ -2246,6 +2275,7 @@
     registerServiceWorker();
     bindNotificationActionMessages();
     handleColdNotificationAction();
+    handleLaunchParams();
     setInterval(function () {
       completeRestIfNeeded();
       refreshTimers();

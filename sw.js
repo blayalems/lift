@@ -1,4 +1,4 @@
-const CACHE_VERSION = "lift-v4";
+const CACHE_VERSION = "lift-v5";
 const PRECACHE = `${CACHE_VERSION}-precache`;
 const RUNTIME = `${CACHE_VERSION}-runtime`;
 
@@ -19,6 +19,8 @@ const APP_SHELL = [
   "./features/library.js",
   "./features/notifications.js",
   "./manifest.webmanifest",
+  "./screenshots/lift-mobile-home.png",
+  "./screenshots/lift-desktop-dashboard.png",
   "./icons/icon.svg",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
