@@ -722,6 +722,46 @@
     .baseline-card { border-radius: 15px; padding: 12px; background: var(--bg-soft); }
     .baseline-card .label { color: var(--fg-dim); font-size: 11px; font-weight: 760; line-height: 1.3; }
     .baseline-card .value { margin-top: 4px; font-size: 20px; font-weight: 870; letter-spacing: 0; }
+
+    .notif-permission {
+      position: fixed;
+      inset: 0;
+      z-index: 130;
+      display: grid;
+      place-items: center;
+      padding: 22px;
+      background: rgba(10, 10, 14, .56);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease;
+      -webkit-backdrop-filter: saturate(170%) blur(18px);
+      backdrop-filter: saturate(170%) blur(18px);
+    }
+    .notif-permission[data-open="true"] { opacity: 1; pointer-events: auto; }
+    .notif-permission-card {
+      width: min(100%, 430px);
+      padding: 22px;
+      border-radius: 26px;
+      background: var(--glass-strong);
+      border: 1px solid var(--glass-border);
+      box-shadow: var(--glass-shadow);
+      -webkit-backdrop-filter: saturate(190%) blur(30px);
+      backdrop-filter: saturate(190%) blur(30px);
+    }
+    .notif-permission-icon {
+      width: 54px;
+      height: 54px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      color: white;
+      background: linear-gradient(135deg, #0a84ff, #ff2d55 52%, #ff9500);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.42), 0 18px 34px -24px rgba(10,132,255,.9);
+    }
+    .notif-permission-icon svg { width: 27px; height: 27px; }
+    .notif-permission-card h2 { margin: 16px 0 0; font-size: 24px; line-height: 1.06; letter-spacing: 0; }
+    .notif-permission-card p { margin: 10px 0 0; color: var(--fg-dim); line-height: 1.45; }
+    .notif-permission-actions { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; }
     .baseline-card .unit { color: var(--fg-dim); font-size: 11px; margin-left: 3px; }
     .calendar-grid { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 8px; }
     .calendar-week { border-radius: 14px; padding: 10px 8px; color: white; min-height: 78px; display: grid; align-content: space-between; }
@@ -881,6 +921,7 @@
   <div id="sheet-backdrop" class="sheet-backdrop" data-open="false"></div>
   <section id="sheet" class="sheet" data-open="false" aria-modal="true" role="dialog"></section>
   <div id="summary-overlay" class="summary-overlay" data-open="false"></div>
+  <div id="notification-permission" class="notif-permission" data-open="false"></div>
   <script src="./data.js"></script>
   <script src="./features/achievements.js"></script>
   <script src="./features/records.js"></script>
@@ -892,6 +933,7 @@
   <script src="./features/journal.js"></script>
   <script src="./features/cloud.js"></script>
   <script src="./features/library.js"></script>
+  <script src="./features/notifications.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
