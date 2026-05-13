@@ -2235,9 +2235,7 @@
       var nextSearch = params.toString();
       var nextUrl = location.pathname + (nextSearch ? "?" + nextSearch : "") + location.hash;
       history.replaceState(null, "", nextUrl);
-      setTimeout(function () {
-        handleNotifAction(action);
-      }, 0);
+      console.warn("Ignoring notifAction from URL without trusted notification context.", action);
     } catch (err) {}
   }
 
