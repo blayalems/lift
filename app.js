@@ -1494,6 +1494,7 @@
     rest.duration = Math.max(numberOr(rest.duration, state.settings.defaultRest), remaining);
     if (rest.running) rest.endsAt = Date.now() + remaining * 1000;
     else rest.pausedRemaining = remaining;
+    if (remaining > 0) rest.completedAt = 0;
     saveRest();
     render();
     updateWorkoutNotification(true);
