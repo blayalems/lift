@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,viewport-fit=cover" />
   <meta name="description" content="Offline progressive overload workout tracker for the May-June 2026 cycle." />
   <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f4f7" />
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#111114" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Lift" />
@@ -147,7 +148,7 @@
       position: sticky;
       top: 0;
       z-index: 30;
-      padding: calc(var(--safe-top) + 14px) 18px 12px;
+      padding: calc(env(safe-area-inset-top, 0px) + 14px) 18px 12px;
       background: color-mix(in oklab, var(--glass-strong) 78%, transparent);
       border-bottom: 1px solid var(--glass-border);
       -webkit-backdrop-filter: saturate(190%) blur(30px);
@@ -464,7 +465,7 @@
     .rest-fab {
       position: fixed;
       left: 50%;
-      bottom: calc(var(--safe-bot) + 18px);
+      bottom: 18px;
       z-index: 40;
       width: min(calc(100% - 28px), 448px);
       transform: translateX(-50%);
@@ -474,7 +475,7 @@
       box-shadow: 0 24px 70px -34px rgba(44, 72, 126, .82), inset 0 1px 0 rgba(255,255,255,.42);
       -webkit-backdrop-filter: saturate(190%) blur(28px);
       backdrop-filter: saturate(190%) blur(28px);
-      padding: 12px;
+      padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px));
     }
     .rest-fab[data-active="true"] { color: white; background: linear-gradient(135deg, rgba(255,63,106,.9), rgba(255,139,31,.9)); border-color: rgba(255,255,255,.30); }
     .rest-main { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 11px; }
@@ -828,7 +829,7 @@
       .exercise-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
       .menu-grid { grid-template-columns: repeat(4, minmax(0,1fr)); }
       .baseline-grid { grid-template-columns: repeat(4, minmax(0,1fr)); }
-      .rest-fab { width: min(calc(100% - 64px), 640px); padding: 14px 16px; }
+      .rest-fab { width: min(calc(100% - 64px), 640px); padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px)); }
       .rest-presets { padding-left: 72px; }
       .toast-stack { width: min(calc(100% - 64px), 520px); bottom: calc(var(--safe-bot) + 130px); }
       .sheet { width: min(100%, 640px); }
