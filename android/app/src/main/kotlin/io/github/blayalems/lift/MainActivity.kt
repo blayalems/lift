@@ -9,15 +9,20 @@ import android.os.Bundle
 import android.webkit.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 class MainActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_NOTIF_ACTION = "notif_action"
         private const val PWA_URL = "https://blayalems.github.io/lift/"
+        private const val NOTIF_PERM_REQUEST = 1
     }
 
     private lateinit var webView: WebView
+    private var pendingAction: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,13 +31,13 @@ class MainActivity : AppCompatActivity() {
 
         webView = WebView(this).also { wv ->
             wv.settings.apply {
-                javaScriptEnabled            = true
-                domStorageEnabled            = true
-                databaseEnabled              = true
-                cacheMode                    = WebSettings.LOAD_DEFAULT
-                allowFileAccess              = false
+                javaScriptEnabled                = true
+                domStorageEnabled                = true
+                databaseEnabled                  = true
+                cacheMode                        = WebSettings.LOAD_DEFAULT
+                allowFileAccess                  = false
                 mediaPlaybackRequiresUserGesture = false
-                mixedContentMode             = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                mixedContentMode                 = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             }
             wv.webChromeClient = LiftChromeClient()
             wv.webViewClient   = LiftWebViewClient()
@@ -40,14 +45,26 @@ class MainActivity : AppCompatActivity() {
             setContentView(wv)
         }
 
+        // Buffer any cold-start notification action; flushed in onPageFinished after
+        // the JS listener is installed — dispatching here would race the page load.
+        pendingAction = intent?.getStringExtra(EXTRA_NOTIF_ACTION)
+        intent?.removeExtra(EXTRA_NOTIF_ACTION)
+
         webView.loadUrl(PWA_URL)
-        handleIntent(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleIntent(intent)
+        val action = intent.getStringExtra(EXTRA_NOTIF_ACTION) ?: return
+        intent.removeExtra(EXTRA_NOTIF_ACTION)
+        dispatchAction(action)
+    }
+
+    // Re-apply fullscreen after the user transiently reveals system bars
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) goFullscreen()
     }
 
     override fun onResume()  { super.onResume();  webView.onResume()  }
@@ -59,10 +76,9 @@ class MainActivity : AppCompatActivity() {
         if (webView.canGoBack()) webView.goBack() else super.onBackPressed()
     }
 
-    // ── Intent handling ────────────────────────────────────────────────────────
+    // ── Action dispatch ────────────────────────────────────────────────────────
 
-    private fun handleIntent(intent: Intent?) {
-        val action = intent?.getStringExtra(EXTRA_NOTIF_ACTION) ?: return
+    private fun dispatchAction(action: String) {
         val safe = action.replace("'", "\\'")
         webView.post {
             webView.evaluateJavascript(
@@ -70,17 +86,16 @@ class MainActivity : AppCompatActivity() {
                 null
             )
         }
-        intent.removeExtra(EXTRA_NOTIF_ACTION)
     }
 
     // ── Fullscreen ─────────────────────────────────────────────────────────────
 
     private fun goFullscreen() {
-        val flags = (android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
-                or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                or android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
-        @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = flags
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
     }
 
     // ── Notification permission ────────────────────────────────────────────────
@@ -90,7 +105,7 @@ class MainActivity : AppCompatActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIF_PERM_REQUEST)
         }
     }
 
@@ -115,6 +130,12 @@ class MainActivity : AppCompatActivity() {
                     });
                 })();
             """.trimIndent(), null)
+
+            // Flush any cold-start action buffered before this listener existed
+            pendingAction?.let { action ->
+                pendingAction = null
+                dispatchAction(action)
+            }
         }
 
         override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
