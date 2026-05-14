@@ -44,5 +44,5 @@ android {
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
-    implementation("org.json:json:20240303")
+    // org.json is provided by the Android platform — do not add as a dependency
 }
