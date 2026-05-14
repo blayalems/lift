@@ -40,9 +40,10 @@ jobs:
 
       - name: Build debug APK
         working-directory: android
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: |
+          # Tell AGP where the Android SDK lives (most reliable method on CI)
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          gradle assembleDebug --no-daemon --stacktrace
 
       - name: Rename APK
         run: |
