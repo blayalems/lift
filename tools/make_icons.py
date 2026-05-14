@@ -75,6 +75,8 @@ def main() -> None:
         for size, maskable, name in output_specs():
             write_png_pillow(ICON_DIR / name, size, maskable, Image, ImageDraw)
 
+    write_badge(ICON_DIR / "badge.png")
+
 
 def output_specs():
     return (
@@ -84,6 +86,23 @@ def output_specs():
         (512, True, "maskable-512.png"),
         (512, True, "icon-maskable-512.png"),
     )
+
+
+def write_badge(path: Path) -> None:
+    """96×96 monochrome badge: white dumbbell on transparent background.
+
+    Android status-bar badges must be alpha-only. This writes the glyph in
+    white with full opacity and leaves every other pixel transparent so the
+    OS can tint it correctly.
+    """
+    size = 96
+    pixels = bytearray(size * size * 4)  # all transparent RGBA
+
+    for rect, radius in GLYPH:
+        coords, scaled_radius = transformed(rect, radius, size, False)
+        fill_round_rect(pixels, size, coords, scaled_radius, WHITE)
+
+    path.write_bytes(encode_png_rgba(size, size, pixels))
 
 
 def transformed(rect: tuple[int, int, int, int], radius: int, size: int, maskable: bool):

@@ -27,7 +27,8 @@ const APP_SHELL = [
   "./icons/icon-512.png",
   "./icons/maskable-192.png",
   "./icons/maskable-512.png",
-  "./icons/icon-maskable-512.png"
+  "./icons/icon-maskable-512.png",
+  "./icons/badge.png"
 ];
 
 const STATIC_DESTINATIONS = new Set([
@@ -193,7 +194,7 @@ async function showLiftNotification(payload, options = {}) {
     tag: payload.tag || "lift-workout",
     body: payload.body || "",
     icon: "./icons/icon-192.png",
-    badge: "./icons/icon-192.png",
+    badge: "./icons/badge.png",
     requireInteraction: true,
     renotify: false,
     silent: !!options.silent,
