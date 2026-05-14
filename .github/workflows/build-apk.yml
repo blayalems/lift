@@ -29,14 +29,14 @@ jobs:
           # GitHub-hosted runners ship the Android SDK at $ANDROID_SDK_ROOT.
           # Install the exact platform + build-tools the project needs.
           yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
-            "platforms;android-35" \
-            "build-tools;35.0.0" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
             "platform-tools" 2>&1 | tail -5
 
-      - name: Setup Gradle 8.7
+      - name: Setup Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '8.7'
+          gradle-version: '9.3.1'
 
       - name: Build debug APK
         working-directory: android
