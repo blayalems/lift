@@ -11,8 +11,20 @@ android {
         applicationId = "io.github.blayalems.lift"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.2.1"
+    }
+
+    signingConfigs {
+        // Consistent debug keystore committed to the repo so every CI build
+        // produces an APK that can be installed over the previous one without
+        // needing to uninstall first.
+        getByName("debug") {
+            storeFile = rootProject.file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
@@ -20,6 +32,7 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
             isDebuggable = true
+            signingConfig = signingConfigs.getByName("debug")
         }
         release {
             isMinifyEnabled = true
