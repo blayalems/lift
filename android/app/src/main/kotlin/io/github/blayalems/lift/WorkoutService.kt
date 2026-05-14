@@ -46,7 +46,7 @@ class WorkoutService : Service() {
 
                 val notification = buildNotification(snap)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-                    startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING)
+                    startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_ACTIVE_PROCESSING)
                 } else {
                     startForeground(NOTIF_ID, notification)
                 }
