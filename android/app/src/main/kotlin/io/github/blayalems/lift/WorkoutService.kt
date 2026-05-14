@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import org.json.JSONObject
 
 /**
@@ -54,7 +55,7 @@ class WorkoutService : Service() {
                         startForeground(NOTIF_ID, notification)
                     }
                 } catch (e: Exception) {
-                    NotificationManagerCompat.from(this).notify(NOTIF_ID, notification)
+                    runCatching { NotificationManagerCompat.from(this).notify(NOTIF_ID, notification) }
                     stopSelf()
                     return START_NOT_STICKY
                 }
