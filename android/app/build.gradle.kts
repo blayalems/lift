@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "io.github.blayalems.lift"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "io.github.blayalems.lift"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 2
         versionName = "1.1.0"
     }

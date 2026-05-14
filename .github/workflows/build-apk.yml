@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # needed to create/update the release
+  contents: write
 
 jobs:
   build:
@@ -24,17 +24,25 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Install required Android SDK components
+        run: |
+          # GitHub-hosted runners ship the Android SDK at $ANDROID_SDK_ROOT.
+          # Install the exact platform + build-tools the project needs.
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "platform-tools" 2>&1 | tail -5
 
-      - name: Setup Gradle
+      - name: Setup Gradle 8.6
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.6'
 
       - name: Build debug APK
         working-directory: android
-        run: gradle assembleDebug --no-daemon
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+        run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Rename APK
         run: |
@@ -48,7 +56,7 @@ jobs:
           path: lift-android-debug.apk
           retention-days: 90
 
-      # ── Rolling "latest" release — always points to the newest build ──────────
+      # ── Rolling "latest" release ─────────────────────────────────────────────
       - name: Delete previous latest-apk release (if exists)
         run: gh release delete latest-apk --yes 2>/dev/null || true
         env:
@@ -61,28 +69,21 @@ jobs:
         run: |
           gh release create latest-apk lift-android-debug.apk \
             --title "Lift Android APK — latest build" \
-            --notes "$(cat <<'NOTES'
-          ## Lift — Android Debug APK
+            --notes "## Lift — Android Debug APK
 
-          **Auto-built from `main` branch** — commit ${{ github.sha }}
+          Built from commit \`${{ github.sha }}\`
 
           ### How to install
-          1. On your Android phone, go to **Settings → Apps → Special app access → Install unknown apps**
+          1. On your Android phone go to **Settings → Apps → Special app access → Install unknown apps**
           2. Allow installs from your browser or file manager
-          3. Download `lift-android-debug.apk` from this release
-          4. Open the downloaded file and tap **Install**
+          3. Download \`lift-android-debug.apk\` below and tap **Install**
 
           ### What this APK does
-          - Opens the Lift PWA (`blayalems.github.io/lift`) in a full-screen WebView
-          - Shows an Android 16 **Live Update** notification during workouts:
-            - Coloured status-bar chip with rest countdown or elapsed time
-            - Accent-coloured notification card matching the Lift theme
-            - Action buttons: −15 s / Skip rest / +15 s / Logged it / Finish
+          - Opens the Lift PWA in a full-screen native wrapper
+          - Live Update notification during workouts: coloured status-bar chip, accent card, action buttons (−15 s / Skip rest / +15 s / Logged it / Finish)
           - Notification actions feed back into the PWA in real time
 
-          > **Note:** This is a debug build (not Play Store signed). It is safe to install and use; it just hasn't gone through Play Store review.
-          NOTES
-          )" \
+          > Debug build — safe to sideload; not Play Store signed." \
             --latest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
