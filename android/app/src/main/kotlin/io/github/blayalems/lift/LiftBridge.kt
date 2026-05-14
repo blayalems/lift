@@ -9,6 +9,8 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.webkit.JavascriptInterface
 import android.widget.Toast
@@ -51,13 +53,20 @@ class LiftBridge(private val context: Context) {
         ) return
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-            // API 35+: use foreground service so Android 16 renders the Live Update chip
-            context.startForegroundService(
-                Intent(context, WorkoutService::class.java).apply {
-                    action = WorkoutService.ACTION_UPDATE
-                    putExtra(WorkoutService.EXTRA_SNAP, json)
+            // @JavascriptInterface runs on a WebView background thread; startForegroundService
+            // must be called from the main thread on API 35+ or the system throws.
+            // Fall back to direct notify if the service can't start for any reason.
+            val serviceIntent = Intent(context, WorkoutService::class.java).apply {
+                action = WorkoutService.ACTION_UPDATE
+                putExtra(WorkoutService.EXTRA_SNAP, json)
+            }
+            Handler(Looper.getMainLooper()).post {
+                try {
+                    context.startForegroundService(serviceIntent)
+                } catch (e: Exception) {
+                    NotificationManagerCompat.from(context).notify(NOTIF_ID, buildNotification(snap))
                 }
-            )
+            }
         } else {
             NotificationManagerCompat.from(context).notify(NOTIF_ID, buildNotification(snap))
         }
@@ -66,7 +75,9 @@ class LiftBridge(private val context: Context) {
     @JavascriptInterface
     fun clearWorkout() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-            context.stopService(Intent(context, WorkoutService::class.java))
+            Handler(Looper.getMainLooper()).post {
+                runCatching { context.stopService(Intent(context, WorkoutService::class.java)) }
+            }
         }
         NotificationManagerCompat.from(context).cancel(NOTIF_ID)
     }
