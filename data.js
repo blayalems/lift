@@ -49,7 +49,7 @@
     meta: {
       title: "Lem Progressive Overload Plan",
       athlete: "Lem",
-      dateRange: "May 13-June 14, 2026",
+      dateRange: "May 12-June 14, 2026",
       timeZone: "Asia/Manila",
       source: "reference/lem_progressive_overload_may_june_2026.html",
       enrichmentSource: "reference/Workout Tracker.html",

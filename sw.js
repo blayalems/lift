@@ -1,4 +1,4 @@
-const CACHE_VERSION = "lift-v8";
+const CACHE_VERSION = "lift-v9";
 const PRECACHE = `${CACHE_VERSION}-precache`;
 const RUNTIME = `${CACHE_VERSION}-runtime`;
 
@@ -40,6 +40,7 @@ const STATIC_DESTINATIONS = new Set([
 ]);
 
 const STATIC_PATH_RE = /\.(?:css|js|mjs|json|webmanifest|svg|png|jpg|jpeg|gif|webp|ico|woff2?|ttf|otf)$/i;
+const FRESH_STATIC_PATH_RE = /\.(?:css|js|mjs|json|webmanifest)$/i;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(precacheAppShell());
@@ -113,7 +114,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isStaticRequest(request, url)) {
-    event.respondWith(cacheFirstStatic(request));
+    event.respondWith(shouldRefreshStatic(url) ? networkFirstStatic(request) : cacheFirstStatic(request));
   }
 });
 
@@ -178,8 +179,25 @@ async function cacheFirstStatic(request) {
   return response;
 }
 
+async function networkFirstStatic(request) {
+  const cache = await caches.open(RUNTIME);
+  try {
+    const response = await fetch(request, { cache: "no-store" });
+    if (response.ok) {
+      await cache.put(request, response.clone());
+    }
+    return response;
+  } catch (_) {
+    return (await caches.match(request)) || (await caches.match("./index.html")) || Response.error();
+  }
+}
+
 function isStaticRequest(request, url) {
   return STATIC_DESTINATIONS.has(request.destination) || STATIC_PATH_RE.test(url.pathname);
+}
+
+function shouldRefreshStatic(url) {
+  return FRESH_STATIC_PATH_RE.test(url.pathname);
 }
 
 async function notifyClientsOfUpdate() {

@@ -1,6 +1,6 @@
 # Lift - Progressive Overload
 
-Lift is a small installable PWA that merges the May 13-June 14, 2026 progressive-overload plan with an interactive workout tracker. It now also includes platform-style fitness surfaces: activity rings, personal records, badges, post-workout summaries, a training heatmap, journal feed, goals, step logging, workout library templates, and backup/export tools.
+Lift is a small installable PWA that merges the May 12-June 14, 2026 progressive-overload plan with an interactive workout tracker. It now also includes platform-style fitness surfaces: activity rings, personal records, badges, post-workout summaries, a training heatmap, journal feed, goals, step logging, workout library templates, and backup/export tools.
 
 ## Local Serve
 
