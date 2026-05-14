@@ -77,7 +77,10 @@ class LiftBridge(private val context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             Handler(Looper.getMainLooper()).post {
                 runCatching { context.stopService(Intent(context, WorkoutService::class.java)) }
+                runCatching { NotificationManagerCompat.from(context).cancel(NOTIF_ID) }
             }
+        } else {
+            NotificationManagerCompat.from(context).cancel(NOTIF_ID)
         }
         Handler(Looper.getMainLooper()).post {
             NotificationManagerCompat.from(context).cancel(NOTIF_ID)
