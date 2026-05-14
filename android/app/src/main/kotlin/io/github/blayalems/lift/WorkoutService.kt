@@ -6,7 +6,9 @@ import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import org.json.JSONObject
 
 /**
@@ -17,6 +19,7 @@ import org.json.JSONObject
  * On older Android it appears as a colourised foreground-service notification.
  */
 class WorkoutService : Service() {
+    private val tag = "WorkoutService"
 
     companion object {
         const val ACTION_UPDATE = "io.github.blayalems.lift.UPDATE"
@@ -46,10 +49,18 @@ class WorkoutService : Service() {
 
                 val notification = buildNotification(snap)
                 // FOREGROUND_SERVICE_TYPE_HEALTH requires the 3-arg form on API 34+.
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH)
-                } else {
-                    startForeground(NOTIF_ID, notification)
+                // Guard startForeground so any platform/runtime restriction can't crash the app.
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH)
+                    } else {
+                        startForeground(NOTIF_ID, notification)
+                    }
+                } catch (e: Exception) {
+                    runCatching { NotificationManagerCompat.from(this).notify(NOTIF_ID, notification) }
+                        .onFailure { err -> Log.w(tag, "Fallback notification failed", err) }
+                    stopSelf()
+                    return START_NOT_STICKY
                 }
             }
             ACTION_CLEAR -> stopSelf()
