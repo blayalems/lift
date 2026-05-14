@@ -30,7 +30,15 @@
   }
 
   async function shareBackup(ctx) {
-    var file = new File([backupBlob(ctx)], "lift-backup-" + ctx.todayId() + ".json", { type: "application/json" });
+    var filename = "lift-backup-" + ctx.todayId() + ".json";
+    var json = JSON.stringify(ctx.state, null, 2);
+    if (ctx.nativeShareJson && ctx.nativeShareJson(filename, json, "Lift backup")) {
+      ctx.state.cloudSync = Object.assign({}, ctx.state.cloudSync || {}, { lastBackupAt: Date.now(), provider: "share" });
+      if (ctx.saveState) ctx.saveState();
+      ctx.toast("Opening Android share sheet.");
+      return;
+    }
+    var file = new File([backupBlob(ctx)], filename, { type: "application/json" });
     if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
       await navigator.share({ files: [file], title: "Lift backup" });
       ctx.state.cloudSync = Object.assign({}, ctx.state.cloudSync || {}, { lastBackupAt: Date.now(), provider: "share" });

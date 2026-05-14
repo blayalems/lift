@@ -8,7 +8,7 @@
   var sheetBackdrop = document.getElementById("sheet-backdrop");
   var summaryOverlay = document.getElementById("summary-overlay");
 
-  var APP_VERSION = "1.2.7";
+  var APP_VERSION = "1.3.0";
   window.LIFT_APP_VERSION = APP_VERSION;
 
   var STORE_KEY = "lift.v3.state";
@@ -137,7 +137,9 @@
   }
 
   function haptic(pattern) {
-    if (state && state.settings && state.settings.haptics && navigator.vibrate) {
+    if (!(state && state.settings && state.settings.haptics)) return;
+    if (nativeHaptic(pattern)) return;
+    if (navigator.vibrate) {
       navigator.vibrate(pattern || 18);
     }
   }
@@ -351,6 +353,9 @@
       icon: icon,
       toast: toast,
       haptic: haptic,
+      nativeShareText: nativeShareText,
+      nativeShareJson: nativeShareJson,
+      nativeShareImage: nativeShareImage,
       openSheet: openSheet,
       closeSheet: closeSheet,
       downloadDayImage: downloadDayImage,
@@ -1307,6 +1312,48 @@
     );
   }
 
+  function canUseNative(method) {
+    return !!(
+      window.LIFT_IS_NATIVE &&
+      window.LiftAndroid &&
+      typeof window.LiftAndroid[method] === "function"
+    );
+  }
+
+  function nativeShareText(title, text) {
+    try {
+      return canUseNative("shareText") && window.LiftAndroid.shareText(title || "Lift", text || "");
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function nativeShareJson(filename, json, title) {
+    try {
+      return canUseNative("shareJsonFile") && window.LiftAndroid.shareJsonFile(filename, json, title || "Lift backup");
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function nativeShareImage(filename, dataUrl, title) {
+    try {
+      return canUseNative("shareImageFile") && window.LiftAndroid.shareImageFile(filename, dataUrl, title || "Lift image");
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function nativeHaptic(pattern) {
+    try {
+      if (!canUseNative("haptic")) return false;
+      var payload = Array.isArray(pattern) ? pattern : [pattern || 18];
+      return !!window.LiftAndroid.haptic(JSON.stringify(payload));
+    } catch (e) {
+      return false;
+    }
+  }
+
   function clearNative() {
     try {
       if (window.LiftAndroid && typeof window.LiftAndroid.clearWorkout === "function") {
@@ -1606,7 +1653,7 @@
   }
 
   function notifyRestDone() {
-    if (state.settings.haptics && navigator.vibrate) navigator.vibrate([160, 80, 160]);
+    haptic([160, 80, 160]);
     if (state.settings.sound) beep();
     toast("Rest complete.");
   }
@@ -1718,11 +1765,22 @@
 
   function exportData() {
     var payload = JSON.stringify(state, null, 2);
+    var filename = "lift-backup-" + todayId() + ".json";
+    if (nativeShareJson(filename, payload, "Lift backup")) {
+      toast("Opening Android share sheet.");
+      return;
+    }
+    if (window.LIFT_IS_NATIVE && window.LiftAndroid && typeof window.LiftAndroid.saveBackupFile === "function") {
+      try {
+        window.LiftAndroid.saveBackupFile(filename, payload);
+        return;
+      } catch (err) {}
+    }
     var blob = new Blob([payload], { type: "application/json" });
     var url = URL.createObjectURL(blob);
     var link = document.createElement("a");
     link.href = url;
-    link.download = "lift-backup-" + todayId() + ".json";
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -1924,7 +1982,8 @@
     renderSheet();
   }
 
-  async function downloadDayImage() {
+  async function downloadDayImage(options) {
+    options = options || {};
     var day = getDay(state.activeDayId);
     var canvas = document.createElement("canvas");
     canvas.width = 1200;
@@ -1957,15 +2016,21 @@
       y += 78;
       ctx.font = "700 36px system-ui, sans-serif";
     });
-    if (canSaveNativeImage()) {
+    var imageName = "lift-" + day.id + ".png";
+    var dataUrl = canvas.toDataURL("image/png");
+    if (options.share && nativeShareImage(imageName, dataUrl, "Lift " + day.id)) {
+      toast("Opening Android share sheet.");
+      return;
+    }
+    if (!options.share && canSaveNativeImage()) {
       try {
-        window.LiftAndroid.saveImageFile("lift-" + day.id + ".png", canvas.toDataURL("image/png"));
+        window.LiftAndroid.saveImageFile(imageName, dataUrl);
         return;
       } catch (err) {}
     }
     canvas.toBlob(async function (blob) {
       if (!blob) return;
-      var file = new File([blob], "lift-" + day.id + ".png", { type: "image/png" });
+      var file = new File([blob], imageName, { type: "image/png" });
       if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
         try { await navigator.share({ files: [file], title: "Lift " + day.id }); return; } catch (err) {}
       }
@@ -2004,10 +2069,6 @@
       }
     }
     ctx.fillText(line, x, y);
-  }
-
-  function haptic(pattern) {
-    if (state.settings.haptics && navigator.vibrate) navigator.vibrate(pattern);
   }
 
   function toast(message) {
@@ -2121,15 +2182,20 @@
       runtime.copyScope = btn.dataset.scope;
       renderSheet();
     } else if (action === "copy-log") {
-      copyText(buildLog(runtime.copyScope || "day")).then(function () { toast("Log copied."); }).catch(function () { toast("Clipboard blocked. Long-press the log text to copy."); });
+      var copyLogText = buildLog(runtime.copyScope || "day");
+      copyText(copyLogText).then(function () { toast("Log copied."); }).catch(function () {
+        if (nativeShareText("Lift log", copyLogText)) toast("Clipboard blocked. Opening Android share sheet.");
+        else toast("Clipboard blocked. Long-press the log text to copy.");
+      });
     } else if (action === "share-log") {
       var text = buildLog(runtime.copyScope || "day");
-      if (navigator.share) navigator.share({ title: "Lift log", text: text }).catch(function () {});
+      if (nativeShareText("Lift log", text)) toast("Opening Android share sheet.");
+      else if (navigator.share) navigator.share({ title: "Lift log", text: text }).catch(function () {});
       else copyText(text).then(function () { toast("Share unavailable. Log copied instead."); }).catch(function () { toast("Share unavailable. Long-press the log text to copy."); });
     } else if (action === "share-image") {
-      downloadDayImage();
+      downloadDayImage({ share: true });
     } else if (action === "summary-share") {
-      downloadDayImage();
+      downloadDayImage({ share: true });
     } else if (action === "summary-review") {
       runtime.summaryDayId = null;
       runtime.cycleReview = false;

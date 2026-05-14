@@ -8,12 +8,10 @@ import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
 import android.webkit.*
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import org.json.JSONObject
 
 class MainActivity : AppCompatActivity() {
@@ -51,7 +49,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        goFullscreen()
         requestNotifPermissionIfNeeded()
 
         webView = WebView(this).also { wv ->
@@ -74,6 +71,16 @@ class MainActivity : AppCompatActivity() {
             wv.addJavascriptInterface(LiftBridge(this), "LiftAndroid")
             setContentView(wv)
         }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (::webView.isInitialized && webView.canGoBack()) {
+                    webView.goBack()
+                    return
+                }
+                isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+            }
+        })
 
         // Buffer any cold-start notification action; flushed in onPageFinished after
         // the JS listener is installed — dispatching here would race the page load.
@@ -96,20 +103,9 @@ class MainActivity : AppCompatActivity() {
         dispatchAction(action)
     }
 
-    // Re-apply fullscreen after the user transiently reveals system bars
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) goFullscreen()
-    }
-
     override fun onResume()  { super.onResume();  webView.onResume()  }
     override fun onPause()   { super.onPause();   webView.onPause()   }
     override fun onDestroy() { super.onDestroy(); webView.destroy()   }
-
-    @Deprecated("Deprecated in API 33")
-    override fun onBackPressed() {
-        if (webView.canGoBack()) webView.goBack() else super.onBackPressed()
-    }
 
     // ── Action dispatch ────────────────────────────────────────────────────────
 
@@ -149,16 +145,6 @@ class MainActivity : AppCompatActivity() {
             @Suppress("DEPRECATION")
             packageManager.getPackageInfo(packageName, 0).versionCode
         }
-
-    // ── Fullscreen ─────────────────────────────────────────────────────────────
-
-    private fun goFullscreen() {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        WindowCompat.getInsetsController(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.systemBars())
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
-    }
 
     // ── Notification permission ────────────────────────────────────────────────
 

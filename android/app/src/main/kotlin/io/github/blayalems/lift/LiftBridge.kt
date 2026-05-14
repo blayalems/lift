@@ -2,11 +2,15 @@ package io.github.blayalems.lift
 
 import android.Manifest
 import android.app.*
+import android.content.ClipData
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.os.Build
 import android.os.Environment
 import android.os.Handler
@@ -14,11 +18,14 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.util.Base64
 import android.util.Log
+import android.view.HapticFeedbackConstants
 import android.webkit.JavascriptInterface
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
@@ -50,6 +57,7 @@ class LiftBridge(private val context: Context) {
             clearWorkout()
             return
         }
+        LiftWidgetProvider.updateAll(context, snap)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
@@ -77,6 +85,7 @@ class LiftBridge(private val context: Context) {
 
     @JavascriptInterface
     fun clearWorkout() {
+        LiftWidgetProvider.updateAll(context, null)
         Handler(Looper.getMainLooper()).post {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
                 runCatching { context.stopService(Intent(context, WorkoutService::class.java)) }
@@ -92,9 +101,10 @@ class LiftBridge(private val context: Context) {
     @JavascriptInterface
     fun saveBackupFile(filename: String, json: String) {
         try {
+            val safeName = cleanFilename(filename, "lift-backup.json", ".json")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val values = ContentValues().apply {
-                    put(MediaStore.Downloads.DISPLAY_NAME, filename)
+                    put(MediaStore.Downloads.DISPLAY_NAME, safeName)
                     put(MediaStore.Downloads.MIME_TYPE, "application/json")
                     put(MediaStore.Downloads.IS_PENDING, 1)
                 }
@@ -115,10 +125,10 @@ class LiftBridge(private val context: Context) {
             } else {
                 val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
                 dir.mkdirs()
-                File(dir, filename).writeText(json, Charsets.UTF_8)
+                File(dir, safeName).writeText(json, Charsets.UTF_8)
             }
             (context as? Activity)?.runOnUiThread {
-                Toast.makeText(context, "Backup saved to Downloads/$filename", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Backup saved to Downloads/$safeName", Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
             (context as? Activity)?.runOnUiThread {
@@ -130,7 +140,7 @@ class LiftBridge(private val context: Context) {
     @JavascriptInterface
     fun saveImageFile(filename: String, dataUrl: String) {
         try {
-            val safeName = cleanFilename(filename, "lift-workout.png")
+            val safeName = cleanFilename(filename, "lift-workout.png", ".png")
             val bytes = decodeDataUrl(dataUrl)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val values = ContentValues().apply {
@@ -165,6 +175,76 @@ class LiftBridge(private val context: Context) {
             (context as? Activity)?.runOnUiThread {
                 Toast.makeText(context, "Image save failed: ${e.message}", Toast.LENGTH_LONG).show()
             }
+        }
+    }
+
+    @JavascriptInterface
+    fun shareText(title: String, text: String): Boolean {
+        val safeTitle = title.ifBlank { "Share Lift log" }
+        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TITLE, safeTitle)
+            putExtra(Intent.EXTRA_SUBJECT, safeTitle)
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        return launchShare(sendIntent, safeTitle)
+    }
+
+    @JavascriptInterface
+    fun shareJsonFile(filename: String, json: String, title: String): Boolean =
+        shareCacheFile(
+            cleanFilename(filename, "lift-backup.json", ".json"),
+            json.toByteArray(Charsets.UTF_8),
+            "application/json",
+            title.ifBlank { "Share Lift backup" },
+        )
+
+    @JavascriptInterface
+    fun shareImageFile(filename: String, dataUrl: String, title: String): Boolean =
+        runCatching {
+            shareCacheFile(
+                cleanFilename(filename, "lift-workout.png", ".png"),
+                decodeDataUrl(dataUrl),
+                "image/png",
+                title.ifBlank { "Share Lift image" },
+            )
+        }.getOrElse { err ->
+            showToast("Image share failed: ${err.message}", long = true)
+            false
+        }
+
+    @JavascriptInterface
+    fun haptic(patternJson: String): Boolean {
+        val pattern = parseHapticPattern(patternJson)
+        val decor = (context as? Activity)?.window?.decorView
+        val vibrator = getVibrator()
+        return try {
+            if (pattern.size <= 1) {
+                Handler(Looper.getMainLooper()).post {
+                    decor?.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                }
+                return true
+            }
+            if (vibrator != null && vibrator.hasVibrator()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val effect = VibrationEffect.createWaveform(longArrayOf(0L, *pattern), -1)
+                    vibrator.vibrate(effect)
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(longArrayOf(0L, *pattern), -1)
+                }
+                true
+            } else {
+                Handler(Looper.getMainLooper()).post {
+                    decor?.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                }
+                true
+            }
+        } catch (e: Exception) {
+            Handler(Looper.getMainLooper()).post {
+                decor?.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+            }
+            false
         }
     }
 
@@ -291,15 +371,92 @@ class LiftBridge(private val context: Context) {
         return Base64.decode(payload, Base64.DEFAULT)
     }
 
-    private fun cleanFilename(filename: String, fallback: String): String {
+    private fun cleanFilename(filename: String, fallback: String, extension: String): String {
         val cleaned = filename
             .replace(Regex("""[\\/:*?"<>|]"""), "_")
             .trim()
             .take(96)
         return when {
             cleaned.isEmpty() -> fallback
-            cleaned.endsWith(".png", ignoreCase = true) -> cleaned
-            else -> "$cleaned.png"
+            cleaned.endsWith(extension, ignoreCase = true) -> cleaned
+            else -> "$cleaned$extension"
+        }
+    }
+
+    private fun shareCacheFile(
+        safeName: String,
+        bytes: ByteArray,
+        mimeType: String,
+        title: String,
+    ): Boolean {
+        return try {
+            val dir = File(context.cacheDir, "shared").apply { mkdirs() }
+            val file = File(dir, safeName)
+            file.writeBytes(bytes)
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file,
+            )
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = mimeType
+                putExtra(Intent.EXTRA_TITLE, title)
+                putExtra(Intent.EXTRA_SUBJECT, title)
+                putExtra(Intent.EXTRA_STREAM, uri)
+                clipData = ClipData.newUri(context.contentResolver, title, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            launchShare(sendIntent, title)
+        } catch (e: Exception) {
+            showToast("Share failed: ${e.message}", long = true)
+            false
+        }
+    }
+
+    private fun launchShare(sendIntent: Intent, title: String): Boolean {
+        val chooser = Intent.createChooser(sendIntent, title.ifBlank { "Share with" }).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        Handler(Looper.getMainLooper()).post {
+            try {
+                context.startActivity(chooser)
+            } catch (e: Exception) {
+                showToast("Share failed: ${e.message}", long = true)
+            }
+        }
+        return true
+    }
+
+    private fun showToast(message: String, long: Boolean = false) {
+        (context as? Activity)?.runOnUiThread {
+            Toast.makeText(context, message, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun parseHapticPattern(patternJson: String): LongArray {
+        return runCatching {
+            val trimmed = patternJson.trim()
+            val values = if (trimmed.startsWith("[")) {
+                val array = JSONArray(trimmed)
+                (0 until array.length()).map { array.optLong(it, 18L) }
+            } else {
+                listOf(trimmed.toLongOrNull() ?: 18L)
+            }
+            values
+                .filter { it > 0L }
+                .map { it.coerceIn(1L, 400L) }
+                .ifEmpty { listOf(18L) }
+                .toLongArray()
+        }.getOrDefault(longArrayOf(18L))
+    }
+
+    private fun getVibrator(): Vibrator? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            context.getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         }
     }
 
