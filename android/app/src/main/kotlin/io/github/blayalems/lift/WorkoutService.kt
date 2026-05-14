@@ -45,8 +45,9 @@ class WorkoutService : Service() {
                 }
 
                 val notification = buildNotification(snap)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-                    startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_ACTIVE_PROCESSING)
+                // FOREGROUND_SERVICE_TYPE_HEALTH requires the 3-arg form on API 34+.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH)
                 } else {
                     startForeground(NOTIF_ID, notification)
                 }
