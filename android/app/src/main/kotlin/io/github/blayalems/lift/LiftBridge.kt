@@ -79,7 +79,9 @@ class LiftBridge(private val context: Context) {
                 runCatching { context.stopService(Intent(context, WorkoutService::class.java)) }
             }
         }
-        NotificationManagerCompat.from(context).cancel(NOTIF_ID)
+        Handler(Looper.getMainLooper()).post {
+            NotificationManagerCompat.from(context).cancel(NOTIF_ID)
+        }
     }
 
     @JavascriptInterface
