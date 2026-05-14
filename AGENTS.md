@@ -29,7 +29,7 @@ lift/
                 ├── MainActivity.kt         # WebView host, fullscreen, file chooser
                 ├── LiftBridge.kt           # @JavascriptInterface exposed as window.LiftAndroid
                 ├── WorkoutService.kt       # Foreground service for API 35+ Live Update chip
-                └── NotificationActionReceiver.kt
+                └── LiftWidgetProvider.kt   # Native home-screen workout widget
 ```
 
 ---
@@ -241,6 +241,11 @@ Fields to keep in sync with the Gradle project:
 | `clearWorkout()` | PWA on finish | Cancels notification, stops service |
 | `isNative()` | PWA startup | Returns `true` — used to gate native-only paths |
 | `saveBackupFile(filename, json)` | `cloud.js` downloadBackup | Writes JSON to MediaStore Downloads (API 29+) |
+| `saveImageFile(filename, dataUrl)` | `app.js` workout image export | Writes PNG snapshots to Downloads |
+| `shareText(title, text)` | `app.js` copy/share log | Opens Android Sharesheet for text logs |
+| `shareJsonFile(filename, json, title)` | `app.js` / `cloud.js` backup share | Shares a JSON backup through a FileProvider content URI |
+| `shareImageFile(filename, dataUrl, title)` | `app.js` workout image share | Shares a PNG through a FileProvider content URI |
+| `haptic(patternJson)` | `app.js` haptic helper | Routes tap and waveform haptics through Android |
 
 `window.LIFT_IS_NATIVE` is set to `true` by the WebViewClient's `onPageFinished` injection.
 Check this flag before calling any `window.LiftAndroid.*` method from JS.

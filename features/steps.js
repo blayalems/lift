@@ -3,6 +3,7 @@
 
   var root = window.LIFT_FEATURES = window.LIFT_FEATURES || {};
   var sensor = null;
+  var motionHandler = null;
   var lastMag = 0;
   var lastStepTs = 0;
 
@@ -30,6 +31,9 @@
   }
 
   function startSensor(ctx) {
+    stopActiveSensor();
+    lastMag = 0;
+    lastStepTs = 0;
     try {
       if ("Accelerometer" in window) {
         sensor = new Accelerometer({ frequency: 20 });
@@ -42,7 +46,8 @@
       }
     } catch (err) {}
     if (window.DeviceMotionEvent) {
-      window.addEventListener("devicemotion", motionListener(ctx));
+      motionHandler = motionListener(ctx);
+      window.addEventListener("devicemotion", motionHandler, { passive: true });
       ctx.toast("Motion counter enabled while app stays open.");
     } else {
       ctx.toast("Motion sensors are unavailable. Use manual steps.");
@@ -67,9 +72,17 @@
   }
 
   function stopSensor(ctx) {
+    stopActiveSensor();
+    ctx.toast("Step counter stopped.");
+  }
+
+  function stopActiveSensor() {
     try { if (sensor) sensor.stop(); } catch (err) {}
     sensor = null;
-    ctx.toast("Step counter stopped.");
+    if (motionHandler) {
+      try { window.removeEventListener("devicemotion", motionHandler); } catch (err) {}
+      motionHandler = null;
+    }
   }
 
   root.steps = {

@@ -18,6 +18,14 @@
     return { start: start, end: end };
   }
 
+  function monthBounds(dateId) {
+    var d = new Date(dateId + "T00:00:00");
+    return {
+      start: new Date(d.getFullYear(), d.getMonth(), 1),
+      end: new Date(d.getFullYear(), d.getMonth() + 1, 0)
+    };
+  }
+
   function inBounds(id, bounds) {
     var d = new Date(id + "T00:00:00");
     return d >= bounds.start && d <= bounds.end;
@@ -26,10 +34,13 @@
   function metrics(ctx, dateId) {
     var goals = ensureGoals(ctx);
     var bounds = weekBounds(dateId || ctx.todayId());
+    var month = monthBounds(dateId || ctx.todayId());
     var sessions = 0;
     var volume = 0;
+    var monthlyVolume = 0;
     var points = 0;
     ctx.allDays().forEach(function (entry) {
+      if (inBounds(entry.day.id, month)) monthlyVolume += ctx.completedVolume(entry.day);
       if (!inBounds(entry.day.id, bounds)) return;
       var ds = ctx.state.days[entry.day.id] || {};
       if (ds.finishedAt && ctx.completedSetCount(entry.day, ctx.state) > 0) sessions += 1;
@@ -40,6 +51,7 @@
     return {
       train: { value: sessions, goal: goals.weeklySessions, pct: pct(sessions, goals.weeklySessions) },
       volume: { value: volume, goal: goals.weeklyVolumeKg, pct: pct(volume, goals.weeklyVolumeKg) },
+      monthlyVolume: { value: monthlyVolume, goal: goals.monthlyVolumeKg, pct: pct(monthlyVolume, goals.monthlyVolumeKg) },
       move: { value: steps, goal: goals.dailySteps, pct: pct(steps, goals.dailySteps) },
       points: points
     };
@@ -61,7 +73,7 @@
     html += metric("Lift Points", String(m.points));
     html += metric("Cycle adherence", ctx.cycleAdherence() + "%");
     html += metric("Training streak", ctx.trainingStreak() + " days");
-    html += metric("Today", ctx.todayId());
+    html += metric("Monthly volume", ctx.cleanNumber(ctx.kgToDisplay(m.monthlyVolume.value), 0) + "/" + ctx.cleanNumber(ctx.kgToDisplay(m.monthlyVolume.goal), 0) + " " + ctx.unitLabel() + " (" + Math.round(m.monthlyVolume.pct * 100) + "%)");
     html += '</div>';
     html += '<div class="sheet-actions"><button class="action-btn secondary" data-action="open-sheet" data-sheet="goals">' + ctx.icon("gear") + 'Edit goals</button><button class="action-btn secondary" data-action="open-sheet" data-sheet="steps">' + ctx.icon("today") + 'Steps</button></div>';
     html += '</div>';

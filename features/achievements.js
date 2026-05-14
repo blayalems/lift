@@ -117,9 +117,10 @@
   }
 
   function phaseComplete(ctx, phase) {
-    return ctx.allDays().filter(function (entry) {
+    var matches = ctx.allDays().filter(function (entry) {
       return ctx.normalizePhase(entry.week.phase) === phase && hasExercises(entry.day);
-    }).every(function (entry) {
+    });
+    return matches.length > 0 && matches.every(function (entry) {
       return ctx.completedSetCount(entry.day, ctx.state) >= ctx.totalSetCountForSource(entry.day, ctx.state);
     });
   }
