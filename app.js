@@ -1678,7 +1678,7 @@
       reader.onload = function () {
         try {
           var imported = JSON.parse(String(reader.result || "{}"));
-          if (!imported || imported.v !== 2) throw new Error("Expected lift.v2 backup");
+          if (!imported || (imported.v !== 2 && imported.v !== 3)) throw new Error("Expected lift.v2 backup");
           var merge = confirm("Merge imported data with current data? Press Cancel to replace current data.");
           if (merge) {
             state.days = Object.assign({}, state.days || {}, imported.days || {});
@@ -1686,7 +1686,7 @@
             state.prs = Object.assign({}, state.prs || {}, imported.prs || {});
             state.settings = Object.assign({}, state.settings, imported.settings || {});
           } else {
-            state = Object.assign({ v: 2 }, imported);
+            state = Object.assign({ v: imported.v || 2 }, imported);
             state.settings = Object.assign({}, DEFAULT_SETTINGS, state.settings || {});
           }
           var selection = chooseInitialSelection(state);
