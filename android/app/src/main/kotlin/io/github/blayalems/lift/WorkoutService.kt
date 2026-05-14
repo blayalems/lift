@@ -2,6 +2,7 @@ package io.github.blayalems.lift
 
 import android.app.*
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.os.Build
 import android.os.IBinder
@@ -44,7 +45,12 @@ class WorkoutService : Service() {
                 }
 
                 val notification = buildNotification(snap)
-                startForeground(NOTIF_ID, notification)
+                // API 34+ requires the 3-arg form when foregroundServiceType is declared.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH)
+                } else {
+                    startForeground(NOTIF_ID, notification)
+                }
             }
             ACTION_CLEAR -> stopSelf()
         }

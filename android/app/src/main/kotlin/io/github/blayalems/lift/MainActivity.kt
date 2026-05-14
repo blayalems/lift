@@ -3,10 +3,12 @@ package io.github.blayalems.lift
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
 import android.webkit.*
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -23,6 +25,25 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private var pendingAction: String? = null
+
+    // File chooser callback held while the system picker is open
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
+
+    private val fileChooserLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uris: Array<Uri>? = if (result.resultCode == RESULT_OK) {
+            val data = result.data
+            when {
+                data?.clipData != null ->
+                    Array(data.clipData!!.itemCount) { data.clipData!!.getItemAt(it).uri }
+                data?.data != null -> arrayOf(data.data!!)
+                else -> null
+            }
+        } else null
+        filePathCallback?.onReceiveValue(uris)
+        filePathCallback = null
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -149,6 +170,23 @@ class MainActivity : AppCompatActivity() {
                 request.grant(request.resources)
             } else {
                 request.deny()
+            }
+        }
+
+        override fun onShowFileChooser(
+            webView: WebView?,
+            filePathCallback: ValueCallback<Array<Uri>>,
+            fileChooserParams: FileChooserParams
+        ): Boolean {
+            // Cancel any previous callback that never resolved
+            this@MainActivity.filePathCallback?.onReceiveValue(null)
+            this@MainActivity.filePathCallback = filePathCallback
+            return try {
+                fileChooserLauncher.launch(fileChooserParams.createIntent())
+                true
+            } catch (e: Exception) {
+                this@MainActivity.filePathCallback = null
+                false
             }
         }
     }
