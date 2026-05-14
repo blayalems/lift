@@ -60,6 +60,9 @@ class WorkoutService : Service() {
     // ── Notification builder ──────────────────────────────────────────────────
 
     private fun buildNotification(snap: JSONObject): Notification {
+        if (Build.VERSION.SDK_INT >= 36) {
+            return buildProgressStyleNotification(this, snap, CHANNEL_ID)
+        }
         val phase          = snap.optString("phase", "set-up-next")
         val dayTitle       = snap.optString("dayTitle", "Workout")
         val exName         = snap.optString("exName", "")
