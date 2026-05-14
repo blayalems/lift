@@ -8,7 +8,7 @@
   var sheetBackdrop = document.getElementById("sheet-backdrop");
   var summaryOverlay = document.getElementById("summary-overlay");
 
-  var APP_VERSION = "1.2.6";
+  var APP_VERSION = "1.2.7";
   window.LIFT_APP_VERSION = APP_VERSION;
 
   var STORE_KEY = "lift.v3.state";
@@ -1235,10 +1235,12 @@
     }
 
     var next = findNextPendingSet(day);
-    var phase = "set-up-next";
+    var totalExercises = (day.exercises || []).length;
+    var allSetsComplete = !next && totalExercises > 0;
+    var phase = allSetsComplete ? "complete" : "set-up-next";
     var remaining = restRemaining();
-    if (rest.running && remaining > 0) phase = "resting";
-    else if (numberOr(rest.completedAt, 0) > 0 && next) phase = "rest-done";
+    if (!allSetsComplete && rest.running && remaining > 0) phase = "resting";
+    else if (!allSetsComplete && numberOr(rest.completedAt, 0) > 0 && next) phase = "rest-done";
 
     var value = next ? next.value : { weight: 0, reps: 0 };
     var repsText = value.reps > 0 ? String(value.reps) : "failure";
@@ -1253,7 +1255,6 @@
       phase === "resting" ? remaining : numberOr(rest.completedAt, 0)
     ].join(":");
 
-    var totalExercises = (day.exercises || []).length;
     var currentExercise = next ? next.exIndex + 1 : totalExercises;
     var elapsedSec = workoutElapsed(day.id);
 
@@ -1284,10 +1285,26 @@
 
   function notifyNative(snap) {
     try {
-      if (window.LiftAndroid && typeof window.LiftAndroid.onWorkoutState === "function") {
+      if (canNotifyNative()) {
         window.LiftAndroid.onWorkoutState(JSON.stringify(snap));
       }
     } catch (e) {}
+  }
+
+  function canNotifyNative() {
+    return !!(
+      window.LIFT_IS_NATIVE &&
+      window.LiftAndroid &&
+      typeof window.LiftAndroid.onWorkoutState === "function"
+    );
+  }
+
+  function canSaveNativeImage() {
+    return !!(
+      window.LIFT_IS_NATIVE &&
+      window.LiftAndroid &&
+      typeof window.LiftAndroid.saveImageFile === "function"
+    );
   }
 
   function clearNative() {
@@ -1299,24 +1316,24 @@
   }
 
   function showWorkoutNotification() {
+    if (state.settings.workoutNotifications === false) return;
+    var snap = buildNotifSnapshot();
+    runtime.lastNotifSig = snap.signature;
+    runtime.lastNotifSnapshot = snap;
+    if (canNotifyNative()) {
+      notifyNative(snap);
+      return;
+    }
     var mod = feature("notifications");
     if (!mod || typeof mod.ensurePermission !== "function" || typeof mod.show !== "function") return;
-    if (state.settings.workoutNotifications === false) return;
     var ctx = makeCtx();
     mod.ensurePermission(ctx).then(function (permission) {
       if (permission !== "granted") return;
-      var snap = buildNotifSnapshot();
-      runtime.lastNotifSig = snap.signature;
-      runtime.lastNotifSnapshot = snap;
       mod.show(snap);
     });
-    var snap = buildNotifSnapshot();
-    notifyNative(snap);
   }
 
   function updateWorkoutNotification(force) {
-    var mod = feature("notifications");
-    if (!mod || typeof mod.update !== "function") return;
     if (state.settings.workoutNotifications === false) return;
     var snap = buildNotifSnapshot();
     runtime.lastNotifSnapshot = snap;
@@ -1326,8 +1343,13 @@
     }
     if (!force && snap.signature === runtime.lastNotifSig) return;
     runtime.lastNotifSig = snap.signature;
+    if (canNotifyNative()) {
+      notifyNative(snap);
+      return;
+    }
+    var mod = feature("notifications");
+    if (!mod || typeof mod.update !== "function") return;
     mod.update(snap);
-    notifyNative(snap);
   }
 
   function clearWorkoutNotification() {
@@ -1935,6 +1957,12 @@
       y += 78;
       ctx.font = "700 36px system-ui, sans-serif";
     });
+    if (canSaveNativeImage()) {
+      try {
+        window.LiftAndroid.saveImageFile("lift-" + day.id + ".png", canvas.toDataURL("image/png"));
+        return;
+      } catch (err) {}
+    }
     canvas.toBlob(async function (blob) {
       if (!blob) return;
       var file = new File([blob], "lift-" + day.id + ".png", { type: "image/png" });
@@ -2291,7 +2319,7 @@
       console.info("Service worker skipped outside http/https.");
       return;
     }
-    navigator.serviceWorker.register("./sw.js").then(function (registration) {
+    navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then(function (registration) {
       console.info("Lift service worker registered.");
       registration.update().catch(function () {});
     }).catch(function (err) {
@@ -2303,6 +2331,15 @@
   }
 
   function bindNotificationActionMessages() {
+    // Route actions coming from the native Android wrapper
+    window.addEventListener("liftNativeAction", function (event) {
+      var action = event && event.detail;
+      if (action) handleNotifAction(String(action));
+    });
+    window.__liftNativeActionReady = true;
+    (window.__liftPendingNativeActions || []).splice(0).forEach(function (action) {
+      if (action) handleNotifAction(String(action));
+    });
     if (!("serviceWorker" in navigator)) return;
     navigator.serviceWorker.addEventListener("message", function (event) {
       if (!event.data) return;
@@ -2312,7 +2349,6 @@
         applyPendingReload();
       }
     });
-    // Route actions coming from the native Android wrapper
     window.addEventListener("liftHandleColdAction", function () {
       handleColdNotificationAction();
     });
@@ -2327,7 +2363,9 @@
       var nextSearch = params.toString();
       var nextUrl = location.pathname + (nextSearch ? "?" + nextSearch : "") + location.hash;
       history.replaceState(null, "", nextUrl);
-      console.warn("Ignoring notifAction from URL without trusted notification context.", action);
+      if (/^(finish|minus-15|plus-15|skip|logged|open)$/.test(action)) {
+        handleNotifAction(action);
+      }
     } catch (err) {}
   }
 

@@ -43,6 +43,7 @@ class WorkoutService : Service() {
                     ?: return START_NOT_STICKY
 
                 if (snap.optString("phase") == "idle") {
+                    stopForegroundNotification()
                     stopSelf()
                     return START_NOT_STICKY
                 }
@@ -63,7 +64,10 @@ class WorkoutService : Service() {
                     return START_NOT_STICKY
                 }
             }
-            ACTION_CLEAR -> stopSelf()
+            ACTION_CLEAR -> {
+                stopForegroundNotification()
+                stopSelf()
+            }
         }
         return START_NOT_STICKY
     }
@@ -72,7 +76,11 @@ class WorkoutService : Service() {
 
     private fun buildNotification(snap: JSONObject): Notification {
         if (Build.VERSION.SDK_INT >= 36) {
-            return buildProgressStyleNotification(this, snap, CHANNEL_ID)
+            val progress = runCatching { buildProgressStyleNotification(this, snap, CHANNEL_ID) }
+            progress.getOrNull()?.let { return it }
+            progress.exceptionOrNull()?.let { err ->
+                Log.w(tag, "Progress-style notification failed; falling back to compat", err)
+            }
         }
         val phase          = snap.optString("phase", "set-up-next")
         val dayTitle       = snap.optString("dayTitle", "Workout")
@@ -102,6 +110,8 @@ class WorkoutService : Service() {
             "rest-done" ->
                 "Rest done ✓" to
                     "$exProgress · $exName · Set $setIndex/$totalSets · $setDetail — ready!".trim(' ', '·')
+            "complete" ->
+                "Workout complete" to "$exProgress · Finish workout when ready"
             else ->
                 dayTitle to
                     "$exProgress · ${exName.ifEmpty { "Workout running" }} · ${elapsedMin} min"
@@ -150,6 +160,7 @@ class WorkoutService : Service() {
                 builder.addAction(action("logged", "Logged it"))
                 builder.addAction(action("finish", "Finish"))
             }
+            "complete" -> builder.addAction(action("finish", "Finish"))
             else -> builder.addAction(action("finish", "Finish workout"))
         }
 
@@ -163,12 +174,17 @@ class WorkoutService : Service() {
         return builder.build()
     }
 
+    private fun stopForegroundNotification() {
+        runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+        runCatching { NotificationManagerCompat.from(this).cancel(NOTIF_ID) }
+    }
+
     private fun action(actionKey: String, label: String): NotificationCompat.Action {
-        val intent = Intent(this, NotificationActionReceiver::class.java).apply {
-            action = "io.github.blayalems.lift.NOTIF_ACTION"
-            putExtra(NotificationActionReceiver.EXTRA_ACTION, actionKey)
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(MainActivity.EXTRA_NOTIF_ACTION, actionKey)
         }
-        val pi = PendingIntent.getBroadcast(
+        val pi = PendingIntent.getActivity(
             this, actionKey.hashCode(), intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )

@@ -11,15 +11,18 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val action = intent.getStringExtra(EXTRA_ACTION) ?: return
 
         if (action == "finish") {
-            NotificationManagerCompat.from(context).cancel(LiftBridge.NOTIF_ID)
+            runCatching { context.stopService(Intent(context, WorkoutService::class.java)) }
+            runCatching { NotificationManagerCompat.from(context).cancel(LiftBridge.NOTIF_ID) }
         }
 
-        context.startActivity(
-            Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
-                putExtra(MainActivity.EXTRA_NOTIF_ACTION, action)
-            }
-        )
+        runCatching {
+            context.startActivity(
+                Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+                    putExtra(MainActivity.EXTRA_NOTIF_ACTION, action)
+                }
+            )
+        }
     }
 
     companion object {

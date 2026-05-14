@@ -12,6 +12,8 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.util.Base64
+import android.util.Log
 import android.webkit.JavascriptInterface
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
@@ -34,6 +36,7 @@ class LiftBridge(private val context: Context) {
         const val NOTIF_ID   = 42
         const val CHANNEL_ID = "lift_workout"
         private const val LIFT_PINK = 0xFFE63B5D.toInt()
+        private const val TAG = "LiftBridge"
     }
 
     init {
@@ -64,11 +67,11 @@ class LiftBridge(private val context: Context) {
                 try {
                     context.startForegroundService(serviceIntent)
                 } catch (e: Exception) {
-                    NotificationManagerCompat.from(context).notify(NOTIF_ID, buildNotification(snap))
+                    postFallbackNotification(snap)
                 }
             }
         } else {
-            NotificationManagerCompat.from(context).notify(NOTIF_ID, buildNotification(snap))
+            postFallbackNotification(snap)
         }
     }
 
@@ -79,7 +82,7 @@ class LiftBridge(private val context: Context) {
                 runCatching { context.stopService(Intent(context, WorkoutService::class.java)) }
                 runCatching { NotificationManagerCompat.from(context).cancel(NOTIF_ID) }
             }
-            NotificationManagerCompat.from(context).cancel(NOTIF_ID)
+            runCatching { NotificationManagerCompat.from(context).cancel(NOTIF_ID) }
         }
     }
 
@@ -98,10 +101,17 @@ class LiftBridge(private val context: Context) {
                 val resolver = context.contentResolver
                 val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                     ?: throw Exception("MediaStore insert returned null")
-                resolver.openOutputStream(uri)?.use { it.write(json.toByteArray(Charsets.UTF_8)) }
-                values.clear()
-                values.put(MediaStore.Downloads.IS_PENDING, 0)
-                resolver.update(uri, values, null, null)
+                try {
+                    resolver.openOutputStream(uri)
+                        ?.use { it.write(json.toByteArray(Charsets.UTF_8)) }
+                        ?: throw Exception("MediaStore output stream returned null")
+                    values.clear()
+                    values.put(MediaStore.Downloads.IS_PENDING, 0)
+                    resolver.update(uri, values, null, null)
+                } catch (e: Exception) {
+                    runCatching { resolver.delete(uri, null, null) }
+                    throw e
+                }
             } else {
                 val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
                 dir.mkdirs()
@@ -117,11 +127,56 @@ class LiftBridge(private val context: Context) {
         }
     }
 
+    @JavascriptInterface
+    fun saveImageFile(filename: String, dataUrl: String) {
+        try {
+            val safeName = cleanFilename(filename, "lift-workout.png")
+            val bytes = decodeDataUrl(dataUrl)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, safeName)
+                    put(MediaStore.Downloads.MIME_TYPE, "image/png")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                    put(MediaStore.Downloads.IS_PENDING, 1)
+                }
+                val resolver = context.contentResolver
+                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: throw Exception("MediaStore insert returned null")
+                try {
+                    resolver.openOutputStream(uri)
+                        ?.use { it.write(bytes) }
+                        ?: throw Exception("MediaStore output stream returned null")
+                    values.clear()
+                    values.put(MediaStore.Downloads.IS_PENDING, 0)
+                    resolver.update(uri, values, null, null)
+                } catch (e: Exception) {
+                    runCatching { resolver.delete(uri, null, null) }
+                    throw e
+                }
+            } else {
+                val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                dir.mkdirs()
+                File(dir, safeName).writeBytes(bytes)
+            }
+            (context as? Activity)?.runOnUiThread {
+                Toast.makeText(context, "Image saved to Downloads/$safeName", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            (context as? Activity)?.runOnUiThread {
+                Toast.makeText(context, "Image save failed: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     // ── Notification builder ──────────────────────────────────────────────────
 
     private fun buildNotification(snap: JSONObject): Notification {
         if (Build.VERSION.SDK_INT >= 36) {
-            return buildProgressStyleNotification(context, snap, CHANNEL_ID)
+            val progress = runCatching { buildProgressStyleNotification(context, snap, CHANNEL_ID) }
+            progress.getOrNull()?.let { return it }
+            progress.exceptionOrNull()?.let { err ->
+                Log.w(TAG, "Progress-style notification failed; falling back to compat", err)
+            }
         }
         val phase         = snap.optString("phase", "set-up-next")
         val dayTitle      = snap.optString("dayTitle", "Workout")
@@ -150,6 +205,8 @@ class LiftBridge(private val context: Context) {
             "rest-done" ->
                 "Rest done ✓" to
                     "$exProgress · $exName · Set $setIndex/$totalSets · $setDetail — ready!".trim(' ', '·')
+            "complete" ->
+                "Workout complete" to "$exProgress · Finish workout when ready"
             else ->
                 dayTitle to
                     "$exProgress · ${exName.ifEmpty { "Workout running" }} · $elapsedMin min"
@@ -196,6 +253,7 @@ class LiftBridge(private val context: Context) {
                 builder.addAction(notifAction("logged", "Logged it"))
                 builder.addAction(notifAction("finish", "Finish"))
             }
+            "complete" -> builder.addAction(notifAction("finish", "Finish"))
             else -> builder.addAction(notifAction("finish", "Finish workout"))
         }
 
@@ -209,15 +267,40 @@ class LiftBridge(private val context: Context) {
     }
 
     private fun notifAction(actionKey: String, label: String): NotificationCompat.Action {
-        val intent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = "io.github.blayalems.lift.NOTIF_ACTION"
-            putExtra(NotificationActionReceiver.EXTRA_ACTION, actionKey)
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(MainActivity.EXTRA_NOTIF_ACTION, actionKey)
         }
-        val pi = PendingIntent.getBroadcast(
+        val pi = PendingIntent.getActivity(
             context, actionKey.hashCode(), intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Action.Builder(0, label, pi).build()
+    }
+
+    private fun postFallbackNotification(snap: JSONObject) {
+        runCatching {
+            NotificationManagerCompat.from(context).notify(NOTIF_ID, buildNotification(snap))
+        }.onFailure { err ->
+            Log.w(TAG, "Fallback notification failed", err)
+        }
+    }
+
+    private fun decodeDataUrl(dataUrl: String): ByteArray {
+        val payload = dataUrl.substringAfter(",", dataUrl).trim()
+        return Base64.decode(payload, Base64.DEFAULT)
+    }
+
+    private fun cleanFilename(filename: String, fallback: String): String {
+        val cleaned = filename
+            .replace(Regex("""[\\/:*?"<>|]"""), "_")
+            .trim()
+            .take(96)
+        return when {
+            cleaned.isEmpty() -> fallback
+            cleaned.endsWith(".png", ignoreCase = true) -> cleaned
+            else -> "$cleaned.png"
+        }
     }
 
     // ── Channel (idempotent — safe to call on every bridge construction) ──────

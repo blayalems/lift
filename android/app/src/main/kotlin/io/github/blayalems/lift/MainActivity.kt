@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import org.json.JSONObject
 
 class MainActivity : AppCompatActivity() {
 
@@ -27,6 +28,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private var pendingAction: String? = null
+    private var pendingAssetRefreshVersion: Int = 0
 
     // File chooser callback held while the system picker is open
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
@@ -78,8 +80,8 @@ class MainActivity : AppCompatActivity() {
         pendingAction = intent?.getStringExtra(EXTRA_NOTIF_ACTION)
         intent?.removeExtra(EXTRA_NOTIF_ACTION)
 
-        clearCacheIfVersionChanged()
-        webView.loadUrl(PWA_URL)
+        val initialUrl = prepareUrlForVersion()
+        webView.loadUrl(initialUrl)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -87,6 +89,10 @@ class MainActivity : AppCompatActivity() {
         setIntent(intent)
         val action = intent.getStringExtra(EXTRA_NOTIF_ACTION) ?: return
         intent.removeExtra(EXTRA_NOTIF_ACTION)
+        if (pendingAssetRefreshVersion > 0 || !::webView.isInitialized) {
+            pendingAction = action
+            return
+        }
         dispatchAction(action)
     }
 
@@ -108,10 +114,10 @@ class MainActivity : AppCompatActivity() {
     // ── Action dispatch ────────────────────────────────────────────────────────
 
     private fun dispatchAction(action: String) {
-        val safe = action.replace("'", "\\'")
+        val safe = JSONObject.quote(action)
         webView.post {
             webView.evaluateJavascript(
-                "window.dispatchEvent(new CustomEvent('liftNativeAction',{detail:'$safe'}));",
+                "if(window.__liftDispatchNativeAction){window.__liftDispatchNativeAction($safe);}else{window.dispatchEvent(new CustomEvent('liftNativeAction',{detail:$safe}));}",
                 null
             )
         }
@@ -119,20 +125,30 @@ class MainActivity : AppCompatActivity() {
 
     // ── PWA cache invalidation on APK version change ───────────────────────────
 
-    private fun clearCacheIfVersionChanged() {
+    private fun prepareUrlForVersion(): String {
         val prefs   = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val stored  = prefs.getInt(PREFS_KEY_VC, 0)
-        val current = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        val current = currentVersionCode()
+        if (stored != current) {
+            webView.clearCache(true)
+            webView.settings.cacheMode = WebSettings.LOAD_NO_CACHE
+            pendingAssetRefreshVersion = current
+            return Uri.parse(PWA_URL).buildUpon()
+                .appendQueryParameter("nativeVersion", current.toString())
+                .appendQueryParameter("cacheBust", System.currentTimeMillis().toString())
+                .build()
+                .toString()
+        }
+        return PWA_URL
+    }
+
+    private fun currentVersionCode(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             packageManager.getPackageInfo(packageName, 0).longVersionCode.toInt()
         } else {
             @Suppress("DEPRECATION")
             packageManager.getPackageInfo(packageName, 0).versionCode
         }
-        if (stored != current) {
-            webView.clearCache(true)
-            prefs.edit().putInt(PREFS_KEY_VC, current).apply()
-        }
-    }
 
     // ── Fullscreen ─────────────────────────────────────────────────────────────
 
@@ -167,15 +183,21 @@ class MainActivity : AppCompatActivity() {
                     if(window.__liftNativeHooked)return;
                     window.__liftNativeHooked=true;
                     window.LIFT_IS_NATIVE=true;
-                    window.addEventListener('liftNativeAction',function(e){
-                        var a=e.detail;if(!a)return;
-                        var u=new URL(location.href);
-                        u.searchParams.set('notifAction',a);
-                        history.replaceState(null,'',u.toString());
-                        window.dispatchEvent(new Event('liftHandleColdAction'));
-                    });
+                    window.__liftPendingNativeActions=window.__liftPendingNativeActions||[];
+                    window.__liftDispatchNativeAction=function(a){
+                        if(!a)return;
+                        if(!window.__liftNativeActionReady){
+                            window.__liftPendingNativeActions.push(String(a));
+                        }
+                        window.dispatchEvent(new CustomEvent('liftNativeAction',{detail:String(a)}));
+                    };
                 })();
             """.trimIndent(), null)
+
+            if (pendingAssetRefreshVersion > 0) {
+                refreshPwaAssetsAfterApkUpdate(view, pendingAssetRefreshVersion)
+                return
+            }
 
             // Flush any cold-start action buffered before this listener existed
             pendingAction?.let { action ->
@@ -214,5 +236,36 @@ class MainActivity : AppCompatActivity() {
                 false
             }
         }
+    }
+
+    private fun refreshPwaAssetsAfterApkUpdate(view: WebView, versionCode: Int) {
+        pendingAssetRefreshVersion = 0
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putInt(PREFS_KEY_VC, versionCode)
+            .apply()
+
+        val freshUrl = Uri.parse(PWA_URL).buildUpon()
+            .appendQueryParameter("nativeVersion", versionCode.toString())
+            .appendQueryParameter("assetRefresh", System.currentTimeMillis().toString())
+            .build()
+            .toString()
+        val safeUrl = JSONObject.quote(freshUrl)
+        view.settings.cacheMode = WebSettings.LOAD_DEFAULT
+        view.evaluateJavascript("""
+            (function(){
+                var clearCaches = window.caches ? caches.keys().then(function(keys){
+                    return Promise.all(keys.filter(function(key){
+                        return key.indexOf('lift-') === 0;
+                    }).map(function(key){ return caches.delete(key); }));
+                }) : Promise.resolve();
+                var unregister = navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(function(regs){
+                    return Promise.all(regs.map(function(reg){ return reg.unregister(); }));
+                }) : Promise.resolve();
+                Promise.all([clearCaches, unregister]).catch(function(){}).then(function(){
+                    location.replace($safeUrl);
+                });
+            })();
+        """.trimIndent(), null)
     }
 }
