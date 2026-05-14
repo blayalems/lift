@@ -42,14 +42,15 @@ internal fun buildProgressStyleNotification(
     val phase         = snap.optString("phase", "set-up-next")
     val dayTitle      = snap.optString("dayTitle", "Workout")
     val exName        = snap.optString("exName", "")
-    val setIndex      = snap.optInt("setIndex", 1)
+    val rawSetIndex   = snap.optInt("setIndex", 1)
     val totalSets     = snap.optInt("totalSets", 1).coerceAtLeast(1)
+    val setIndex      = rawSetIndex.coerceIn(0, totalSets)
     val curEx         = snap.optInt("currentExercise", 1).coerceAtLeast(1)
     val totEx         = snap.optInt("totalExercises", 1).coerceAtLeast(1)
     val weightText    = snap.optString("weightText", "")
     val repsText      = snap.optString("repsText", "")
     val unitLabel     = snap.optString("unitLabel", "kg")
-    val restRemaining = snap.optLong("restRemainingSec", 0L)
+    val restRemaining = snap.optLong("restRemainingSec", 0L).coerceAtLeast(0L)
     val elapsedMin    = snap.optInt("elapsedMin", 0)
     val startedAt     = snap.optLong("startedAt", 0L)
 
@@ -66,6 +67,8 @@ internal fun buildProgressStyleNotification(
         "rest-done" ->
             "Rest done ✓" to
                 "$exProgress · $exName · Set $setIndex/$totalSets · $setDetail — ready!".trim(' ', '·')
+        "complete" ->
+            "Workout complete" to "$exProgress · Finish workout when ready"
         else ->
             dayTitle to
                 "$exProgress · ${exName.ifEmpty { "Workout running" }} · $elapsedMin min"
@@ -82,6 +85,7 @@ internal fun buildProgressStyleNotification(
     val chipText = when (phase) {
         "resting" -> "%d:%02d".format(restRemaining / 60, restRemaining % 60)
         "rest-done" -> "Ready"
+        "complete" -> "Done"
         else -> "Ex $curEx/$totEx"
     }
 
@@ -121,6 +125,7 @@ internal fun buildProgressStyleNotification(
             builder.addAction(platformAction(context, "logged", "Logged it"))
             builder.addAction(platformAction(context, "finish", "Finish"))
         }
+        "complete" -> builder.addAction(platformAction(context, "finish", "Finish"))
         else -> builder.addAction(platformAction(context, "finish", "Finish workout"))
     }
 
@@ -130,18 +135,19 @@ internal fun buildProgressStyleNotification(
     val segUnits = 100
     val totalUnits = segUnits * totEx
 
-    val completedInCurEx = when (phase) {
-        "resting", "rest-done" -> setIndex
-        else -> setIndex - 1
-    }.coerceIn(0, totalSets)
+    val completedInCurEx = (setIndex - 1).coerceIn(0, totalSets)
     val intoEx = (completedInCurEx.toDouble() / totalSets * segUnits).toInt()
-    val progress = (((curEx - 1) * segUnits) + intoEx).coerceIn(0, totalUnits)
+    val progress = if (phase == "complete") {
+        totalUnits
+    } else {
+        (((curEx - 1) * segUnits) + intoEx).coerceIn(0, totalUnits)
+    }
 
     val segments = (1..totEx).map { idx ->
         val color = when {
-            idx <  curEx -> LIFT_PINK_FILLED
-            idx == curEx -> LIFT_PINK
-            else         -> LIFT_TRACK_REMAIN
+            phase == "complete" || idx < curEx -> LIFT_PINK_FILLED
+            idx == curEx                       -> LIFT_PINK
+            else                               -> LIFT_TRACK_REMAIN
         }
         Notification.ProgressStyle.Segment(segUnits).setColor(color)
     }
@@ -167,11 +173,11 @@ private fun platformAction(
     actionKey: String,
     label: String,
 ): Notification.Action {
-    val intent = Intent(context, NotificationActionReceiver::class.java).apply {
-        action = "io.github.blayalems.lift.NOTIF_ACTION"
-        putExtra(NotificationActionReceiver.EXTRA_ACTION, actionKey)
+    val intent = Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        putExtra(MainActivity.EXTRA_NOTIF_ACTION, actionKey)
     }
-    val pi = PendingIntent.getBroadcast(
+    val pi = PendingIntent.getActivity(
         context, actionKey.hashCode(), intent,
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
