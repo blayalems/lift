@@ -45,10 +45,8 @@ class WorkoutService : Service() {
                 }
 
                 val notification = buildNotification(snap)
-                // API 35+ requires the 3-arg form with ACTIVE_PROCESSING type.
-                // We only start this service on API 35+, so the else branch is a safety net.
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-                    startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_ACTIVE_PROCESSING)
+                    startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING)
                 } else {
                     startForeground(NOTIF_ID, notification)
                 }

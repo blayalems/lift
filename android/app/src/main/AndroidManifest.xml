@@ -33,7 +33,7 @@
         <service
             android:name=".WorkoutService"
             android:exported="false"
-            android:foregroundServiceType="activeProcessing" />
+            android:foregroundServiceType="mediaProcessing" />
 
     </application>
 
