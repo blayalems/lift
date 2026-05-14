@@ -82,24 +82,38 @@
     var title = "Lift";
     var body = "";
 
+    var exProgress = (snap.totalExercises > 0)
+      ? "Ex " + snap.currentExercise + "/" + snap.totalExercises + " · "
+      : "";
+    var setProgress = (snap.totalSets > 0)
+      ? " · Set " + snap.setIndex + "/" + snap.totalSets
+      : "";
+    var elapsed = (snap.elapsedMin > 0) ? " · " + snap.elapsedMin + " min" : "";
+
     if (snap.phase === "resting") {
-      title = "Lift - Resting " + (snap.restLabel || formatSeconds(snap.restRemainingSec));
-      body = "Next: " + (snap.exName || "next set") + " - set " + (snap.setIndex || 1) + " of " + (snap.totalSets || 1);
+      title = "Lift — Rest " + (snap.restLabel || formatSeconds(snap.restRemainingSec));
+      body = exProgress + (snap.exName || "next set") + setProgress;
+      if (snap.weightText && snap.repsText) {
+        body += " · " + snap.weightText + " " + (snap.unitLabel || "") + " × " + snap.repsText;
+      }
       actions = [
         { action: "minus-15", title: "-15s" },
         { action: "skip", title: "Skip rest" },
         { action: "plus-15", title: "+15s" }
       ];
     } else if (snap.phase === "rest-done") {
-      title = "Lift - Rest done";
-      body = snap.exName ? "Tap to log " + setText : "Next set is ready.";
+      title = "Lift — Rest done ✓";
+      body = exProgress + (snap.exName || "next set") + setProgress;
+      if (snap.weightText && snap.repsText) {
+        body += " · " + snap.weightText + " " + (snap.unitLabel || "") + " × " + snap.repsText + " — ready!";
+      }
       actions = [
         { action: "logged", title: "Logged it" },
         { action: "finish", title: "Finish" }
       ];
     } else if (snap.phase === "set-up-next") {
-      title = "Lift - " + (snap.dayTitle || "Workout");
-      body = snap.exName ? "Up next: " + setText : "Workout is running.";
+      title = "Lift — " + (snap.dayTitle || "Workout");
+      body = exProgress + (snap.exName ? setText : "Workout running") + elapsed;
       actions = [{ action: "finish", title: "Finish workout" }];
     } else {
       title = "Lift";
