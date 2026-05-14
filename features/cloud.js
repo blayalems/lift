@@ -35,7 +35,23 @@
 
   function renderBackup(ctx) {
     var sync = ctx.state.cloudSync || {};
-    return '<div class="sheet-grid"><div class="overview-card"><strong>Optional cloud export</strong><p>Google Drive and Dropbox uploads require OAuth client IDs. This offline build provides the safe portable path now: download JSON or use the system share sheet to save to Files, Drive, or Dropbox.</p></div><div class="metric-grid"><div class="metric-card"><div class="label">Last backup</div><div class="value">' + (sync.lastBackupAt ? new Date(sync.lastBackupAt).toLocaleDateString() : "Never") + '</div></div><div class="metric-card"><div class="label">Provider</div><div class="value">' + ctx.escapeHtml(sync.provider || "local") + '</div></div></div><div class="sheet-actions"><button class="action-btn" data-action="backup-download">' + ctx.icon("download") + 'Download JSON</button><button class="action-btn secondary" data-action="backup-share">' + ctx.icon("share") + 'Share backup</button><button class="action-btn secondary" data-action="backup-restore">' + ctx.icon("upload") + 'Restore file</button></div></div>';
+    var appVersion = ctx.appVersion || (window.LIFT_APP_VERSION) || "—";
+    return (
+      '<div class="sheet-grid">' +
+      '<div class="overview-card"><strong>Optional cloud export</strong><p>Google Drive and Dropbox uploads require OAuth client IDs. This offline build provides the safe portable path now: download JSON or use the system share sheet to save to Files, Drive, or Dropbox.</p></div>' +
+      '<div class="metric-grid">' +
+        '<div class="metric-card"><div class="label">Last backup</div><div class="value">' + (sync.lastBackupAt ? new Date(sync.lastBackupAt).toLocaleDateString() : "Never") + '</div></div>' +
+        '<div class="metric-card"><div class="label">Provider</div><div class="value">' + ctx.escapeHtml(sync.provider || "local") + '</div></div>' +
+        '<div class="metric-card"><div class="label">App version</div><div class="value">v' + ctx.escapeHtml(appVersion) + '</div></div>' +
+      '</div>' +
+      '<div class="sheet-actions">' +
+        '<button class="action-btn" data-action="backup-download">' + ctx.icon("download") + 'Download JSON</button>' +
+        '<button class="action-btn secondary" data-action="backup-share">' + ctx.icon("share") + 'Share backup</button>' +
+        '<button class="action-btn secondary" data-action="backup-restore">' + ctx.icon("upload") + 'Restore file</button>' +
+        '<button class="action-btn secondary" data-action="check-updates">' + ctx.icon("refresh") + 'Check for updates</button>' +
+      '</div>' +
+      '</div>'
+    );
   }
 
   function restoreFromFile(ctx, file, callback) {

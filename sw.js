@@ -1,4 +1,4 @@
-const CACHE_VERSION = "lift-v5";
+const CACHE_VERSION = "lift-v6";
 const PRECACHE = `${CACHE_VERSION}-precache`;
 const RUNTIME = `${CACHE_VERSION}-runtime`;
 
@@ -7,6 +7,7 @@ const APP_SHELL = [
   "./index.html",
   "./app.js",
   "./data.js",
+  "./version.json",
   "./features/achievements.js",
   "./features/records.js",
   "./features/summary.js",
@@ -56,6 +57,7 @@ self.addEventListener("activate", (event) => {
         )
       )
       .then(() => self.clients.claim())
+      .then(() => notifyClientsOfUpdate())
   );
 });
 
@@ -98,6 +100,14 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(networkFirstNavigation(request));
+    return;
+  }
+
+  // Always fetch version.json from the network so update checks see live data.
+  if (url.pathname.endsWith("/version.json")) {
+    event.respondWith(
+      fetch(request, { cache: "no-store" }).catch(() => caches.match("./version.json"))
+    );
     return;
   }
 
@@ -169,6 +179,11 @@ async function cacheFirstStatic(request) {
 
 function isStaticRequest(request, url) {
   return STATIC_DESTINATIONS.has(request.destination) || STATIC_PATH_RE.test(url.pathname);
+}
+
+async function notifyClientsOfUpdate() {
+  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  clients.forEach((client) => client.postMessage({ type: "LIFT_SW_UPDATED" }));
 }
 
 async function showLiftNotification(payload, options = {}) {

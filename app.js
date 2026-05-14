@@ -8,6 +8,9 @@
   var sheetBackdrop = document.getElementById("sheet-backdrop");
   var summaryOverlay = document.getElementById("summary-overlay");
 
+  var APP_VERSION = "1.1.0";
+  window.LIFT_APP_VERSION = APP_VERSION;
+
   var STORE_KEY = "lift.v3.state";
   var V2_STORE_KEY = "lift.v2.state";
   var THEME_KEY = "lift.v2.theme";
@@ -63,7 +66,8 @@
     cycleReview: false,
     recordsSort: "recency",
     lastNotifSig: "",
-    lastNotifSnapshot: null
+    lastNotifSnapshot: null,
+    pendingReload: false
   };
 
   var state = loadState();
@@ -203,7 +207,8 @@
       grid: '<path d="M4 4h6v6H4ZM14 4h6v6h-6ZM4 14h6v6H4ZM14 14h6v6h-6Z"/>',
       badge: '<circle cx="12" cy="9" r="5"/><path d="m8.5 13.5-1.5 6 5-3 5 3-1.5-6"/>',
       book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 0-3-3Z"/><path d="M5 4v13"/><path d="M8 8h7M8 12h6"/>',
-      shoe: '<path d="M4 14c2.2 1.8 5.3 3 9.2 3H20c.6 0 1-.4 1-1v-1.4c0-.6-.4-1-1-1h-3.6c-1.7 0-3.2-.7-4.4-1.8L9.5 9.5 7.4 12 5 10.4 4 14Z"/><path d="M8 13h4M11 11l1.5-1.5"/>'
+      shoe: '<path d="M4 14c2.2 1.8 5.3 3 9.2 3H20c.6 0 1-.4 1-1v-1.4c0-.6-.4-1-1-1h-3.6c-1.7 0-3.2-.7-4.4-1.8L9.5 9.5 7.4 12 5 10.4 4 14Z"/><path d="M8 13h4M11 11l1.5-1.5"/>',
+      refresh: '<path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M21 3v5h-5M3 21v-5h5"/>'
     };
     return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (paths[name] || paths.more) + "</svg>";
   }
@@ -352,6 +357,8 @@
       exportData: exportData,
       importData: importData,
       saveState: saveState,
+      appVersion: APP_VERSION,
+      checkForUpdates: checkForUpdates,
       cycleAdherence: cycleAdherence,
       trainingStreak: trainingStreak,
       dayStatus: dayStatus,
@@ -1166,6 +1173,11 @@
       }
     }
     render();
+    if (runtime.pendingReload) {
+      runtime.pendingReload = false;
+      toast("Applying app update now…");
+      setTimeout(function () { location.reload(); }, 1400);
+    }
   }
 
   function isCycleComplete() {
@@ -1241,6 +1253,10 @@
       phase === "resting" ? remaining : numberOr(rest.completedAt, 0)
     ].join(":");
 
+    var totalExercises = (day.exercises || []).length;
+    var currentExercise = next ? next.exIndex + 1 : totalExercises;
+    var elapsedSec = workoutElapsed(day.id);
+
     return {
       phase: phase,
       dayId: day.id,
@@ -1252,6 +1268,9 @@
       repsText: repsText,
       setIndex: next ? next.setIndex + 1 : 0,
       totalSets: next ? next.totalSets : 0,
+      currentExercise: currentExercise,
+      totalExercises: totalExercises,
+      elapsedMin: Math.floor(elapsedSec / 60),
       pendingExIndex: next ? next.exIndex : null,
       pendingSetIndex: next ? next.setIndex : null,
       restRemainingSec: remaining,
@@ -1678,7 +1697,7 @@
       reader.onload = function () {
         try {
           var imported = JSON.parse(String(reader.result || "{}"));
-          if (!imported || (imported.v !== 2 && imported.v !== 3)) throw new Error("Expected lift.v2 backup");
+          if (!imported || typeof imported !== "object" || typeof imported.days !== "object") throw new Error("Invalid backup: missing workout data");
           var merge = confirm("Merge imported data with current data? Press Cancel to replace current data.");
           if (merge) {
             state.days = Object.assign({}, state.days || {}, imported.days || {});
@@ -2120,6 +2139,8 @@
       if (shareCloud && typeof shareCloud.shareBackup === "function") shareCloud.shareBackup(makeCtx());
     } else if (action === "backup-restore") {
       importData();
+    } else if (action === "check-updates") {
+      checkForUpdates();
     } else if (action === "library-add") {
       var library = feature("library");
       var nameNode = sheet.querySelector("[data-library-name]");
@@ -2206,27 +2227,68 @@
     }
   }
 
+  function checkForUpdates() {
+    if (!navigator.onLine) {
+      toast("You are offline. Connect to check for updates.");
+      return;
+    }
+    toast("Checking for updates…");
+    fetch("./version.json", { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var online = data && data.version;
+        if (online && online !== APP_VERSION) {
+          toast("Update available (v" + online + "). Applying…");
+          if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.ready.then(function (reg) {
+              reg.update().catch(function () {});
+            });
+          }
+        } else {
+          toast("Already on the latest version (v" + APP_VERSION + ").");
+        }
+      })
+      .catch(function () {
+        toast("Update check failed. Are you online?");
+      });
+  }
+
+  function applyPendingReload() {
+    var day = getDay(state.activeDayId);
+    if (day && isWorkoutRunning(day.id)) {
+      runtime.pendingReload = true;
+      toast("App update ready — will reload after your workout.");
+    } else {
+      toast("App updated to v" + APP_VERSION + ".");
+      setTimeout(function () { location.reload(); }, 1400);
+    }
+  }
+
   function registerServiceWorker() {
     if (!("serviceWorker" in navigator)) return;
     if (!location.protocol.startsWith("http")) {
       console.info("Service worker skipped outside http/https.");
       return;
     }
-    navigator.serviceWorker.register("./sw.js").then(function () {
+    navigator.serviceWorker.register("./sw.js").then(function (registration) {
       console.info("Lift service worker registered.");
+      registration.update().catch(function () {});
     }).catch(function (err) {
       console.warn("Lift service worker registration failed.", err);
     });
     navigator.serviceWorker.addEventListener("controllerchange", function () {
-      toast("Offline app updated. Reload when convenient.");
+      applyPendingReload();
     });
   }
 
   function bindNotificationActionMessages() {
     if (!("serviceWorker" in navigator)) return;
     navigator.serviceWorker.addEventListener("message", function (event) {
-      if (event.data && event.data.type === "LIFT_NOTIF_ACTION") {
+      if (!event.data) return;
+      if (event.data.type === "LIFT_NOTIF_ACTION") {
         handleNotifAction(event.data.action);
+      } else if (event.data.type === "LIFT_SW_UPDATED") {
+        applyPendingReload();
       }
     });
   }
