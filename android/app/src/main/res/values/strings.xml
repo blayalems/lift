@@ -3,4 +3,7 @@
     <string name="app_name">Lift</string>
     <string name="notif_channel_name">Active Workout</string>
     <string name="notif_channel_desc">Shows current exercise, set, and rest timer while a workout is running</string>
+    <string name="widget_desc">Lift workout progress widget</string>
+    <string name="widget_ready">Ready to train</string>
+    <string name="widget_detail_idle">Tap to open today\'s workout</string>
 </resources>

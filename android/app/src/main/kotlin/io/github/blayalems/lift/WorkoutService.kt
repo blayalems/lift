@@ -43,11 +43,13 @@ class WorkoutService : Service() {
                     ?: return START_NOT_STICKY
 
                 if (snap.optString("phase") == "idle") {
+                    LiftWidgetProvider.updateAll(this, null)
                     stopForegroundNotification()
                     stopSelf()
                     return START_NOT_STICKY
                 }
 
+                LiftWidgetProvider.updateAll(this, snap)
                 val notification = buildNotification(snap)
                 // FOREGROUND_SERVICE_TYPE_HEALTH requires the 3-arg form on API 34+.
                 // Guard startForeground so any platform/runtime restriction can't crash the app.
@@ -65,6 +67,7 @@ class WorkoutService : Service() {
                 }
             }
             ACTION_CLEAR -> {
+                LiftWidgetProvider.updateAll(this, null)
                 stopForegroundNotification()
                 stopSelf()
             }
