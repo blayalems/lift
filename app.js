@@ -1271,6 +1271,7 @@
       currentExercise: currentExercise,
       totalExercises: totalExercises,
       elapsedMin: Math.floor(elapsedSec / 60),
+      startedAt: dayState(day.id).startedAt || 0,
       pendingExIndex: next ? next.exIndex : null,
       pendingSetIndex: next ? next.setIndex : null,
       restRemainingSec: remaining,
@@ -1279,6 +1280,22 @@
       setText: setText,
       signature: signature
     };
+  }
+
+  function notifyNative(snap) {
+    try {
+      if (window.LiftAndroid && typeof window.LiftAndroid.onWorkoutState === "function") {
+        window.LiftAndroid.onWorkoutState(JSON.stringify(snap));
+      }
+    } catch (e) {}
+  }
+
+  function clearNative() {
+    try {
+      if (window.LiftAndroid && typeof window.LiftAndroid.clearWorkout === "function") {
+        window.LiftAndroid.clearWorkout();
+      }
+    } catch (e) {}
   }
 
   function showWorkoutNotification() {
@@ -1293,6 +1310,8 @@
       runtime.lastNotifSnapshot = snap;
       mod.show(snap);
     });
+    var snap = buildNotifSnapshot();
+    notifyNative(snap);
   }
 
   function updateWorkoutNotification(force) {
@@ -1308,6 +1327,7 @@
     if (!force && snap.signature === runtime.lastNotifSig) return;
     runtime.lastNotifSig = snap.signature;
     mod.update(snap);
+    notifyNative(snap);
   }
 
   function clearWorkoutNotification() {
@@ -1315,6 +1335,7 @@
     runtime.lastNotifSig = "";
     runtime.lastNotifSnapshot = null;
     if (mod && typeof mod.clear === "function") mod.clear();
+    clearNative();
   }
 
   function handleNotifAction(action) {
@@ -2290,6 +2311,10 @@
       } else if (event.data.type === "LIFT_SW_UPDATED") {
         applyPendingReload();
       }
+    });
+    // Route actions coming from the native Android wrapper
+    window.addEventListener("liftHandleColdAction", function () {
+      handleColdNotificationAction();
     });
   }
 

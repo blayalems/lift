@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Monochrome dumbbell for the notification small icon.
+    Android uses only the alpha channel — keep fill white on transparent.
+    Viewport matches the SVG source (512×512).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <!-- Left outer plate: x=88 y=204 w=58 h=104 rx=14 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M102,204 H132 Q146,204 146,218 V294 Q146,308 132,308 H102 Q88,308 88,294 V218 Q88,204 102,204 Z" />
+
+    <!-- Left inner plate: x=156 y=184 w=48 h=144 rx=14 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M170,184 H190 Q204,184 204,198 V314 Q204,328 190,328 H170 Q156,328 156,314 V198 Q156,184 170,184 Z" />
+
+    <!-- Bar: x=196 y=238 w=120 h=36 rx=18 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M214,238 H298 Q316,238 316,256 Q316,274 298,274 H214 Q196,274 196,256 Q196,238 214,238 Z" />
+
+    <!-- Right inner plate: x=308 y=184 w=48 h=144 rx=14 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M322,184 H342 Q356,184 356,198 V314 Q356,328 342,328 H322 Q308,328 308,314 V198 Q308,184 322,184 Z" />
+
+    <!-- Right outer plate: x=366 y=204 w=58 h=104 rx=14 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M380,204 H410 Q424,204 424,218 V294 Q424,308 410,308 H380 Q366,308 366,294 V218 Q366,204 380,204 Z" />
+
+</vector>
