@@ -74,12 +74,11 @@ class LiftBridge(private val context: Context) {
 
     @JavascriptInterface
     fun clearWorkout() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-            Handler(Looper.getMainLooper()).post {
+        Handler(Looper.getMainLooper()).post {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
                 runCatching { context.stopService(Intent(context, WorkoutService::class.java)) }
                 runCatching { NotificationManagerCompat.from(context).cancel(NOTIF_ID) }
             }
-        } else {
             NotificationManagerCompat.from(context).cancel(NOTIF_ID)
         }
     }
@@ -121,6 +120,9 @@ class LiftBridge(private val context: Context) {
     // ── Notification builder ──────────────────────────────────────────────────
 
     private fun buildNotification(snap: JSONObject): Notification {
+        if (Build.VERSION.SDK_INT >= 36) {
+            return buildProgressStyleNotification(context, snap, CHANNEL_ID)
+        }
         val phase         = snap.optString("phase", "set-up-next")
         val dayTitle      = snap.optString("dayTitle", "Workout")
         val exName        = snap.optString("exName", "")
