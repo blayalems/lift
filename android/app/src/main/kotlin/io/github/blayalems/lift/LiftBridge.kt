@@ -2,24 +2,29 @@ package io.github.blayalems.lift
 
 import android.Manifest
 import android.app.*
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.webkit.JavascriptInterface
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import org.json.JSONObject
+import java.io.File
 
 /**
  * Exposed to the PWA as `window.LiftAndroid`.
  *
- * Notification is posted directly via NotificationManagerCompat — no
- * foreground service, no startForeground() — removing the entire class of
- * InvalidForegroundServiceTypeException / SecurityException crashes that
- * the foreground-service path was susceptible to.
+ * On API 35+ (Android 15+), workout state is routed through WorkoutService so the
+ * notification runs under a foreground service — required for the Android 16 Live Update
+ * status-bar chip. On API 26-34 notifications are posted directly via
+ * NotificationManagerCompat, keeping all foreground-service crash vectors off those devices.
  */
 class LiftBridge(private val context: Context) {
 
@@ -44,16 +49,61 @@ class LiftBridge(private val context: Context) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) return
-        NotificationManagerCompat.from(context).notify(NOTIF_ID, buildNotification(snap))
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            // API 35+: use foreground service so Android 16 renders the Live Update chip
+            context.startForegroundService(
+                Intent(context, WorkoutService::class.java).apply {
+                    action = WorkoutService.ACTION_UPDATE
+                    putExtra(WorkoutService.EXTRA_SNAP, json)
+                }
+            )
+        } else {
+            NotificationManagerCompat.from(context).notify(NOTIF_ID, buildNotification(snap))
+        }
     }
 
     @JavascriptInterface
     fun clearWorkout() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            context.stopService(Intent(context, WorkoutService::class.java))
+        }
         NotificationManagerCompat.from(context).cancel(NOTIF_ID)
     }
 
     @JavascriptInterface
     fun isNative(): Boolean = true
+
+    @JavascriptInterface
+    fun saveBackupFile(filename: String, json: String) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, filename)
+                    put(MediaStore.Downloads.MIME_TYPE, "application/json")
+                    put(MediaStore.Downloads.IS_PENDING, 1)
+                }
+                val resolver = context.contentResolver
+                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: throw Exception("MediaStore insert returned null")
+                resolver.openOutputStream(uri)?.use { it.write(json.toByteArray(Charsets.UTF_8)) }
+                values.clear()
+                values.put(MediaStore.Downloads.IS_PENDING, 0)
+                resolver.update(uri, values, null, null)
+            } else {
+                val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                dir.mkdirs()
+                File(dir, filename).writeText(json, Charsets.UTF_8)
+            }
+            (context as? Activity)?.runOnUiThread {
+                Toast.makeText(context, "Backup saved to Downloads/$filename", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            (context as? Activity)?.runOnUiThread {
+                Toast.makeText(context, "Backup save failed: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     // ── Notification builder ──────────────────────────────────────────────────
 

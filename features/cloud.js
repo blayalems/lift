@@ -8,6 +8,14 @@
   }
 
   function downloadBackup(ctx) {
+    if (window.LIFT_IS_NATIVE && window.LiftAndroid &&
+        typeof window.LiftAndroid.saveBackupFile === "function") {
+      var filename = "lift-backup-" + ctx.todayId() + ".json";
+      window.LiftAndroid.saveBackupFile(filename, JSON.stringify(ctx.state, null, 2));
+      ctx.state.cloudSync = Object.assign({}, ctx.state.cloudSync || {}, { lastBackupAt: Date.now(), provider: "download" });
+      if (ctx.saveState) ctx.saveState();
+      return;
+    }
     var url = URL.createObjectURL(backupBlob(ctx));
     var a = document.createElement("a");
     a.href = url;

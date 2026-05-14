@@ -21,6 +21,8 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_NOTIF_ACTION = "notif_action"
         private const val PWA_URL = "https://blayalems.github.io/lift/"
         private const val NOTIF_PERM_REQUEST = 1
+        private const val PREFS_NAME = "lift"
+        private const val PREFS_KEY_VC = "vc"
     }
 
     private lateinit var webView: WebView
@@ -59,7 +61,12 @@ class MainActivity : AppCompatActivity() {
                 allowFileAccess                  = false
                 mediaPlaybackRequiresUserGesture = false
                 mixedContentMode                 = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                builtInZoomControls              = false
+                displayZoomControls              = false
+                setSupportZoom(false)
             }
+            wv.isVerticalScrollBarEnabled   = false
+            wv.isHorizontalScrollBarEnabled = false
             wv.webChromeClient = LiftChromeClient()
             wv.webViewClient   = LiftWebViewClient()
             wv.addJavascriptInterface(LiftBridge(this), "LiftAndroid")
@@ -71,6 +78,7 @@ class MainActivity : AppCompatActivity() {
         pendingAction = intent?.getStringExtra(EXTRA_NOTIF_ACTION)
         intent?.removeExtra(EXTRA_NOTIF_ACTION)
 
+        clearCacheIfVersionChanged()
         webView.loadUrl(PWA_URL)
     }
 
@@ -106,6 +114,23 @@ class MainActivity : AppCompatActivity() {
                 "window.dispatchEvent(new CustomEvent('liftNativeAction',{detail:'$safe'}));",
                 null
             )
+        }
+    }
+
+    // ── PWA cache invalidation on APK version change ───────────────────────────
+
+    private fun clearCacheIfVersionChanged() {
+        val prefs   = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val stored  = prefs.getInt(PREFS_KEY_VC, 0)
+        val current = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            packageManager.getPackageInfo(packageName, 0).longVersionCode.toInt()
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, 0).versionCode
+        }
+        if (stored != current) {
+            webView.clearCache(true)
+            prefs.edit().putInt(PREFS_KEY_VC, current).apply()
         }
     }
 
