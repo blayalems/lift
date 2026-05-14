@@ -10,8 +10,8 @@ android {
         applicationId = "io.github.blayalems.lift"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.2.5"
+        versionCode = 9
+        versionName = "1.2.6"
     }
 
     signingConfigs {
@@ -50,7 +50,7 @@ android {
 }
 
 dependencies {
-    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-ktx:1.18.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     // org.json is provided by the Android platform — do not add as a dependency
 }

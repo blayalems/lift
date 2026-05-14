@@ -27,7 +27,7 @@ import org.json.JSONObject
  */
 private const val LIFT_PINK         = 0xFFE63B5D.toInt()
 private const val LIFT_PINK_FILLED  = 0xFFB12546.toInt()
-private const val LIFT_TRACK_REMAIN = 0x33FFFFFF
+private const val LIFT_TRACK_REMAIN = 0xFF888888.toInt()
 
 // Platform key (Notification.EXTRA_REQUEST_PROMOTED_ONGOING — string literal kept
 // for forward-compat in case the constant moves between SDK previews).
@@ -94,7 +94,7 @@ internal fun buildProgressStyleNotification(
         .setVisibility(Notification.VISIBILITY_PUBLIC)
         .setContentIntent(openPi)
         .setOnlyAlertOnce(true)
-        .setCategory(Notification.CATEGORY_PROGRESS)
+        .setCategory("live_update")
         .setShortCriticalText(chipText)
         .addExtras(Bundle().apply {
             putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, true)
