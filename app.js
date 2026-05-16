@@ -8,7 +8,7 @@
   var sheetBackdrop = document.getElementById("sheet-backdrop");
   var summaryOverlay = document.getElementById("summary-overlay");
 
-  var APP_VERSION = "1.4.0";
+  var APP_VERSION = "1.4.1";
   window.LIFT_APP_VERSION = APP_VERSION;
 
   var STORE_KEY = "lift.v3.state";
@@ -1770,6 +1770,7 @@
     else rest.pausedRemaining = remaining;
     if (remaining > 0) rest.completedAt = 0;
     saveRest();
+    haptic(4);
     render();
     updateWorkoutNotification(true);
   }
@@ -1789,6 +1790,7 @@
       rest.completedAt = 0;
     }
     saveRest();
+    haptic(8);
     render();
     updateWorkoutNotification(true);
   }
@@ -1796,6 +1798,7 @@
   function presetRest(seconds) {
     rest = { duration: seconds, pausedRemaining: seconds, endsAt: 0, running: false, label: "Rest", completedAt: seconds <= 0 ? Date.now() : 0 };
     saveRest();
+    haptic(5);
     render();
     updateWorkoutNotification(true);
   }
@@ -2284,12 +2287,14 @@
         var open = firstIncompleteDay(week, state) || week.days[0];
         state.activeDayId = open.id;
       }
+      haptic(3);
       saveState();
       closeSheet();
       render();
     } else if (action === "select-day") {
       state.activeDayId = btn.dataset.day;
       state.activeWeekId = (weekForDayId(state.activeDayId) || getWeek(state.activeWeekId)).id;
+      haptic(3);
       saveState();
       closeSheet();
       render();
@@ -2299,9 +2304,11 @@
       var current = state.settings.theme === "dark" ? "light" : state.settings.theme === "light" ? "system" : "dark";
       state.settings.theme = current;
       applyTheme(current);
+      haptic(3);
       saveState();
       render();
     } else if (action === "open-sheet") {
+      haptic(3);
       openSheet(btn.dataset.sheet);
     } else if (action === "dismiss-recap") {
       state.weeklyRecapDismissedIso = btn.dataset.iso || isoWeekId(parseDateId(todayId()));
@@ -2312,6 +2319,7 @@
       runtime.cycleReview = false;
       renderSummaryOverlay();
     } else if (action === "close-sheet") {
+      haptic(3);
       closeSheet();
     } else if (action === "start-workout") {
       requireWorkoutReady(null);
@@ -2331,8 +2339,10 @@
     } else if (action === "did-planned") {
       didAsPlanned(Number(btn.dataset.ex));
     } else if (action === "add-set") {
+      haptic([8, 30, 8]);
       addSet(Number(btn.dataset.ex));
     } else if (action === "remove-set") {
+      haptic(5);
       removeSet(Number(btn.dataset.ex));
     } else if (action === "plate") {
       var day = getDay(state.activeDayId);
@@ -2441,18 +2451,22 @@
     } else if (action === "library-start") {
       toast("Library workouts are saved templates. Copy them into the plan manually for now.");
     } else if (action === "open-drawer") {
+      haptic(3);
       runtime.drawerOpen = true;
       renderNavDrawer();
     } else if (action === "close-drawer") {
+      haptic(3);
       runtime.drawerOpen = false;
       renderNavDrawer();
     } else if (action === "drawer-open-sheet") {
+      haptic(3);
       runtime.drawerOpen = false;
       renderNavDrawer();
       openSheet(btn.dataset.sheet, null, { mode: "page" });
     } else if (action === "fab-tap") {
       // Resolved at render time to start-workout or finish-workout.
     } else if (action === "nav-tab") {
+      haptic(3);
       var tab = btn.dataset.nav || "today";
       runtime.activeTab = tab;
       renderBottomNav();
@@ -2510,6 +2524,7 @@
         renderSheet();
       }
     } else if (action === "qa-preset") {
+      haptic(3);
       runtime.quickAddDraft = runtime.quickAddDraft || {};
       runtime.quickAddDraft.name = btn.dataset.name;
       runtime.quickAddDraft.sets = Number(btn.dataset.sets) || 3;
@@ -2520,6 +2535,7 @@
     } else if (action === "qa-commit") {
       var qa = feature("quickadd");
       if (qa && typeof qa.commit === "function" && qa.commit(makeCtx())) {
+        haptic(5);
         closeSheet();
         render();
       }
