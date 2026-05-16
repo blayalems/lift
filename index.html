@@ -1838,13 +1838,12 @@
     .sheet[data-mode="page"] {
       left: 50%;
       right: auto;
-      bottom: 0;
       top: 0;
       transform: translate(-50%, 100%);
       width: 100%;
       max-width: var(--app-max);
       max-height: none;
-      height: 100dvh;
+      height: calc(100dvh - var(--bottom-nav-h));
       border-radius: 0;
       border: 0;
       background: var(--md-surface);
