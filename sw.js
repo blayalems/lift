@@ -1,4 +1,4 @@
-const CACHE_VERSION = "lift-v11";
+const CACHE_VERSION = "lift-v12";
 const PRECACHE = `${CACHE_VERSION}-precache`;
 const RUNTIME = `${CACHE_VERSION}-runtime`;
 

@@ -43,10 +43,7 @@
   }
 
   function testVoice(ctx) {
-    if (!supported()) {
-      if (ctx && typeof ctx.toast === "function") ctx.toast("Speech is not supported in this browser.");
-      return;
-    }
+    if (!supported()) return;
     speak("Voice cues are on. Lift smart.", { rate: 1.0 });
   }
 

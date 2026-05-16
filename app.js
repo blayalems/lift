@@ -8,7 +8,7 @@
   var sheetBackdrop = document.getElementById("sheet-backdrop");
   var summaryOverlay = document.getElementById("summary-overlay");
 
-  var APP_VERSION = "1.4.1";
+  var APP_VERSION = "1.4.2";
   window.LIFT_APP_VERSION = APP_VERSION;
 
   var STORE_KEY = "lift.v3.state";
@@ -575,7 +575,7 @@
     document.documentElement.dataset.themeChoice = selected;
     // Update theme-color meta so the Android system status bar adapts.
     var meta = document.getElementById("theme-color-active");
-    if (meta) meta.setAttribute("content", resolved === "dark" ? "#0a0a0a" : "#fafafa");
+    if (meta) meta.setAttribute("content", resolved === "dark" ? "#161616" : "#f5f5f5");
     try { localStorage.setItem(THEME_KEY, selected); } catch (err) {}
   }
 
@@ -1109,7 +1109,9 @@
       fieldSelect("sound", "Sound", s.sound ? "true" : "false", [["true", "On"], ["false", "Off"]]) +
       fieldSelect("workoutNotifications", "Workout notifications", s.workoutNotifications ? "true" : "false", [["true", "On"], ["false", "Off"]]) +
       fieldSelect("autoStartRest", "Auto-start rest on set complete", (s.autoStartRest !== false) ? "true" : "false", [["true", "On"], ["false", "Off"]]) +
-      fieldSelect("voiceRestCue", "Voice cue when rest ends", s.voiceRestCue ? "true" : "false", [["true", "On"], ["false", "Off"]]) +
+      (typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window
+        ? fieldSelect("voiceRestCue", "Voice cue when rest ends", s.voiceRestCue ? "true" : "false", [["true", "On"], ["false", "Off"]])
+        : '<div class="field-block"><label>Voice cue when rest ends</label><p class="section-sub" style="margin:0;padding:4px 0">Not supported in this browser.</p></div>') +
       notificationSettingsCard() +
       '<div class="sheet-actions">' +
       '<button class="action-btn" data-action="export-data">' + icon("download") + "Export data</button>" +
@@ -1127,7 +1129,7 @@
       else if (Notification.permission === "denied") status = "Blocked. Re-enable notifications from Chrome site settings for this app.";
       else status = state.settings.notifSkipped ? "Off. Turn this on to ask again next time." : "Ask on the next workout start.";
     }
-    return '<div class="overview-card"><strong>Android live status</strong><p>' + escapeHtml(status) + "</p></div>";
+    return '<div class="overview-card"><strong>Notification status</strong><p>' + escapeHtml(status) + "</p></div>";
   }
 
   function goalsSheet() {
@@ -2613,10 +2615,14 @@
       else if (key === "barWeight") state.settings.barWeight = displayToKg(value);
       else if (key === "haptics" || key === "sound") state.settings[key] = value === "true";
       else if (key === "autoStartRest" || key === "voiceRestCue") {
-        state.settings[key] = value === "true";
-        if (key === "voiceRestCue" && value === "true") {
-          var voice = feature("voice");
-          if (voice && typeof voice.testVoice === "function") voice.testVoice(makeCtx());
+        if (key === "voiceRestCue" && value === "true" && !(typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window)) {
+          state.settings[key] = false;
+        } else {
+          state.settings[key] = value === "true";
+          if (key === "voiceRestCue" && value === "true") {
+            var voice = feature("voice");
+            if (voice && typeof voice.testVoice === "function") voice.testVoice(makeCtx());
+          }
         }
       }
       else if (key === "workoutNotifications") {
