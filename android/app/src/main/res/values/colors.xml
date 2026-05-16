@@ -1,8 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="lift_pink">#FFE63B5D</color>
-    <color name="lift_blue">#FF0A84FF</color>
-    <color name="lift_orange">#FFFF9500</color>
+    <!-- Legacy named colours retained for compatibility. -->
+    <color name="lift_pink">#FF1C1C1E</color>
+    <color name="lift_blue">#FF48484A</color>
+    <color name="lift_orange">#FF79797A</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- v1.4: Material 3 Expressive — monochrome neutrals (no hue). -->
+    <color name="md_primary">#FF1C1C1E</color>
+    <color name="md_on_primary">#FFFFFFFF</color>
+    <color name="md_primary_container">#FFE0E0E2</color>
+    <color name="md_on_primary_container">#FF1C1C1E</color>
+    <color name="md_secondary">#FF48484A</color>
+    <color name="md_secondary_container">#FFEBEBED</color>
+    <color name="md_on_secondary_container">#FF1C1C1E</color>
+    <color name="md_surface">#FF0A0A0A</color>
+    <color name="md_surface_container">#FF1C1C1C</color>
+    <color name="md_on_surface">#FFEBEBED</color>
+    <color name="md_outline_variant">#FF48484A</color>
 </resources>
