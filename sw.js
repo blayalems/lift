@@ -1,4 +1,4 @@
-const CACHE_VERSION = "lift-v9";
+const CACHE_VERSION = "lift-v10";
 const PRECACHE = `${CACHE_VERSION}-precache`;
 const RUNTIME = `${CACHE_VERSION}-runtime`;
 
@@ -19,6 +19,15 @@ const APP_SHELL = [
   "./features/cloud.js",
   "./features/library.js",
   "./features/notifications.js",
+  "./features/voice.js",
+  "./features/measurements.js",
+  "./features/strength.js",
+  "./features/streaks.js",
+  "./features/calendar.js",
+  "./features/marketplace.js",
+  "./features/healthkit.js",
+  "./features/forms.js",
+  "./features/quickadd.js",
   "./manifest.webmanifest",
   "./screenshots/lift-mobile-home.png",
   "./screenshots/lift-desktop-dashboard.png",

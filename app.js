@@ -8,7 +8,7 @@
   var sheetBackdrop = document.getElementById("sheet-backdrop");
   var summaryOverlay = document.getElementById("summary-overlay");
 
-  var APP_VERSION = "1.3.1";
+  var APP_VERSION = "1.4.0";
   window.LIFT_APP_VERSION = APP_VERSION;
 
   var STORE_KEY = "lift.v3.state";
@@ -28,6 +28,8 @@
     sound: true,
     workoutNotifications: true,
     notifSkipped: false,
+    autoStartRest: true,
+    voiceRestCue: false,
     barWeight: 20,
     plates: [25, 20, 15, 10, 5, 2.5, 1.25]
   };
@@ -67,7 +69,15 @@
     recordsSort: "recency",
     lastNotifSig: "",
     lastNotifSnapshot: null,
-    pendingReload: false
+    pendingReload: false,
+    activeTab: "today",
+    drawerOpen: false,
+    calYear: null,
+    calMonth: null,
+    marketFilter: "all",
+    marketSelected: null,
+    quickAddDraft: null,
+    strengthCalc: { weight: null, reps: 5 }
   };
 
   var state = loadState();
@@ -210,7 +220,14 @@
       badge: '<circle cx="12" cy="9" r="5"/><path d="m8.5 13.5-1.5 6 5-3 5 3-1.5-6"/>',
       book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 0-3-3Z"/><path d="M5 4v13"/><path d="M8 8h7M8 12h6"/>',
       shoe: '<path d="M4 14c2.2 1.8 5.3 3 9.2 3H20c.6 0 1-.4 1-1v-1.4c0-.6-.4-1-1-1h-3.6c-1.7 0-3.2-.7-4.4-1.8L9.5 9.5 7.4 12 5 10.4 4 14Z"/><path d="M8 13h4M11 11l1.5-1.5"/>',
-      refresh: '<path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M21 3v5h-5M3 21v-5h5"/>'
+      refresh: '<path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M21 3v5h-5M3 21v-5h5"/>',
+      menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+      'chevron-left': '<path d="m15 6-6 6 6 6"/>',
+      'chevron-right': '<path d="m9 6 6 6-6 6"/>',
+      mic: '<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+      ruler: '<path d="M3 17 17 3l4 4L7 21z"/><path d="m7 11 2 2M11 7l2 2M15 11l2 2"/>',
+      heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
+      market: '<path d="M3 6h18l-2 6H5L3 6Z"/><path d="M6 12v8h12v-8M9 4l1-2h4l1 2"/>'
     };
     return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (paths[name] || paths.more) + "</svg>";
   }
@@ -309,7 +326,12 @@
     var days = [];
     PLAN.weeks.forEach(function (week) {
       (week.days || []).forEach(function (day) {
-        days.push({ week: week, day: day });
+        var ds = (state && state.days && state.days[day.id]) || {};
+        var custom = Array.isArray(ds.customExercises) ? ds.customExercises : [];
+        var mergedDay = custom.length
+          ? Object.assign({}, day, { exercises: (day.exercises || []).concat(custom) })
+          : day;
+        days.push({ week: week, day: mergedDay });
       });
     });
     return days;
@@ -371,7 +393,10 @@
       todayId: todayId,
       normalizePhase: normalizePhase,
       isoWeekId: isoWeekId,
-      defaultGoals: DEFAULT_GOALS
+      defaultGoals: DEFAULT_GOALS,
+      runtime: runtime,
+      allDays: allDays,
+      PLAN: PLAN
     };
   }
 
@@ -548,6 +573,9 @@
       : selected;
     document.documentElement.dataset.theme = resolved;
     document.documentElement.dataset.themeChoice = selected;
+    // Update theme-color meta so the Android system status bar adapts.
+    var meta = document.getElementById("theme-color-active");
+    if (meta) meta.setAttribute("content", resolved === "dark" ? "#0a0a0a" : "#fafafa");
     try { localStorage.setItem(THEME_KEY, selected); } catch (err) {}
   }
 
@@ -606,11 +634,11 @@
 
     html += '<header class="topbar">';
     html += '<div class="topbar-row">';
+    html += '<button class="hamburger-btn" data-action="open-drawer" aria-label="Open menu">' + icon("menu") + "</button>";
     html += '<div><div class="eyebrow">' + escapeHtml("Week " + week.num + " - " + week.dateRange) + '</div><div class="title">' + escapeHtml(PLAN.meta && PLAN.meta.athlete ? PLAN.meta.athlete + "'s Lift" : "Lift") + "</div></div>";
     html += '<div class="top-actions">';
     html += '<button class="chip-btn" data-action="today">' + icon("today") + "<span>Today</span></button>";
     html += '<button class="icon-btn" data-action="cycle-theme" aria-label="Toggle theme">' + icon(document.documentElement.dataset.theme === "dark" ? "sun" : "moon") + "</button>";
-    html += '<button class="icon-btn" data-action="open-sheet" data-sheet="menu" aria-label="Open menu">' + icon("more") + "</button>";
     html += "</div></div></header>";
 
     html += '<nav class="week-strip" aria-label="Weeks">';
@@ -687,7 +715,100 @@
     app.innerHTML = html;
     renderSheet();
     renderSummaryOverlay();
+    renderBottomNav();
+    renderFab();
+    renderNavDrawer();
     refreshTimers();
+  }
+
+  function renderBottomNav() {
+    var nav = document.getElementById("bottom-nav");
+    if (!nav) return;
+    var tab = runtime.activeTab || "today";
+    nav.querySelectorAll(".bottom-nav-btn").forEach(function (btn) {
+      btn.dataset.active = String(btn.dataset.nav === tab);
+    });
+  }
+
+  function renderFab() {
+    var fab = document.getElementById("fab");
+    if (!fab) return;
+    var day = getDay(state.activeDayId);
+    if (!day) { fab.dataset.hidden = "true"; return; }
+    var hasWork = (day.exercises || []).length > 0;
+    if (!hasWork) {
+      fab.dataset.hidden = "true";
+      return;
+    }
+    fab.dataset.hidden = "false";
+    var running = isWorkoutRunning(day.id);
+    fab.dataset.running = String(running);
+    var label = running ? "Finish workout" : (dayState(day.id).startedAt ? "Resume" : "Start workout");
+    var iconKey = running ? "stop" : "play";
+    fab.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' +
+      (iconKey === "stop" ? '<rect x="6" y="6" width="12" height="12" rx="2"/>' : '<polygon points="6 4 20 12 6 20 6 4"/>') +
+      '</svg><span class="fab-label">' + escapeHtml(label) + '</span>';
+    fab.setAttribute("aria-label", label);
+    fab.dataset.action = running ? "finish-workout" : "start-workout";
+  }
+
+  function renderNavDrawer() {
+    var drawer = document.getElementById("nav-drawer");
+    var backdrop = document.getElementById("drawer-backdrop");
+    if (!drawer || !backdrop) return;
+    drawer.dataset.open = String(!!runtime.drawerOpen);
+    backdrop.dataset.open = String(!!runtime.drawerOpen);
+
+    var version = window.LIFT_APP_VERSION || APP_VERSION;
+    var streak = trainingStreak();
+    var html = '';
+    html += '<div class="nav-drawer-head"><div class="nav-drawer-brand">' +
+      '<div class="nav-drawer-mark">L</div>' +
+      '<div class="nav-drawer-meta"><strong>Lift</strong><span>' + streak + ' day streak &middot; v' + escapeHtml(version) + '</span></div>' +
+      '</div></div>';
+    html += '<div class="nav-drawer-body">';
+
+    function navItem(sheetName, label, iconKey) {
+      return '<button class="nav-item" data-action="drawer-open-sheet" data-sheet="' + sheetName + '">' +
+        icon(iconKey) + '<span>' + escapeHtml(label) + '</span></button>';
+    }
+
+    html += '<div class="nav-section-head">Train</div>';
+    html += navItem("library", "Workout library", "bag");
+    html += navItem("marketplace", "Templates marketplace", "market");
+    html += navItem("quickadd", "Quick-add exercise", "plus");
+    html += navItem("plate", "Plate calculator", "plate");
+    html += navItem("readiness", "Readiness check-in", "heart");
+
+    html += '<div class="nav-section-head">Track</div>';
+    html += navItem("notes", "Workout notes", "note");
+    html += navItem("bodyweight", "Body weight", "shoe");
+    html += navItem("measurements", "Body measurements", "ruler");
+    html += navItem("steps", "Steps", "shoe");
+    html += navItem("goals", "Goals", "target");
+
+    html += '<div class="nav-section-head">Trends</div>';
+    html += navItem("rings", "Activity rings", "rings");
+    html += navItem("streaks", "Streaks &amp; weekly", "today");
+    html += navItem("strength", "1RM estimator", "chart");
+    html += navItem("prs", "Personal records", "badge");
+    html += navItem("calendar", "Calendar month view", "today");
+    html += navItem("heatmap", "Training heatmap", "grid");
+    html += navItem("badges", "Achievements", "badge");
+    html += navItem("journal", "Activity journal", "book");
+    html += navItem("progress", "Progress charts", "chart");
+
+    html += '<div class="nav-section-head">Data</div>';
+    html += navItem("overview", "Plan overview", "today");
+    html += navItem("copy", "Export log", "copy");
+    html += navItem("healthkit", "Health &amp; Fit export", "heart");
+    html += navItem("backup", "Backups", "upload");
+    html += navItem("settings", "Settings", "gear");
+
+    html += '</div>';
+    html += '<div class="nav-drawer-foot"><span>Lift v' + escapeHtml(version) + '</span>' +
+      '<button class="icon-btn" data-action="close-drawer" aria-label="Close menu">' + icon("close") + '</button></div>';
+    drawer.innerHTML = html;
   }
 
   function renderSummaryOverlay() {
@@ -733,6 +854,7 @@
     html += '<div class="ex-actions">';
     html += '<button class="tool-btn" data-action="did-planned" data-ex="' + exIndex + '">' + icon("check") + "Did as planned</button>";
     html += '<button class="tool-btn" data-action="add-set" data-ex="' + exIndex + '">' + icon("plus") + "Set</button>";
+    html += '<button class="tool-btn form-link" data-action="form-video" data-name="' + escapeHtml(ex.name) + '"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M10 16.5l6-4.5-6-4.5v9zm12-4.5c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"/></svg>Form</button>';
     if (numberOr(ds.extraSets[String(exIndex)], 0) > 0) html += '<button class="tool-btn danger" data-action="remove-set" data-ex="' + exIndex + '">' + icon("minus") + "Remove set</button>";
     html += "</div>";
     html += '<div class="sets">';
@@ -805,8 +927,27 @@
     sheetBackdrop.dataset.open = "true";
     sheet.dataset.open = "true";
     sheet.dataset.type = runtime.sheet;
+    var mode = runtime.sheetMode === "page" ? "page" : "modal";
+    sheet.dataset.mode = mode;
+    sheetBackdrop.dataset.mode = mode;
     var title = sheetTitle(runtime.sheet);
-    sheet.innerHTML = '<div class="sheet-grabber" aria-hidden="true"></div><div class="sheet-head"><div class="sheet-title">' + escapeHtml(title) + '</div><button class="icon-btn" data-action="close-sheet" aria-label="Close sheet">' + icon("close") + '</button></div><div class="sheet-body">' + sheetBody(runtime.sheet) + "</div>";
+    var headHtml;
+    if (mode === "page") {
+      headHtml = '<div class="sheet-head">' +
+        '<button class="sheet-back" data-action="close-sheet" aria-label="Back">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>' +
+        '</button>' +
+        '<div class="sheet-title">' + escapeHtml(title) + '</div>' +
+        '<span aria-hidden="true"></span>' +
+        '</div>';
+    } else {
+      headHtml = '<div class="sheet-grabber" aria-hidden="true"></div>' +
+        '<div class="sheet-head">' +
+        '<div class="sheet-title">' + escapeHtml(title) + '</div>' +
+        '<button class="icon-btn" data-action="close-sheet" aria-label="Close sheet">' + icon("close") + '</button>' +
+        '</div>';
+    }
+    sheet.innerHTML = headHtml + '<div class="sheet-body">' + sheetBody(runtime.sheet) + "</div>";
   }
 
   function sheetTitle(type) {
@@ -828,7 +969,14 @@
       library: "Workout Library",
       goals: "Goals",
       steps: "Steps",
-      backup: "Backups"
+      backup: "Backups",
+      measurements: "Body Measurements",
+      calendar: "Calendar",
+      marketplace: "Templates Marketplace",
+      healthkit: "Health &amp; Fit Export",
+      strength: "1RM &amp; Strength",
+      streaks: "Streaks &amp; Weekly",
+      quickadd: "Quick Add Exercise"
     }[type] || "Sheet";
   }
 
@@ -851,6 +999,13 @@
     if (type === "steps") return featureSheet("steps", "renderSteps");
     if (type === "backup") return featureSheet("cloud", "renderBackup");
     if (type === "goals") return goalsSheet();
+    if (type === "measurements") return featureSheet("measurements", "renderMeasurements");
+    if (type === "calendar") return featureSheet("calendar", "renderCalendar");
+    if (type === "marketplace") return featureSheet("marketplace", "renderMarketplace");
+    if (type === "healthkit") return featureSheet("healthkit", "renderHealthExport");
+    if (type === "strength") return featureSheet("strength", "renderStrength");
+    if (type === "streaks") return featureSheet("streaks", "renderStreaks");
+    if (type === "quickadd") return featureSheet("quickadd", "renderQuickAdd");
     return "";
   }
 
@@ -953,6 +1108,8 @@
       fieldSelect("haptics", "Haptics", s.haptics ? "true" : "false", [["true", "On"], ["false", "Off"]]) +
       fieldSelect("sound", "Sound", s.sound ? "true" : "false", [["true", "On"], ["false", "Off"]]) +
       fieldSelect("workoutNotifications", "Workout notifications", s.workoutNotifications ? "true" : "false", [["true", "On"], ["false", "Off"]]) +
+      fieldSelect("autoStartRest", "Auto-start rest on set complete", (s.autoStartRest !== false) ? "true" : "false", [["true", "On"], ["false", "Off"]]) +
+      fieldSelect("voiceRestCue", "Voice cue when rest ends", s.voiceRestCue ? "true" : "false", [["true", "On"], ["false", "Off"]]) +
       notificationSettingsCard() +
       '<div class="sheet-actions">' +
       '<button class="action-btn" data-action="export-data">' + icon("download") + "Export data</button>" +
@@ -1079,8 +1236,9 @@
     return html;
   }
 
-  function openSheet(type, options) {
+  function openSheet(type, options, opts) {
     runtime.sheet = type;
+    runtime.sheetMode = (opts && opts.mode) || "modal";
     if (type === "readiness") {
       var ds = dayState(state.activeDayId);
       runtime.readinessValue = ds.readiness || 8;
@@ -1093,8 +1251,11 @@
 
   function closeSheet() {
     runtime.sheet = null;
+    runtime.sheetMode = "modal";
     runtime.pendingAction = null;
+    runtime.activeTab = "today";
     renderSheet();
+    renderBottomNav();
   }
 
   function isCaveatNote(note) {
@@ -1489,7 +1650,9 @@
       toast("PR: " + ex.name + " at " + formatWeight(value.weight) + " " + unitLabel() + ".");
     }
     haptic(pr ? [10, 50, 20] : 8);
-    startRest(numberOr(ex.defaultRest, state.settings.defaultRest), ex.name);
+    if (state.settings.autoStartRest !== false) {
+      startRest(numberOr(ex.defaultRest, state.settings.defaultRest), ex.name);
+    }
     saveState();
     render();
     updateWorkoutNotification(true);
@@ -1525,7 +1688,9 @@
       toast("Exercise completed as planned.");
     }
     haptic(prCount ? [10, 50, 20] : [8, 30, 8]);
-    startRest(numberOr(ex.defaultRest, state.settings.defaultRest), ex.name);
+    if (state.settings.autoStartRest !== false) {
+      startRest(numberOr(ex.defaultRest, state.settings.defaultRest), ex.name);
+    }
     saveState();
     render();
     updateWorkoutNotification(true);
@@ -1655,6 +1820,10 @@
   function notifyRestDone() {
     haptic([160, 80, 160]);
     if (state.settings.sound) beep();
+    var voice = feature("voice");
+    if (voice && typeof voice.speakRestDone === "function") {
+      voice.speakRestDone(makeCtx());
+    }
     toast("Rest complete.");
   }
 
@@ -2251,7 +2420,11 @@
       if (cloud && typeof cloud.downloadBackup === "function") cloud.downloadBackup(makeCtx());
     } else if (action === "backup-share") {
       var shareCloud = feature("cloud");
-      if (shareCloud && typeof shareCloud.shareBackup === "function") shareCloud.shareBackup(makeCtx());
+      if (shareCloud && typeof shareCloud.shareBackup === "function") {
+        shareCloud.shareBackup(makeCtx()).catch(function (err) {
+          if (err && err.name !== "AbortError") toast("Share failed.");
+        });
+      }
     } else if (action === "backup-restore") {
       importData();
     } else if (action === "check-updates") {
@@ -2267,6 +2440,116 @@
       }
     } else if (action === "library-start") {
       toast("Library workouts are saved templates. Copy them into the plan manually for now.");
+    } else if (action === "open-drawer") {
+      runtime.drawerOpen = true;
+      renderNavDrawer();
+    } else if (action === "close-drawer") {
+      runtime.drawerOpen = false;
+      renderNavDrawer();
+    } else if (action === "drawer-open-sheet") {
+      runtime.drawerOpen = false;
+      renderNavDrawer();
+      openSheet(btn.dataset.sheet, null, { mode: "page" });
+    } else if (action === "fab-tap") {
+      // Resolved at render time to start-workout or finish-workout.
+    } else if (action === "nav-tab") {
+      var tab = btn.dataset.nav || "today";
+      runtime.activeTab = tab;
+      renderBottomNav();
+      if (tab === "today") {
+        if (runtime.sheet) closeSheet();
+        goToday();
+      } else if (tab === "plan") {
+        openSheet("calendar", null, { mode: "page" });
+      } else if (tab === "progress") {
+        openSheet("streaks", null, { mode: "page" });
+      } else if (tab === "body") {
+        openSheet("measurements", null, { mode: "page" });
+      } else if (tab === "library") {
+        openSheet("library", null, { mode: "page" });
+      }
+    } else if (action === "cal-prev" || action === "cal-next") {
+      var year = runtime.calYear, month = runtime.calMonth;
+      if (year == null) {
+        var today = (localDateId(new Date()) || todayId()).split("-");
+        year = +today[0]; month = +today[1] - 1;
+      }
+      month += action === "cal-next" ? 1 : -1;
+      if (month < 0) { month = 11; year -= 1; }
+      if (month > 11) { month = 0; year += 1; }
+      runtime.calYear = year;
+      runtime.calMonth = month;
+      renderSheet();
+    } else if (action === "cal-today") {
+      runtime.calYear = null;
+      runtime.calMonth = null;
+      renderSheet();
+    } else if (action === "cal-day") {
+      var iso = btn.dataset.iso;
+      if (iso && getDay(iso)) {
+        state.activeDayId = iso;
+        state.activeWeekId = (weekForDayId(iso) || getWeek(state.activeWeekId)).id;
+        runtime.activeTab = "today";
+        closeSheet();
+        render();
+      }
+    } else if (action === "market-filter") {
+      runtime.marketFilter = btn.dataset.vibe || "all";
+      runtime.marketSelected = null;
+      renderSheet();
+    } else if (action === "market-open") {
+      runtime.marketSelected = btn.dataset.id;
+      renderSheet();
+    } else if (action === "market-close") {
+      runtime.marketSelected = null;
+      renderSheet();
+    } else if (action === "market-import") {
+      var market = feature("marketplace");
+      if (market && typeof market.importTemplate === "function") {
+        market.importTemplate(makeCtx(), btn.dataset.id);
+        renderSheet();
+      }
+    } else if (action === "qa-preset") {
+      runtime.quickAddDraft = runtime.quickAddDraft || {};
+      runtime.quickAddDraft.name = btn.dataset.name;
+      runtime.quickAddDraft.sets = Number(btn.dataset.sets) || 3;
+      runtime.quickAddDraft.reps = btn.dataset.reps || 8;
+      runtime.quickAddDraft.restSec = Number(btn.dataset.rest) || 60;
+      runtime.quickAddDraft.weight = runtime.quickAddDraft.weight || 0;
+      renderSheet();
+    } else if (action === "qa-commit") {
+      var qa = feature("quickadd");
+      if (qa && typeof qa.commit === "function" && qa.commit(makeCtx())) {
+        closeSheet();
+        render();
+      }
+    } else if (action === "measure-add") {
+      var fieldKey = btn.dataset.field;
+      var valInput = sheet.querySelector('[data-m-field="' + fieldKey + '"]');
+      var dateInput = sheet.querySelector('[data-m-date]');
+      var meas = feature("measurements");
+      if (meas && typeof meas.addEntry === "function" && valInput) {
+        if (meas.addEntry(makeCtx(), fieldKey, valInput.value, dateInput && dateInput.value)) {
+          renderSheet();
+        }
+      }
+    } else if (action === "measure-delete") {
+      var meas2 = feature("measurements");
+      if (meas2 && typeof meas2.deleteEntry === "function") {
+        meas2.deleteEntry(makeCtx(), btn.dataset.date, btn.dataset.field);
+        renderSheet();
+      }
+    } else if (action === "health-export") {
+      var hk = feature("healthkit");
+      if (hk && typeof hk.exportTarget === "function") hk.exportTarget(makeCtx(), btn.dataset.target);
+    } else if (action === "form-video") {
+      var forms = feature("forms");
+      if (forms && typeof forms.openForFormVideo === "function") forms.openForFormVideo(makeCtx(), btn.dataset.name);
+    } else if (action === "rm-save") {
+      toast("Estimate saved to this session.");
+    } else if (action === "voice-test") {
+      var v = feature("voice");
+      if (v && typeof v.testVoice === "function") v.testVoice(makeCtx());
     }
   }
 
@@ -2287,6 +2570,13 @@
       if (target.dataset.field === "target") runtime.plate.targetKg = displayToKg(target.value);
       if (target.dataset.field === "bar") runtime.plate.barKg = displayToKg(target.value);
       renderSheet();
+    } else if (action === "qa-input") {
+      runtime.quickAddDraft = runtime.quickAddDraft || {};
+      runtime.quickAddDraft[target.dataset.field] = target.value;
+    } else if (action === "rm-input") {
+      runtime.strengthCalc = runtime.strengthCalc || { weight: null, reps: 5 };
+      runtime.strengthCalc[target.dataset.field] = target.value;
+      renderSheet();
     } else if (action === "steps-live") {
       var steps = feature("steps");
       if (steps && typeof steps.addManual === "function") {
@@ -2306,6 +2596,13 @@
       else if (key === "weightStep") state.settings.weightStep = Math.max(0.5, numberOr(value, 2.5));
       else if (key === "barWeight") state.settings.barWeight = displayToKg(value);
       else if (key === "haptics" || key === "sound") state.settings[key] = value === "true";
+      else if (key === "autoStartRest" || key === "voiceRestCue") {
+        state.settings[key] = value === "true";
+        if (key === "voiceRestCue" && value === "true") {
+          var voice = feature("voice");
+          if (voice && typeof voice.testVoice === "function") voice.testVoice(makeCtx());
+        }
+      }
       else if (key === "workoutNotifications") {
         state.settings.workoutNotifications = value === "true";
         state.settings.notifSkipped = value !== "true";
@@ -2475,6 +2772,35 @@
     document.addEventListener("input", handleInput);
     document.addEventListener("change", handleChange);
     sheetBackdrop.addEventListener("click", closeSheet);
+    var drawerBackdrop = document.getElementById("drawer-backdrop");
+    if (drawerBackdrop) {
+      drawerBackdrop.addEventListener("click", function () {
+        runtime.drawerOpen = false;
+        renderNavDrawer();
+      });
+    }
+    // Swipe from left edge to open the drawer.
+    var edgeSwipe = null;
+    document.addEventListener("touchstart", function (e) {
+      if (runtime.drawerOpen) return;
+      var t = e.touches && e.touches[0];
+      if (!t) return;
+      if (t.clientX > 18) return;
+      edgeSwipe = { startX: t.clientX, startY: t.clientY };
+    }, { passive: true });
+    document.addEventListener("touchmove", function (e) {
+      if (!edgeSwipe) return;
+      var t = e.touches && e.touches[0];
+      if (!t) return;
+      var dx = t.clientX - edgeSwipe.startX;
+      var dy = Math.abs(t.clientY - edgeSwipe.startY);
+      if (dx > 60 && dx > dy * 1.5) {
+        runtime.drawerOpen = true;
+        renderNavDrawer();
+        edgeSwipe = null;
+      }
+    }, { passive: true });
+    document.addEventListener("touchend", function () { edgeSwipe = null; }, { passive: true });
     if (summaryOverlay) {
       summaryOverlay.addEventListener("click", function (event) {
         if (event.target === summaryOverlay) {

@@ -4,8 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,viewport-fit=cover" />
   <meta name="description" content="Offline progressive overload workout tracker for the May-June 2026 cycle." />
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f4f7" />
-  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#111114" />
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fafafa" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0a0a" />
+  <meta id="theme-color-active" name="theme-color" content="#fafafa" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,400;8..144,500;8..144,600;8..144,700;8..144,800;8..144,900&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -23,6 +27,8 @@
           : theme;
         document.documentElement.dataset.theme = resolved;
         document.documentElement.dataset.themeChoice = theme;
+        var meta = document.getElementById("theme-color-active");
+        if (meta) meta.setAttribute("content", resolved === "dark" ? "#0a0a0a" : "#fafafa");
       } catch (err) {
         document.documentElement.dataset.theme = "light";
         document.documentElement.dataset.themeChoice = "system";
@@ -913,11 +919,1087 @@
     }
     .check-btn.just-checked { animation: lift-check .4s cubic-bezier(.34,1.56,.64,1) both; }
   </style>
+  <style id="m3e-1.4">
+    /* ============================================================
+       LIFT v1.4 — Material 3 Expressive overlay (hybrid)
+       Layered on top of the existing iOS-flavored stylesheet.
+       Tokens follow the M3 system-color naming so we can re-skin
+       individual surfaces without rewriting every component.
+       ============================================================ */
+    :root {
+      /* M3 tonal palette — Monochrome neutrals. Hue 0%, contrast wins. */
+      --md-primary: #1c1c1e;
+      --md-on-primary: #ffffff;
+      --md-primary-container: #e0e0e2;
+      --md-on-primary-container: #1c1c1e;
+      --md-secondary: #48484a;
+      --md-secondary-container: #ebebed;
+      --md-on-secondary-container: #1c1c1e;
+      --md-tertiary: #2c2c2e;
+      --md-tertiary-container: #d6d6d8;
+      --md-on-tertiary-container: #1c1c1e;
+      --md-surface: #fafafa;
+      --md-surface-dim: #d6d6d8;
+      --md-surface-bright: #fafafa;
+      --md-surface-container-lowest: #ffffff;
+      --md-surface-container-low: #f5f5f5;
+      --md-surface-container: #f0f0f0;
+      --md-surface-container-high: #ebebeb;
+      --md-surface-container-highest: #e5e5e5;
+      --md-on-surface: #1c1c1e;
+      --md-on-surface-variant: #48484a;
+      --md-outline: #79797a;
+      --md-outline-variant: #cdcdcd;
+      --md-error: #ba1a1a;
+      --md-success: #1d8c3e;
+
+      /* Shape — M3E uses larger, varied corner radii. */
+      --md-shape-xs: 4px;
+      --md-shape-sm: 12px;
+      --md-shape-md: 16px;
+      --md-shape-lg: 24px;
+      --md-shape-xl: 28px;
+      --md-shape-xxl: 36px;
+      --md-shape-full: 9999px;
+
+      /* Motion — expressive uses bouncier springs. */
+      --md-spring-fast:  cubic-bezier(.2, .9, .2, 1.3);
+      --md-spring-bounce: cubic-bezier(.34, 1.56, .64, 1);
+      --md-emphasized: cubic-bezier(.2, 0, 0, 1);
+
+      /* Bottom nav metrics — used by #app padding to leave room. */
+      --bottom-nav-h: 84px;
+      --bottom-nav-gap: 14px;
+    }
+
+    html[data-theme="dark"] {
+      --md-primary: #ebebed;
+      --md-on-primary: #1c1c1e;
+      --md-primary-container: #3a3a3c;
+      --md-on-primary-container: #ebebed;
+      --md-secondary: #c7c7c9;
+      --md-secondary-container: #2c2c2e;
+      --md-on-secondary-container: #ebebed;
+      --md-tertiary: #d6d6d8;
+      --md-tertiary-container: #444446;
+      --md-on-tertiary-container: #ebebed;
+      --md-surface: #0a0a0a;
+      --md-surface-dim: #0a0a0a;
+      --md-surface-bright: #38383a;
+      --md-surface-container-lowest: #050505;
+      --md-surface-container-low: #161616;
+      --md-surface-container: #1c1c1c;
+      --md-surface-container-high: #262628;
+      --md-surface-container-highest: #303032;
+      --md-on-surface: #ebebed;
+      --md-on-surface-variant: #c7c7c9;
+      --md-outline: #8a8a8c;
+      --md-outline-variant: #48484a;
+      --md-success: #6cd58a;
+    }
+
+    /* ---------- Typography: Roboto Flex with optical sizing ---------- */
+    body {
+      font-family: "Roboto Flex", ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+      font-variation-settings: "opsz" 14, "wght" 400;
+      letter-spacing: -0.005em;
+    }
+    .title, .hero-title, .section-title, .sheet-title, .menu-title, .ex-name, .badge-title {
+      font-family: "Roboto Flex", "Roboto Flex Variable", system-ui, sans-serif;
+      font-variation-settings: "opsz" 36, "wght" 720;
+      letter-spacing: -0.022em;
+    }
+    .hero-title { font-variation-settings: "opsz" 60, "wght" 760; letter-spacing: -0.028em; }
+    .eyebrow, .hero-kicker, .phase-badge, .tag, .menu-section, .ring-card .ring-label, .baseline-card .label, .metric-card .label, .field-block label, .unit-label {
+      font-family: "Roboto Flex", system-ui, sans-serif;
+      font-variation-settings: "opsz" 11, "wght" 700, "GRAD" 50;
+      letter-spacing: 0.06em;
+    }
+    .set-input, .rest-time, .hero-stat .v, .metric-card .value, .baseline-card .value {
+      font-feature-settings: "tnum", "ss01";
+      font-variation-settings: "opsz" 20, "wght" 760;
+    }
+
+    /* ---------- BUG FIX: status bar contrast ----------
+       The system status bar (Android WebView in fullscreen) sits over
+       env(safe-area-inset-top). Provide a SOLID coloured strip there
+       so the system glyphs always have enough contrast, and pin
+       theme-color to it from JS (see applyTheme in app.js).
+       ---------------------------------------------------- */
+    .status-bar-bg {
+      position: fixed;
+      inset: 0 0 auto 0;
+      height: env(safe-area-inset-top, 0px);
+      background: #fafafa;
+      z-index: 70;
+      pointer-events: none;
+      transition: background .2s ease;
+    }
+    html[data-theme="dark"] .status-bar-bg { background: #0a0a0a; }
+
+    /* ---------- BUG FIX: day pill DOW label in dark mode ----------
+       Original CSS mixed --bg into the DOW colour, which on a dark
+       active pill produced near-black text on near-black bg.
+       Use an explicit alpha-white so it works in both themes.
+       ---------------------------------------------------- */
+    .day-pill[data-active="true"] .dow {
+      color: rgba(255, 255, 255, 0.82) !important;
+    }
+    .day-pill[data-active="true"] {
+      background: linear-gradient(135deg, var(--md-primary), color-mix(in oklab, var(--md-secondary) 80%, var(--md-primary)));
+      color: #fff;
+      border-color: transparent;
+      box-shadow:
+        0 18px 30px -22px color-mix(in oklab, var(--md-primary) 90%, transparent),
+        inset 0 1px 0 rgba(255,255,255,.22);
+    }
+    .day-pill[data-active="true"] .dom { color: #fff; }
+    .day-pill[data-active="true"] .status-dot { background: rgba(255,255,255,0.85); opacity: 1; }
+
+    /* ---------- Topbar: hamburger left, compact M3 app bar ---------- */
+    .topbar {
+      background: color-mix(in oklab, var(--md-surface-container-low) 88%, transparent);
+      border-bottom: 1px solid color-mix(in oklab, var(--md-outline-variant) 60%, transparent);
+    }
+    html[data-theme="dark"] .topbar {
+      background: color-mix(in oklab, var(--md-surface-container-low) 92%, transparent);
+    }
+    .topbar-row {
+      grid-template-columns: 44px 1fr auto;
+      gap: 8px;
+    }
+    .hamburger-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--md-shape-full);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--md-on-surface);
+      background: transparent;
+      transition: background .15s ease, transform .35s var(--md-spring-bounce);
+      position: relative;
+    }
+    .hamburger-btn:active { transform: scale(0.92); background: color-mix(in oklab, var(--md-on-surface) 10%, transparent); }
+    .hamburger-btn svg { width: 22px; height: 22px; }
+    .hamburger-btn[data-badge="true"]::after {
+      content: '';
+      position: absolute;
+      top: 9px; right: 9px;
+      width: 8px; height: 8px;
+      border-radius: 999px;
+      background: var(--md-primary);
+      box-shadow: 0 0 0 2px var(--md-surface-container-low);
+    }
+    .topbar .title { font-size: 22px; }
+    .topbar .eyebrow { font-size: 11px; }
+
+    /* The Today + theme buttons get M3 tonal-icon treatment. */
+    .topbar .top-actions .icon-btn,
+    .topbar .top-actions .chip-btn {
+      background: color-mix(in oklab, var(--md-surface-container-high) 78%, transparent);
+      border-color: color-mix(in oklab, var(--md-outline-variant) 70%, transparent);
+      color: var(--md-on-surface);
+      box-shadow: none;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .topbar .top-actions .chip-btn[data-action="today"] {
+      background: var(--md-secondary-container);
+      color: var(--md-on-secondary-container);
+      border-color: transparent;
+    }
+
+    /* ---------- Week + day pills: tone, not glass ---------- */
+    .week-tab {
+      border-color: color-mix(in oklab, var(--md-outline-variant) 70%, transparent);
+      background: color-mix(in oklab, var(--md-surface-container) 85%, transparent);
+      box-shadow: none;
+      border-radius: var(--md-shape-lg);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .day-pill {
+      background: color-mix(in oklab, var(--md-surface-container) 85%, transparent);
+      border-color: color-mix(in oklab, var(--md-outline-variant) 70%, transparent);
+      box-shadow: none;
+      border-radius: 20px;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .day-pill .dow { color: var(--md-on-surface-variant); }
+    .day-pill[data-today="true"] {
+      box-shadow: 0 0 0 2px color-mix(in oklab, var(--md-primary) 50%, transparent);
+    }
+
+    /* ---------- Hero card: M3 expressive shape stack ---------- */
+    .hero {
+      border-radius: 32px;
+      border: 0;
+      box-shadow:
+        0 22px 50px -28px color-mix(in oklab, var(--md-primary) 75%, transparent),
+        inset 0 1px 0 rgba(255,255,255,.34);
+    }
+    .hero-btn {
+      border-radius: var(--md-shape-full);
+      font-variation-settings: "wght" 600;
+    }
+    .hero-btn.primary {
+      background: var(--md-on-primary);
+      color: var(--md-primary);
+    }
+
+    /* ---------- Cards: surface tone with M3 corner choreography ---------- */
+    .ex-card, .notice, .warmup, .overview-card, .rest-panel {
+      background: color-mix(in oklab, var(--md-surface-container) 92%, transparent);
+      border-color: color-mix(in oklab, var(--md-outline-variant) 55%, transparent);
+      box-shadow: none;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      border-radius: var(--md-shape-xl);
+    }
+    .ex-card { border-radius: 28px; }
+    .ex-card[data-complete="true"] {
+      background: color-mix(in oklab, var(--md-success) 12%, var(--md-surface-container));
+      border-color: color-mix(in oklab, var(--md-success) 40%, transparent);
+    }
+    .set-row {
+      background: color-mix(in oklab, var(--md-surface-container-high) 90%, transparent);
+      border-radius: 18px;
+    }
+    .set-row[data-done="true"] {
+      background: color-mix(in oklab, var(--md-success) 16%, var(--md-surface-container));
+    }
+    .set-row[data-done="true"] .check-btn { background: var(--md-success); border-color: var(--md-success); }
+    .number-control {
+      background: color-mix(in oklab, var(--md-surface-container-lowest) 86%, transparent);
+      border-color: color-mix(in oklab, var(--md-outline-variant) 60%, transparent);
+      border-radius: var(--md-shape-md);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+
+    /* ---------- M3 chip-style tool buttons ---------- */
+    .tool-btn {
+      background: color-mix(in oklab, var(--md-surface-container-high) 86%, transparent);
+      border: 1px solid color-mix(in oklab, var(--md-outline-variant) 70%, transparent);
+      border-radius: var(--md-shape-sm);
+      color: var(--md-on-surface);
+      transition: background .14s ease, transform .35s var(--md-spring-bounce);
+    }
+    .tool-btn.danger {
+      background: color-mix(in oklab, var(--md-error) 12%, var(--md-surface-container-high));
+      color: var(--md-error);
+      border-color: color-mix(in oklab, var(--md-error) 30%, transparent);
+    }
+
+    /* ---------- Bottom navigation (M3 expressive) ---------- */
+    .bottom-nav {
+      position: fixed;
+      left: 50%;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 0px);
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: var(--app-max);
+      padding: 0 0 env(safe-area-inset-bottom, 0px);
+      background: color-mix(in oklab, var(--md-surface-container) 96%, transparent);
+      border-top: 1px solid color-mix(in oklab, var(--md-outline-variant) 50%, transparent);
+      z-index: 50;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      align-items: stretch;
+      -webkit-backdrop-filter: saturate(180%) blur(22px);
+      backdrop-filter: saturate(180%) blur(22px);
+    }
+    .bottom-nav[data-hidden="true"] {
+      transform: translate(-50%, 120%);
+      transition: transform .35s var(--md-emphasized);
+    }
+    .bottom-nav[data-hidden="false"] {
+      transition: transform .4s var(--md-spring-bounce);
+    }
+    .bottom-nav-btn {
+      display: grid;
+      grid-template-rows: 32px auto;
+      justify-items: center;
+      align-content: center;
+      gap: 4px;
+      padding: 10px 4px 8px;
+      color: var(--md-on-surface-variant);
+      font-size: 11px;
+      font-variation-settings: "wght" 600;
+      letter-spacing: 0.02em;
+      position: relative;
+      transition: color .2s ease;
+    }
+    .bottom-nav-btn .nav-icon-wrap {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 64px;
+      height: 32px;
+      border-radius: var(--md-shape-full);
+      transition: background .25s var(--md-emphasized), transform .35s var(--md-spring-bounce);
+    }
+    .bottom-nav-btn svg { width: 24px; height: 24px; transition: transform .35s var(--md-spring-bounce); }
+    .bottom-nav-btn[data-active="true"] {
+      color: var(--md-on-surface);
+    }
+    .bottom-nav-btn[data-active="true"] .nav-icon-wrap {
+      background: var(--md-secondary-container);
+      transform: scale(1.0);
+    }
+    .bottom-nav-btn[data-active="true"] svg {
+      color: var(--md-on-secondary-container);
+      transform: scale(1.06);
+    }
+    .bottom-nav-btn[data-active="true"]::after {
+      content: '';
+      position: absolute;
+      top: 6px;
+      right: calc(50% - 22px);
+      width: 6px; height: 6px;
+      border-radius: 999px;
+      background: var(--md-primary);
+      box-shadow: 0 0 0 2px var(--md-surface-container);
+      animation: m3-pop .35s var(--md-spring-bounce);
+    }
+    .bottom-nav-btn[data-badge="true"]::after {
+      content: '';
+      position: absolute;
+      top: 6px;
+      right: calc(50% - 22px);
+      min-width: 8px; height: 8px;
+      border-radius: 999px;
+      background: var(--md-primary);
+      box-shadow: 0 0 0 2px var(--md-surface-container);
+    }
+    @keyframes m3-pop {
+      0%   { transform: scale(0); opacity: 0; }
+      60%  { transform: scale(1.4); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* Adjust #app and rest-fab for bottom nav presence */
+    #app { padding-bottom: calc(var(--bottom-nav-h) + 16px + var(--safe-bot)); }
+    .rest-fab {
+      bottom: calc(var(--bottom-nav-h) + 14px + env(safe-area-inset-bottom, 0px));
+    }
+    .toast-stack {
+      bottom: calc(var(--bottom-nav-h) + 70px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* ---------- FAB (Floating Action Button) ---------- */
+    .fab {
+      position: fixed;
+      right: 16px;
+      bottom: calc(var(--bottom-nav-h) + 18px + env(safe-area-inset-bottom, 0px));
+      z-index: 45;
+      min-width: 56px;
+      height: 56px;
+      padding: 0 18px;
+      border-radius: 18px;
+      background: var(--md-primary-container);
+      color: var(--md-on-primary-container);
+      box-shadow:
+        0 6px 14px -6px color-mix(in oklab, var(--md-primary) 60%, transparent),
+        0 16px 30px -16px color-mix(in oklab, var(--md-primary) 70%, transparent);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-variation-settings: "wght" 700;
+      transition: transform .35s var(--md-spring-bounce), border-radius .35s var(--md-spring-bounce), background .2s ease;
+    }
+    .fab svg { width: 22px; height: 22px; }
+    .fab:active { transform: scale(0.94); border-radius: 28px; }
+    .fab[data-running="true"] {
+      background: linear-gradient(135deg, var(--md-primary), var(--md-secondary));
+      color: #fff;
+    }
+    .fab[data-hidden="true"] { transform: translateY(120px); opacity: 0; pointer-events: none; }
+    .fab-label { display: inline-block; }
+    @media (max-width: 359px) {
+      .fab { padding: 0; width: 56px; }
+      .fab-label { display: none; }
+    }
+
+    /* ---------- Navigation drawer (hamburger top-left) ---------- */
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 95;
+      background: rgba(10, 7, 9, .42);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .22s ease;
+    }
+    .drawer-backdrop[data-open="true"] { opacity: 1; pointer-events: auto; }
+    .nav-drawer {
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      z-index: 100;
+      width: min(320px, 86vw);
+      background: var(--md-surface-container-low);
+      border-right: 1px solid var(--md-outline-variant);
+      transform: translateX(-105%);
+      transition: transform .32s var(--md-emphasized);
+      box-shadow: 30px 0 60px -30px rgba(0,0,0,.42);
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+    }
+    .nav-drawer[data-open="true"] { transform: translateX(0); }
+    .nav-drawer[data-dragging="true"] { transition: none; }
+    .nav-drawer-head {
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid var(--md-outline-variant);
+    }
+    .nav-drawer-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .nav-drawer-mark {
+      width: 44px; height: 44px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--md-primary), var(--md-secondary));
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-variation-settings: "wght" 900;
+      font-size: 22px;
+      box-shadow: 0 8px 18px -10px color-mix(in oklab, var(--md-primary) 80%, transparent);
+    }
+    .nav-drawer-meta { line-height: 1.2; }
+    .nav-drawer-meta strong { display: block; font-size: 18px; font-variation-settings: "wght" 750; }
+    .nav-drawer-meta span { display: block; color: var(--md-on-surface-variant); font-size: 12px; margin-top: 2px; }
+    .nav-drawer-body { overflow-y: auto; padding: 10px 12px 18px; display: grid; gap: 4px; }
+    .nav-section-head {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-variation-settings: "wght" 700;
+      color: var(--md-on-surface-variant);
+      padding: 14px 14px 8px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 14px;
+      border-radius: var(--md-shape-full);
+      color: var(--md-on-surface);
+      font-variation-settings: "wght" 600;
+      font-size: 14px;
+      text-align: left;
+      transition: background .15s ease;
+    }
+    .nav-item:hover { background: color-mix(in oklab, var(--md-on-surface) 6%, transparent); }
+    .nav-item[data-active="true"] {
+      background: var(--md-secondary-container);
+      color: var(--md-on-secondary-container);
+    }
+    .nav-item svg { width: 22px; height: 22px; }
+    .nav-drawer-foot {
+      border-top: 1px solid var(--md-outline-variant);
+      padding: 12px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--md-on-surface-variant);
+      font-size: 12px;
+    }
+    .nav-drawer-foot .icon-btn {
+      width: 38px; height: 38px;
+      background: color-mix(in oklab, var(--md-surface-container-high) 92%, transparent);
+      border-color: var(--md-outline-variant);
+    }
+
+    /* ---------- Quick-add custom exercise sheet ---------- */
+    .quick-add-grid { display: grid; gap: 14px; }
+    .qa-presets { display: flex; gap: 8px; flex-wrap: wrap; }
+    .qa-preset {
+      padding: 9px 14px;
+      border-radius: var(--md-shape-full);
+      background: color-mix(in oklab, var(--md-surface-container-high) 90%, transparent);
+      border: 1px solid var(--md-outline-variant);
+      color: var(--md-on-surface);
+      font-size: 13px;
+      font-variation-settings: "wght" 600;
+    }
+    .qa-preset[data-active="true"] {
+      background: var(--md-secondary-container);
+      color: var(--md-on-secondary-container);
+      border-color: transparent;
+    }
+
+    /* ---------- Body measurements ---------- */
+    .measure-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .measure-card {
+      background: var(--md-surface-container);
+      border: 1px solid var(--md-outline-variant);
+      border-radius: var(--md-shape-lg);
+      padding: 14px;
+      display: grid;
+      gap: 6px;
+    }
+    .measure-card label {
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--md-on-surface-variant);
+      font-variation-settings: "wght" 700;
+    }
+    .measure-card .measure-val {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      font-size: 22px;
+      font-variation-settings: "wght" 750;
+      color: var(--md-on-surface);
+    }
+    .measure-card .measure-val .unit { font-size: 12px; color: var(--md-on-surface-variant); font-variation-settings: "wght" 600; }
+    .measure-card .measure-delta { font-size: 11px; color: var(--md-on-surface-variant); }
+    .measure-card .measure-delta[data-trend="up"] { color: var(--md-success); }
+    .measure-card .measure-delta[data-trend="down"] { color: var(--md-error); }
+    .measure-input-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 8px;
+      align-items: end;
+    }
+
+    /* ---------- Calendar month view ---------- */
+    .cal-month {
+      background: var(--md-surface-container);
+      border: 1px solid var(--md-outline-variant);
+      border-radius: var(--md-shape-xl);
+      padding: 16px;
+    }
+    .cal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .cal-head strong { font-size: 18px; font-variation-settings: "wght" 750; }
+    .cal-head .cal-nav { display: flex; gap: 6px; }
+    .cal-head .icon-btn { width: 36px; height: 36px; }
+    .cal-dow-row {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+    .cal-dow {
+      text-align: center;
+      font-size: 11px;
+      color: var(--md-on-surface-variant);
+      font-variation-settings: "wght" 700;
+      letter-spacing: 0.04em;
+    }
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+    .cal-cell {
+      aspect-ratio: 1;
+      border-radius: 14px;
+      background: transparent;
+      color: var(--md-on-surface);
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+      font-variation-settings: "wght" 600;
+      position: relative;
+      transition: background .2s ease, transform .25s var(--md-spring-bounce);
+    }
+    .cal-cell[data-other="true"] { color: var(--md-on-surface-variant); opacity: 0.4; }
+    .cal-cell[data-status="done"] {
+      background: linear-gradient(135deg, var(--md-primary), var(--md-secondary));
+      color: #fff;
+    }
+    .cal-cell[data-status="partial"] {
+      background: var(--md-secondary-container);
+      color: var(--md-on-secondary-container);
+    }
+    .cal-cell[data-status="planned"] {
+      background: color-mix(in oklab, var(--md-tertiary) 18%, transparent);
+      color: var(--md-on-surface);
+    }
+    .cal-cell[data-today="true"] {
+      box-shadow: inset 0 0 0 2px var(--md-primary);
+    }
+    .cal-cell:active { transform: scale(0.92); }
+    .cal-legend {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+      color: var(--md-on-surface-variant);
+      font-size: 11px;
+    }
+    .cal-legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .cal-legend .dot {
+      width: 10px; height: 10px; border-radius: 4px;
+    }
+
+    /* ---------- Marketplace cards ---------- */
+    .market-list { display: grid; gap: 12px; }
+    .market-card {
+      background: var(--md-surface-container);
+      border: 1px solid var(--md-outline-variant);
+      border-radius: var(--md-shape-xl);
+      padding: 16px;
+      display: grid;
+      grid-template-columns: 56px 1fr;
+      gap: 14px;
+      align-items: center;
+      text-align: left;
+    }
+    .market-thumb {
+      width: 56px; height: 56px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-variation-settings: "wght" 900;
+      font-size: 14px;
+      letter-spacing: 0.06em;
+    }
+    .market-card[data-vibe="strength"] .market-thumb { background: linear-gradient(135deg, #c43154, #855799); }
+    .market-card[data-vibe="hypertrophy"] .market-thumb { background: linear-gradient(135deg, #b85c2a, #c43154); }
+    .market-card[data-vibe="endurance"] .market-thumb { background: linear-gradient(135deg, #1d8c3e, #009aa0); }
+    .market-card[data-vibe="mobility"] .market-thumb { background: linear-gradient(135deg, #855799, #4c5568); }
+    .market-card[data-vibe="quick"] .market-thumb { background: linear-gradient(135deg, #b67518, #ff9500); }
+    .market-meta strong { display: block; font-size: 15px; font-variation-settings: "wght" 740; }
+    .market-meta span { display: block; color: var(--md-on-surface-variant); font-size: 12px; margin-top: 3px; line-height: 1.35; }
+    .market-meta .market-tags { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .market-meta .market-tags .tag {
+      background: color-mix(in oklab, var(--md-tertiary-container) 80%, transparent);
+      color: var(--md-on-tertiary-container);
+    }
+
+    /* ---------- Readiness sheet polish ---------- */
+    .readiness-grid { display: grid; gap: 14px; }
+    .readiness-cluster {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .readiness-cluster button {
+      padding: 14px 12px;
+      border-radius: var(--md-shape-md);
+      background: var(--md-surface-container);
+      border: 1px solid var(--md-outline-variant);
+      color: var(--md-on-surface);
+      text-align: left;
+      font-variation-settings: "wght" 600;
+      font-size: 13px;
+    }
+    .readiness-cluster button[data-active="true"] {
+      background: var(--md-primary-container);
+      color: var(--md-on-primary-container);
+      border-color: transparent;
+    }
+    .readiness-cluster .ic { font-size: 22px; line-height: 1; margin-bottom: 4px; display: block; }
+
+    /* ---------- Form video chip on exercise card ---------- */
+    .tool-btn.form-link svg { color: var(--md-tertiary); }
+
+    /* ---------- Plate calculator stacked plates viz ---------- */
+    .plate-viz {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      height: 110px;
+      padding: 18px 12px;
+      background: var(--md-surface-container-low);
+      border: 1px solid var(--md-outline-variant);
+      border-radius: var(--md-shape-xl);
+      margin: 6px 0;
+      overflow-x: auto;
+    }
+    .plate-bar { width: 4px; height: 14px; background: var(--md-outline); border-radius: 1px; }
+    .plate {
+      width: 16px;
+      border-radius: 3px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 10px;
+      font-variation-settings: "wght" 800;
+      flex-shrink: 0;
+    }
+    .plate[data-kg="25"] { height: 96px; background: #d62828; }
+    .plate[data-kg="20"] { height: 88px; background: #1b6ad6; }
+    .plate[data-kg="15"] { height: 76px; background: #f4a300; }
+    .plate[data-kg="10"] { height: 64px; background: #1d8c3e; }
+    .plate[data-kg="5"]  { height: 50px; background: #aaaaaa; width: 14px; }
+    .plate[data-kg="2.5"]  { height: 38px; background: #d62828; width: 12px; }
+    .plate[data-kg="1.25"] { height: 28px; background: #1b6ad6; width: 10px; }
+    .plate-collar {
+      width: 8px; height: 18px;
+      background: var(--md-outline);
+      border-radius: 2px;
+    }
+
+    /* ---------- Health export sheet ---------- */
+    .health-target-row {
+      display: grid;
+      grid-template-columns: 56px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 14px;
+      border-radius: var(--md-shape-lg);
+      background: var(--md-surface-container);
+      border: 1px solid var(--md-outline-variant);
+    }
+    .health-icon {
+      width: 56px; height: 56px;
+      border-radius: 18px;
+      display: grid; place-items: center;
+      color: #fff;
+      font-size: 24px;
+    }
+    .health-icon[data-target="apple"] { background: linear-gradient(135deg, #fa3c4c, #ff6c6c); }
+    .health-icon[data-target="google"] { background: linear-gradient(135deg, #4285f4, #34a853); }
+    .health-icon[data-target="strava"] { background: linear-gradient(135deg, #fc4c02, #ff8b1f); }
+    .health-icon[data-target="generic"] { background: linear-gradient(135deg, #533c64, #855799); }
+    .health-meta strong { display: block; font-size: 15px; font-variation-settings: "wght" 740; }
+    .health-meta span { display: block; color: var(--md-on-surface-variant); font-size: 12px; margin-top: 3px; }
+
+    /* ---------- 1RM estimator UI ---------- */
+    .est-card {
+      background: linear-gradient(135deg, var(--md-primary-container), var(--md-tertiary-container));
+      color: var(--md-on-primary-container);
+      border-radius: var(--md-shape-xl);
+      padding: 18px;
+      border: 0;
+    }
+    .est-card .est-big {
+      font-size: 44px;
+      font-variation-settings: "wght" 860;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      font-feature-settings: "tnum";
+    }
+    .est-card .est-label { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-variation-settings: "wght" 700; opacity: .8; margin-top: 6px; }
+    .est-card .est-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 14px;
+    }
+    .est-card .est-row > div { display: grid; gap: 4px; }
+    .est-card .est-row strong { font-size: 18px; font-variation-settings: "wght" 750; }
+    .est-card .est-row small { font-size: 11px; opacity: .75; letter-spacing: 0.04em; text-transform: uppercase; font-variation-settings: "wght" 700; }
+
+    /* ---------- Streak ring (weekly target) ---------- */
+    .streak-ring-card {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 18px;
+      align-items: center;
+      padding: 18px;
+      background: var(--md-surface-container);
+      border: 1px solid var(--md-outline-variant);
+      border-radius: var(--md-shape-xl);
+    }
+    .streak-ring { width: 110px; height: 110px; position: relative; }
+    .streak-ring svg { width: 110px; height: 110px; transform: rotate(-90deg); }
+    .streak-ring .track { stroke: var(--md-outline-variant); fill: none; stroke-width: 12; }
+    .streak-ring .bar { stroke: var(--md-primary); stroke-width: 12; stroke-linecap: round; fill: none; transition: stroke-dashoffset .35s var(--md-emphasized); }
+    .streak-ring .label-num {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font-size: 32px;
+      font-variation-settings: "wght" 800;
+      line-height: 1;
+      color: var(--md-on-surface);
+    }
+    .streak-meta strong { display: block; font-size: 16px; font-variation-settings: "wght" 740; }
+    .streak-meta p { margin: 4px 0 0; color: var(--md-on-surface-variant); font-size: 13px; line-height: 1.4; }
+    .streak-flames {
+      margin-top: 8px;
+      display: flex;
+      gap: 4px;
+      font-size: 14px;
+    }
+    .streak-flames span { opacity: 0.3; transition: opacity .3s var(--md-spring-bounce); }
+    .streak-flames span[data-on="true"] { opacity: 1; }
+
+    /* ---------- Sheet polish — M3 shape ---------- */
+    .sheet {
+      background: var(--md-surface-container-low);
+      border-color: var(--md-outline-variant);
+      border-radius: 28px 28px 0 0;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .sheet[data-type="menu"] {
+      background: var(--md-surface-container-low);
+    }
+    .sheet-head {
+      background: var(--md-surface-container-low);
+      border-bottom-color: var(--md-outline-variant);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .action-btn {
+      border-radius: var(--md-shape-full);
+      background: var(--md-primary);
+      color: var(--md-on-primary);
+      font-variation-settings: "wght" 700;
+    }
+    .action-btn.secondary {
+      background: var(--md-secondary-container);
+      color: var(--md-on-secondary-container);
+    }
+    .action-btn.danger {
+      background: color-mix(in oklab, var(--md-error) 12%, var(--md-surface-container-high));
+      color: var(--md-error);
+    }
+    .field-block input, .field-block select, .field-block textarea {
+      background: var(--md-surface-container-lowest);
+      border: 1px solid var(--md-outline-variant);
+      border-radius: var(--md-shape-md);
+      color: var(--md-on-surface);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .field-block input:focus, .field-block select:focus, .field-block textarea:focus {
+      outline: 2px solid var(--md-primary);
+      outline-offset: 1px;
+      border-color: transparent;
+    }
+    .segmented { background: var(--md-surface-container); border-radius: var(--md-shape-full); padding: 4px; }
+    .segmented button { border-radius: var(--md-shape-full); }
+    .segmented button[data-active="true"] {
+      background: var(--md-secondary-container);
+      color: var(--md-on-secondary-container);
+    }
+
+    /* ---------- Menu sheet retired — it's a drawer now ---------- */
+    /* Keep menu sheet HTML usable if someone deep-links it. */
+
+    /* ---------- Mobile-first tweaks ---------- */
+    @media (max-width: 520px) {
+      .topbar { padding-inline: 14px; }
+      .topbar-row { gap: 6px; }
+      .topbar .title { font-size: 20px; }
+      .topbar .eyebrow { font-size: 10px; }
+      .hero { margin: 12px 14px 16px; padding: 20px; border-radius: 28px; }
+      .content { padding-inline: 14px; }
+      .week-strip, .day-strip, .phase-row { padding-inline: 14px; }
+      .chip-btn[data-action="today"] span { display: inline; }
+    }
+
+    /* On larger screens, lay things out wider but keep mobile-first patterns. */
+    @media (min-width: 760px) {
+      .bottom-nav { max-width: var(--app-max); }
+      .nav-drawer { width: min(340px, 32vw); }
+      .fab { right: max(16px, calc((100vw - var(--app-max)) / 2 + 24px)); }
+    }
+
+    /* ============================================================
+       LIFT v1.4 — Page mode (drawer items + bottom nav open as
+       full-page surfaces, not bottom-sheet modals).
+       ============================================================ */
+
+    /* Hero default: was red→orange, now monochrome charcoal — keeps
+       data-type variants for workout-type signaling. */
+    .hero {
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.18), transparent 32%),
+        linear-gradient(315deg, rgba(0,0,0,.30), transparent 60%),
+        linear-gradient(135deg, #2c2c2e, #1c1c1e);
+      box-shadow:
+        0 22px 50px -28px rgba(0,0,0,.65),
+        inset 0 1px 0 rgba(255,255,255,.18);
+    }
+    html[data-theme="dark"] .hero {
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.12), transparent 32%),
+        linear-gradient(315deg, rgba(0,0,0,.42), transparent 60%),
+        linear-gradient(135deg, #38383a, #1c1c1c);
+    }
+
+    /* Page-mode sheet: drawer items + nav-tab destinations get this
+       treatment. Slides in from the right, fills the viewport above
+       the bottom nav (which stays visible), has its own top bar with
+       a back arrow rather than a close X. */
+    .sheet[data-mode="page"] {
+      left: 50%;
+      right: auto;
+      bottom: 0;
+      top: 0;
+      transform: translate(-50%, 100%);
+      width: 100%;
+      max-width: var(--app-max);
+      max-height: none;
+      height: 100dvh;
+      border-radius: 0;
+      border: 0;
+      background: var(--md-surface);
+      box-shadow: none;
+      transition: transform .42s var(--md-emphasized);
+      padding-top: env(safe-area-inset-top, 0px);
+    }
+    .sheet[data-mode="page"][data-open="true"] {
+      transform: translate(-50%, 0);
+    }
+    /* Hide grabber + bottom-sheet chrome when full page. */
+    .sheet[data-mode="page"] .sheet-grabber { display: none; }
+    .sheet[data-mode="page"] .sheet-head {
+      background: var(--md-surface);
+      border-bottom: 1px solid var(--md-outline-variant);
+      padding: 12px 12px 12px 4px;
+      grid-template-columns: 44px 1fr 44px;
+      display: grid;
+      align-items: center;
+      gap: 8px;
+      min-height: 64px;
+    }
+    .sheet[data-mode="page"] .sheet-title {
+      font-size: 22px;
+      font-variation-settings: "opsz" 28, "wght" 720;
+      letter-spacing: -0.018em;
+      text-align: left;
+    }
+    .sheet[data-mode="page"] .sheet-body {
+      max-height: none;
+      height: calc(100dvh - 64px - env(safe-area-inset-top, 0px) - var(--bottom-nav-h));
+      padding: 18px 18px calc(28px + var(--bottom-nav-h) + var(--safe-bot));
+      overflow-y: auto;
+      background: var(--md-surface);
+    }
+    .sheet[data-mode="page"] .sheet-back {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--md-shape-full);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--md-on-surface);
+      background: transparent;
+      border: 0;
+      transition: background .15s ease, transform .3s var(--md-spring-bounce);
+    }
+    .sheet[data-mode="page"] .sheet-back:active {
+      background: color-mix(in oklab, var(--md-on-surface) 10%, transparent);
+      transform: scale(0.92);
+    }
+    .sheet[data-mode="page"] .sheet-back svg { width: 22px; height: 22px; }
+
+    /* In page mode the FAB clutters the surface — hide it. */
+    .sheet[data-mode="page"][data-open="true"] ~ #fab,
+    body:has(.sheet[data-mode="page"][data-open="true"]) #fab {
+      transform: translateY(120px);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Backdrop fades out when in page mode (page is opaque). */
+    .sheet-backdrop[data-mode="page"] {
+      background: transparent;
+    }
+
+    /* Hero on the today PAGE — keep card design but page-style padding. */
+    .page-hero-wrap { padding: 4px 4px 14px; }
+    .page-section {
+      margin: 0 4px 18px;
+    }
+    .page-section + .page-section { margin-top: 0; }
+    .page-h1 {
+      font-family: "Roboto Flex", system-ui, sans-serif;
+      font-variation-settings: "opsz" 36, "wght" 740;
+      letter-spacing: -0.024em;
+      font-size: 32px;
+      line-height: 1.04;
+      margin: 8px 4px 6px;
+      color: var(--md-on-surface);
+    }
+    .page-lede {
+      margin: 0 4px 18px;
+      color: var(--md-on-surface-variant);
+      font-size: 15px;
+      line-height: 1.5;
+      max-width: 56ch;
+    }
+
+    /* Heavy emphasis on monochrome content cards: less border tint, more
+       elevation contrast. */
+    .ex-card, .notice, .warmup, .overview-card, .rest-panel,
+    .market-card, .health-target-row, .measure-card, .cal-month,
+    .streak-ring-card, .est-card {
+      border-color: var(--md-outline-variant);
+    }
+    .ex-card[data-complete="true"] {
+      background: color-mix(in oklab, var(--md-success) 14%, var(--md-surface-container));
+    }
+    .est-card {
+      background: linear-gradient(135deg, #1c1c1e, #38383a);
+      color: #ebebed;
+      border: 0;
+    }
+    html[data-theme="dark"] .est-card {
+      background: linear-gradient(135deg, #ebebed, #d6d6d8);
+      color: #1c1c1e;
+    }
+    .market-card[data-vibe="strength"] .market-thumb { background: linear-gradient(135deg, #1c1c1e, #48484a); }
+    .market-card[data-vibe="hypertrophy"] .market-thumb { background: linear-gradient(135deg, #2c2c2e, #79797a); }
+    .market-card[data-vibe="endurance"] .market-thumb { background: linear-gradient(135deg, #38383a, #c7c7c9); color: #1c1c1e; }
+    .market-card[data-vibe="mobility"] .market-thumb { background: linear-gradient(135deg, #444446, #8a8a8c); }
+    .market-card[data-vibe="quick"] .market-thumb { background: linear-gradient(135deg, #1c1c1e, #ebebed); color: #1c1c1e; }
+
+    /* Health export icons retain a faint vendor accent so they read as
+       BRANDED destinations — but desaturated to match monochrome system. */
+    .health-icon[data-target="apple"] { background: linear-gradient(135deg, #2c2c2e, #48484a); }
+    .health-icon[data-target="google"] { background: linear-gradient(135deg, #1c1c1e, #79797a); }
+    .health-icon[data-target="strava"] { background: linear-gradient(135deg, #38383a, #8a8a8c); }
+    .health-icon[data-target="generic"] { background: linear-gradient(135deg, #1c1c1e, #ebebed); color: #1c1c1e; }
+  </style>
 </head>
 <body>
+  <div class="status-bar-bg" aria-hidden="true"></div>
   <div id="app" aria-live="polite">
     <div class="app-empty">Loading the training plan...</div>
   </div>
+  <button id="fab" class="fab" data-hidden="false" data-action="fab-tap" aria-label="Start workout">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>
+    <span class="fab-label">Start workout</span>
+  </button>
+  <nav id="bottom-nav" class="bottom-nav" data-hidden="false" aria-label="Primary">
+    <button class="bottom-nav-btn" data-action="nav-tab" data-nav="today" data-active="true" aria-label="Today">
+      <span class="nav-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l2-2 4 4 8-8 4 4"/></svg></span>
+      Today
+    </button>
+    <button class="bottom-nav-btn" data-action="nav-tab" data-nav="plan" aria-label="Plan">
+      <span class="nav-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg></span>
+      Plan
+    </button>
+    <button class="bottom-nav-btn" data-action="nav-tab" data-nav="progress" aria-label="Progress">
+      <span class="nav-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 8-8M14 8h6v6"/></svg></span>
+      Progress
+    </button>
+    <button class="bottom-nav-btn" data-action="nav-tab" data-nav="body" aria-label="Body">
+      <span class="nav-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.4"/><path d="M9 11l3-1 3 1v6l-1 5h-4l-1-5z"/></svg></span>
+      Body
+    </button>
+    <button class="bottom-nav-btn" data-action="nav-tab" data-nav="library" aria-label="Library">
+      <span class="nav-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h6v16H4zM14 4h6v16h-6z"/></svg></span>
+      Library
+    </button>
+  </nav>
+  <div id="drawer-backdrop" class="drawer-backdrop" data-open="false"></div>
+  <aside id="nav-drawer" class="nav-drawer" data-open="false" aria-label="Navigation"></aside>
   <div id="toast-root" class="toast-stack" aria-live="assertive"></div>
   <div id="sheet-backdrop" class="sheet-backdrop" data-open="false"></div>
   <section id="sheet" class="sheet" data-open="false" aria-modal="true" role="dialog"></section>
@@ -935,6 +2017,15 @@
   <script src="./features/cloud.js"></script>
   <script src="./features/library.js"></script>
   <script src="./features/notifications.js"></script>
+  <script src="./features/voice.js"></script>
+  <script src="./features/measurements.js"></script>
+  <script src="./features/strength.js"></script>
+  <script src="./features/streaks.js"></script>
+  <script src="./features/calendar.js"></script>
+  <script src="./features/marketplace.js"></script>
+  <script src="./features/healthkit.js"></script>
+  <script src="./features/forms.js"></script>
+  <script src="./features/quickadd.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
