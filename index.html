@@ -1204,7 +1204,7 @@
       padding: 0 0 env(safe-area-inset-bottom, 0px);
       background: color-mix(in oklab, var(--md-surface-container) 96%, transparent);
       border-top: 1px solid color-mix(in oklab, var(--md-outline-variant) 50%, transparent);
-      z-index: 50;
+      z-index: 92;
       display: grid;
       grid-template-columns: repeat(5, 1fr);
       align-items: stretch;
@@ -1281,7 +1281,7 @@
     }
 
     /* Adjust #app and rest-fab for bottom nav presence */
-    #app { padding-bottom: calc(var(--bottom-nav-h) + 16px + var(--safe-bot)); }
+    #app { padding-bottom: calc(var(--bottom-nav-h) + 32px + var(--safe-bot)); }
     .rest-fab {
       bottom: calc(var(--bottom-nav-h) + 14px + env(safe-area-inset-bottom, 0px));
     }
