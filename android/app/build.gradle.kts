@@ -10,8 +10,8 @@ android {
         applicationId = "io.github.blayalems.lift"
         minSdk = 26
         targetSdk = 36
-        versionCode = 15
-        versionName = "1.4.3"
+        versionCode = 16
+        versionName = "1.4.5"
     }
 
     signingConfigs {

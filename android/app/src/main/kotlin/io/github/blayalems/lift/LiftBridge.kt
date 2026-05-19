@@ -99,6 +99,21 @@ class LiftBridge(private val context: Context) {
     fun isNative(): Boolean = true
 
     @JavascriptInterface
+    fun setSystemBars(theme: String) {
+        Handler(Looper.getMainLooper()).post {
+            (context as? MainActivity)?.applySystemBars(theme)
+        }
+    }
+
+    @JavascriptInterface
+    fun getAndroidInfo(): String = JSONObject().apply {
+        put("sdk", Build.VERSION.SDK_INT)
+        put("manufacturer", Build.MANUFACTURER ?: "")
+        put("model", Build.MODEL ?: "")
+        put("brand", Build.BRAND ?: "")
+    }.toString()
+
+    @JavascriptInterface
     fun saveBackupFile(filename: String, json: String) {
         try {
             val safeName = cleanFilename(filename, "lift-backup.json", ".json")
