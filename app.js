@@ -713,6 +713,9 @@
     html += renderRestFab();
 
     app.innerHTML = html;
+    var restFab = app.querySelector(".rest-fab");
+    app.dataset.hasRestFab = String(!!restFab);
+    app.style.setProperty("--rest-fab-h", restFab ? (restFab.offsetHeight + 18) + "px" : "0px");
     renderSheet();
     renderSummaryOverlay();
     renderBottomNav();
@@ -733,6 +736,10 @@
   function renderFab() {
     var fab = document.getElementById("fab");
     if (!fab) return;
+    if ((runtime.activeTab || "today") === "today") {
+      fab.dataset.hidden = "true";
+      return;
+    }
     var day = getDay(state.activeDayId);
     if (!day) { fab.dataset.hidden = "true"; return; }
     var hasWork = (day.exercises || []).length > 0;
@@ -894,13 +901,15 @@
   function renderRestFab() {
     var remaining = restRemaining();
     var duration = Math.max(1, numberOr(rest.duration, state.settings.defaultRest));
+    var isActive = rest.running || remaining < duration;
+    if (!isActive) return "";
     var progress = rest.running ? clamp(remaining / duration, 0, 1) : 0;
     var circumference = 2 * Math.PI * 22;
     var offset = circumference * (1 - progress);
-    var html = '<aside class="rest-fab" data-active="' + String(rest.running || remaining < duration) + '">';
+    var html = '<aside class="rest-fab" data-active="' + String(isActive) + '">';
     html += '<div class="rest-main">';
     html += '<div class="rest-ring"><svg viewBox="0 0 52 52"><circle class="track" cx="26" cy="26" r="22"></circle><circle class="bar" cx="26" cy="26" r="22" stroke-dasharray="' + circumference + '" stroke-dashoffset="' + offset + '"></circle></svg></div>';
-    html += '<div><div class="rest-small">' + escapeHtml(rest.label || "Rest") + '</div><div class="rest-time" data-rest-time>' + formatDuration(remaining) + "</div></div>";
+    html += '<div><div class="rest-small">Rest timer</div><div class="rest-time" data-rest-time>' + formatDuration(remaining) + "</div></div>";
     html += '<div class="rest-actions">';
     html += '<button class="icon-btn" data-action="rest-adjust" data-delta="-15" aria-label="Subtract 15 seconds">' + icon("minus") + "</button>";
     html += '<button class="icon-btn primary" data-action="rest-toggle" aria-label="Play pause rest timer">' + icon(rest.running ? "pause" : "play") + "</button>";
