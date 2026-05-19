@@ -6,6 +6,8 @@
     <color name="lift_orange">#FF79797A</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="status_bar_light">#FFF2F2F3</color>
+    <color name="navigation_bar_light">#FFFAFAFA</color>
 
     <!-- v1.4: Material 3 Expressive — monochrome neutrals (no hue). -->
     <color name="md_primary">#FF1C1C1E</color>

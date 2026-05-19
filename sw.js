@@ -1,5 +1,5 @@
-const APP_VERSION = "1.4.4";
-const CACHE_VERSION = "lift-v13";
+const APP_VERSION = "1.4.5";
+const CACHE_VERSION = "lift-v14";
 const PRECACHE = `${CACHE_VERSION}-precache`;
 const RUNTIME = `${CACHE_VERSION}-runtime`;
 
@@ -55,18 +55,19 @@ const FRESH_STATIC_PATH_RE = /\.(?:css|js|mjs|json|webmanifest)$/i;
 const UI_LAYER_FIX_STYLE = `
 <style id="lift-ui-layer-hotfix">
   :root {
-    --bottom-nav-h: calc(76px + env(safe-area-inset-bottom, 0px));
+    --bottom-nav-h: calc(82px + env(safe-area-inset-bottom, 0px));
+    --bottom-nav-gap: 14px;
     --rest-fab-offset: 0px;
   }
 
   .status-bar-bg {
-    height: max(env(safe-area-inset-top, 0px), 26px) !important;
-    background: #111114 !important;
+    height: env(safe-area-inset-top, 0px) !important;
+    background: #f2f2f3 !important;
     z-index: 150 !important;
   }
 
   html[data-theme="dark"] .status-bar-bg {
-    background: #050505 !important;
+    background: #161616 !important;
   }
 
   .topbar {
@@ -74,22 +75,39 @@ const UI_LAYER_FIX_STYLE = `
   }
 
   #app {
-    padding-bottom: calc(var(--bottom-nav-h) + var(--rest-fab-offset) + 64px) !important;
+    padding-bottom: calc(var(--bottom-nav-h) + var(--rest-fab-offset) + 56px) !important;
+    scroll-padding-bottom: calc(var(--bottom-nav-h) + var(--rest-fab-offset) + 56px) !important;
   }
 
   #app[data-has-rest-fab="true"] {
-    --rest-fab-offset: var(--rest-fab-h, 156px);
+    --rest-fab-offset: var(--rest-fab-h, 132px);
   }
 
   .bottom-nav {
     min-height: var(--bottom-nav-h) !important;
+    bottom: 0 !important;
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px) !important;
+    background: var(--md-surface-container) !important;
     z-index: 92 !important;
   }
 
   .rest-fab {
-    bottom: calc(var(--bottom-nav-h) + 14px) !important;
+    bottom: calc(var(--bottom-nav-h) + var(--bottom-nav-gap)) !important;
     z-index: 80 !important;
+    background: var(--md-surface-container-high) !important;
+  }
+
+  .rest-fab[data-active="true"] {
+    background: linear-gradient(135deg, rgb(255, 63, 106), rgb(255, 139, 31)) !important;
+  }
+
+  .toast-stack {
+    bottom: calc(var(--bottom-nav-h) + var(--rest-fab-offset, 0px) + 24px) !important;
+  }
+
+  body[data-has-rest-fab="true"] .toast-stack {
+    top: calc(env(safe-area-inset-top, 0px) + 132px) !important;
+    bottom: auto !important;
   }
 
   .rest-fab[data-active="false"] {
@@ -140,7 +158,14 @@ const UI_LAYER_FIX_STYLE = `
     overflow-y: auto !important;
   }
 
+  .sheet-backdrop[data-open="true"][data-mode="page"] {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    background: transparent !important;
+  }
+
   body:has(.sheet[data-mode="modal"][data-open="true"]) .bottom-nav,
+  body.sheet-mode-modal .bottom-nav,
   body:has(.summary-overlay[data-open="true"]) .bottom-nav {
     transform: translate(-50%, 120%) !important;
     opacity: 0 !important;
@@ -149,6 +174,7 @@ const UI_LAYER_FIX_STYLE = `
   }
 
   body:has(.sheet[data-mode="modal"][data-open="true"]) .rest-fab,
+  body.sheet-mode-modal .rest-fab,
   body:has(.summary-overlay[data-open="true"]) .rest-fab {
     transform: translate(-50%, 140%) !important;
     opacity: 0 !important;
@@ -156,9 +182,17 @@ const UI_LAYER_FIX_STYLE = `
     pointer-events: none !important;
   }
 
+  body:has(.sheet[data-mode="page"][data-open="true"]) .bottom-nav,
+  body.sheet-mode-page .bottom-nav {
+    transform: translateX(-50%) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+
   @supports not selector(body:has(*)) {
-    body.sheet-open .bottom-nav,
-    body.sheet-open .rest-fab {
+    body.sheet-mode-modal .bottom-nav,
+    body.sheet-mode-modal .rest-fab {
       transform: translate(-50%, 120%) !important;
       opacity: 0 !important;
       visibility: hidden !important;
@@ -410,6 +444,15 @@ function patchAppScriptText(source) {
     renderFab();
   }`);
 
+  out = replaceFunction(out, "syncRestFabLayout", "renderBottomNav", `  function syncRestFabLayout() {
+    var restFab = app.querySelector(".rest-fab");
+    app.dataset.hasRestFab = String(!!restFab);
+    var offset = restFab ? (restFab.offsetHeight + 22) + "px" : "0px";
+    app.style.setProperty("--rest-fab-h", offset);
+    document.body.style.setProperty("--rest-fab-offset", offset);
+    document.body.dataset.hasRestFab = String(!!restFab);
+  }`);
+
   out = replaceFunction(out, "renderBottomNav", "renderFab", `  function renderBottomNav() {
     var nav = document.getElementById("bottom-nav");
     if (!nav) return;
@@ -466,7 +509,15 @@ function patchAppScriptText(source) {
       bar.setAttribute("stroke-dashoffset", String(circumference * (1 - progress)));
     }
     var fab = document.querySelector(".rest-fab");
-    if (fab) fab.dataset.active = String(!!rest.running);
+    if (fab) {
+      var nextActive = String(!!rest.running);
+      if (fab.dataset.active !== nextActive) {
+        fab.dataset.active = nextActive;
+        if (typeof syncRestFabLayout === "function") syncRestFabLayout();
+      } else {
+        fab.dataset.active = nextActive;
+      }
+    }
     updateWorkoutNotification(false);
   }`);
 

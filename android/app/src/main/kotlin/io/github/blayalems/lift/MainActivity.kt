@@ -3,6 +3,7 @@ package io.github.blayalems.lift
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
@@ -12,6 +13,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import org.json.JSONObject
 
 class MainActivity : AppCompatActivity() {
@@ -49,6 +51,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        applySystemBars("light")
         requestNotifPermissionIfNeeded()
 
         webView = WebView(this).also { wv ->
@@ -89,6 +92,16 @@ class MainActivity : AppCompatActivity() {
 
         val initialUrl = prepareUrlForVersion()
         webView.loadUrl(initialUrl)
+    }
+
+    fun applySystemBars(theme: String?) {
+        val dark = theme == "dark"
+        window.statusBarColor = Color.parseColor(if (dark) "#161616" else "#F2F2F3")
+        window.navigationBarColor = Color.parseColor(if (dark) "#0A0A0A" else "#FAFAFA")
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

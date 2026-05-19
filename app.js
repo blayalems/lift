@@ -8,7 +8,7 @@
   var sheetBackdrop = document.getElementById("sheet-backdrop");
   var summaryOverlay = document.getElementById("summary-overlay");
 
-  var APP_VERSION = "1.4.3";
+  var APP_VERSION = "1.4.5";
   window.LIFT_APP_VERSION = APP_VERSION;
 
   var STORE_KEY = "lift.v3.state";
@@ -576,7 +576,16 @@
     // Update theme-color meta so the Android system status bar adapts.
     var meta = document.getElementById("theme-color-active");
     if (meta) meta.setAttribute("content", resolved === "dark" ? "#161616" : "#f2f2f3");
+    syncNativeSystemBars(resolved);
     try { localStorage.setItem(THEME_KEY, selected); } catch (err) {}
+  }
+
+  function syncNativeSystemBars(resolved) {
+    try {
+      if (window.LiftAndroid && typeof window.LiftAndroid.setSystemBars === "function") {
+        window.LiftAndroid.setSystemBars(resolved === "dark" ? "dark" : "light");
+      }
+    } catch (err) {}
   }
 
   function tagLabel(tag) {
@@ -713,9 +722,7 @@
     html += renderRestFab();
 
     app.innerHTML = html;
-    var restFab = app.querySelector(".rest-fab");
-    app.dataset.hasRestFab = String(!!restFab);
-    app.style.setProperty("--rest-fab-h", restFab ? (restFab.offsetHeight + 18) + "px" : "0px");
+    syncRestFabLayout();
     renderSheet();
     renderSummaryOverlay();
     renderBottomNav();
@@ -724,12 +731,25 @@
     refreshTimers();
   }
 
+  function syncRestFabLayout() {
+    var restFab = app.querySelector(".rest-fab");
+    app.dataset.hasRestFab = String(!!restFab);
+    var offset = restFab ? (restFab.offsetHeight + 22) + "px" : "0px";
+    app.style.setProperty("--rest-fab-h", offset);
+    document.body.style.setProperty("--rest-fab-offset", offset);
+    document.body.dataset.hasRestFab = String(!!restFab);
+  }
+
   function renderBottomNav() {
     var nav = document.getElementById("bottom-nav");
     if (!nav) return;
     var tab = runtime.activeTab || "today";
+    var modalOpen = !!(runtime.sheet && runtime.sheetMode !== "page");
+    nav.dataset.hidden = String(modalOpen);
+    nav.setAttribute("aria-hidden", String(modalOpen));
     nav.querySelectorAll(".bottom-nav-btn").forEach(function (btn) {
       btn.dataset.active = String(btn.dataset.nav === tab);
+      btn.tabIndex = modalOpen ? -1 : 0;
     });
   }
 
@@ -823,8 +843,10 @@
     if (!runtime.summaryDayId) {
       summaryOverlay.dataset.open = "false";
       summaryOverlay.innerHTML = "";
+      document.body.classList.remove("summary-open");
       return;
     }
+    document.body.classList.add("summary-open");
     if (runtime.cycleReview) {
       var recap = feature("recap");
       if (recap && typeof recap.renderCycleReview === "function") {
@@ -837,6 +859,7 @@
     if (!mod || typeof mod.renderOverlay !== "function") {
       summaryOverlay.dataset.open = "false";
       summaryOverlay.innerHTML = "";
+      document.body.classList.remove("summary-open");
       return;
     }
     summaryOverlay.innerHTML = mod.renderOverlay(makeCtx(), runtime.summaryDayId);
@@ -901,8 +924,10 @@
   function renderRestFab() {
     var remaining = restRemaining();
     var duration = Math.max(1, numberOr(rest.duration, state.settings.defaultRest));
-    var isActive = rest.running || remaining < duration;
-    if (!isActive) return "";
+    var showCompleted = numberOr(rest.completedAt, 0) > 0;
+    var isVisible = !!(rest.running || remaining < duration || showCompleted);
+    if (!isVisible) return "";
+    var isActive = !!rest.running;
     var progress = rest.running ? clamp(remaining / duration, 0, 1) : 0;
     var circumference = 2 * Math.PI * 22;
     var offset = circumference * (1 - progress);
@@ -927,9 +952,13 @@
     if (!runtime.sheet) {
       sheet.dataset.open = "false";
       sheet.dataset.type = "";
+      sheet.dataset.mode = "";
       sheetBackdrop.dataset.open = "false";
+      sheetBackdrop.dataset.mode = "";
       sheet.innerHTML = "";
       document.body.classList.remove("sheet-open");
+      document.body.classList.remove("sheet-mode-page");
+      document.body.classList.remove("sheet-mode-modal");
       return;
     }
     document.body.classList.add("sheet-open");
@@ -939,6 +968,8 @@
     var mode = runtime.sheetMode === "page" ? "page" : "modal";
     sheet.dataset.mode = mode;
     sheetBackdrop.dataset.mode = mode;
+    document.body.classList.toggle("sheet-mode-page", mode === "page");
+    document.body.classList.toggle("sheet-mode-modal", mode !== "page");
     var title = sheetTitle(runtime.sheet);
     var headHtml;
     if (mode === "page") {
@@ -1108,37 +1139,113 @@
 
   function settingsSheet() {
     var s = state.settings;
-    return '<div class="sheet-grid">' +
-      fieldSelect("units", "Units", s.units, [["kg", "Kilograms"], ["lb", "Pounds"]]) +
-      fieldSelect("theme", "Theme", s.theme, [["system", "System"], ["light", "Light"], ["dark", "Dark"]]) +
-      fieldNumber("defaultRest", "Default rest seconds", s.defaultRest, 15, 600, 15) +
-      fieldNumber("weightStep", "Weight step", s.weightStep, 0.5, 50, 0.5) +
-      fieldNumber("barWeight", "Bar weight (" + unitLabel() + ")", kgToDisplay(s.barWeight), 0, 100, 0.5) +
-      fieldSelect("haptics", "Haptics", s.haptics ? "true" : "false", [["true", "On"], ["false", "Off"]]) +
-      fieldSelect("sound", "Sound", s.sound ? "true" : "false", [["true", "On"], ["false", "Off"]]) +
-      fieldSelect("workoutNotifications", "Workout notifications", s.workoutNotifications ? "true" : "false", [["true", "On"], ["false", "Off"]]) +
-      fieldSelect("autoStartRest", "Auto-start rest on set complete", (s.autoStartRest !== false) ? "true" : "false", [["true", "On"], ["false", "Off"]]) +
-      (typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window
-        ? fieldSelect("voiceRestCue", "Voice cue when rest ends", s.voiceRestCue ? "true" : "false", [["true", "On"], ["false", "Off"]])
-        : '<div class="field-block"><label>Voice cue when rest ends</label><p class="section-sub" style="margin:0;padding:4px 0">Not supported in this browser.</p></div>') +
-      notificationSettingsCard() +
-      '<div class="sheet-actions">' +
-      '<button class="action-btn" data-action="export-data">' + icon("download") + "Export data</button>" +
-      '<button class="action-btn secondary" data-action="import-data">' + icon("upload") + "Import data</button>" +
-      '<button class="action-btn danger" data-action="reset-all">' + icon("trash") + "Reset all</button>" +
+    var voiceSupported = typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+    return '<div class="settings-page">' +
+      settingsHero() +
+      settingsGroup("Display", [
+        settingChoiceGroup("theme", "Theme", "Match Android, force light, or force dark.", s.theme, [["system", "System"], ["light", "Light"], ["dark", "Dark"]], "sun"),
+        settingChoiceGroup("units", "Units", "Use the units you log with most often.", s.units, [["kg", "kg"], ["lb", "lb"]], "plate")
+      ]) +
+      settingsGroup("Workout defaults", [
+        settingNumberRow("defaultRest", "Default rest", "Seconds used by timer presets and auto-rest.", s.defaultRest, 15, 600, 15, "sec", "today"),
+        settingNumberRow("weightStep", "Weight step", "Increment used by set controls.", s.weightStep, 0.5, 50, 0.5, unitLabel(), "plus"),
+        settingNumberRow("barWeight", "Bar weight", "Default bar or sled estimate for plate math.", kgToDisplay(s.barWeight), 0, 100, 0.5, unitLabel(), "plate")
+      ]) +
+      settingsGroup("Feedback", [
+        settingSwitch("haptics", "Haptics", nativeHapticAvailable() ? "Uses Android native haptic feedback when installed." : "Uses browser vibration when available.", !!s.haptics, "rings"),
+        settingSwitch("sound", "Sound", "Short timer and completion cues.", !!s.sound, "bell"),
+        settingSwitch("autoStartRest", "Auto-start rest", "Start the rest timer when a set is checked off.", s.autoStartRest !== false, "play"),
+        settingSwitch("voiceRestCue", "Voice rest cue", voiceSupported ? "Speak when rest finishes." : "Not supported in this browser.", !!s.voiceRestCue, "mic", !voiceSupported)
+      ]) +
+      settingsGroup("Android integration", androidIntegrationRows()) +
+      '<div class="settings-actions">' +
+      '<button class="action-btn" data-action="export-data">' + icon("download") + "Export</button>" +
+      '<button class="action-btn secondary" data-action="import-data">' + icon("upload") + "Import</button>" +
+      '<button class="action-btn secondary" data-action="check-update">' + icon("refresh") + "Check update</button>" +
+      '<button class="action-btn danger" data-action="reset-all">' + icon("trash") + "Reset</button>" +
       "</div>" +
-      '<p class="section-sub">Data stays in this browser. Export regularly, especially on iOS where storage can be evicted.</p>' +
+      '<p class="settings-footnote">Local-first storage. Export before clearing browser data or changing devices.</p>' +
       "</div>";
   }
 
-  function notificationSettingsCard() {
+  function settingsHero() {
+    var native = !!window.LIFT_IS_NATIVE;
+    return '<section class="settings-hero">' +
+      '<div><div class="settings-kicker">Lift settings</div><h2>Android-ready controls</h2><p>Material 3 Expressive surfaces, native status bars, haptics, live notifications, and workout defaults in one place.</p></div>' +
+      '<div class="settings-hero-mark"><span>v' + escapeHtml(APP_VERSION) + '</span><strong>' + (native ? "Native" : "PWA") + "</strong></div>" +
+      "</section>";
+  }
+
+  function settingsGroup(title, rows) {
+    return '<section class="settings-group"><div class="settings-group-head">' + escapeHtml(title) + "</div>" + rows.join("") + "</section>";
+  }
+
+  function settingIcon(iconKey, tone) {
+    return '<span class="settings-icon" data-tone="' + escapeHtml(tone || iconKey || "neutral") + '">' + icon(iconKey || "gear") + "</span>";
+  }
+
+  function settingChoiceGroup(name, label, desc, value, options, iconKey) {
+    var buttons = options.map(function (opt) {
+      var active = String(value) === String(opt[0]);
+      return '<button type="button" data-action="setting-choice" data-setting="' + escapeHtml(name) + '" data-value="' + escapeHtml(opt[0]) + '" data-active="' + String(active) + '">' + escapeHtml(opt[1]) + "</button>";
+    }).join("");
+    return '<div class="settings-row">' + settingIcon(iconKey, name) +
+      '<span class="settings-copy"><strong>' + escapeHtml(label) + "</strong><span>" + escapeHtml(desc) + "</span></span>" +
+      '<span class="settings-segment" role="group" aria-label="' + escapeHtml(label) + '">' + buttons + "</span></div>";
+  }
+
+  function settingNumberRow(name, label, desc, value, min, max, step, suffix, iconKey) {
+    return '<div class="settings-row">' + settingIcon(iconKey, name) +
+      '<span class="settings-copy"><strong>' + escapeHtml(label) + "</strong><span>" + escapeHtml(desc) + "</span></span>" +
+      '<label class="settings-number"><input id="setting-' + escapeHtml(name) + '" data-action="setting" data-setting="' + escapeHtml(name) + '" type="number" min="' + min + '" max="' + max + '" step="' + step + '" value="' + escapeHtml(cleanNumber(value, 2)) + '"><small>' + escapeHtml(suffix || "") + "</small></label></div>";
+  }
+
+  function settingSwitch(name, label, desc, enabled, iconKey, disabled) {
+    return '<button class="settings-row settings-row-button" type="button" data-action="setting-toggle" data-setting="' + escapeHtml(name) + '" data-value="' + (enabled ? "false" : "true") + '" data-disabled="' + String(!!disabled) + '"' + (disabled ? " disabled" : "") + ">" + settingIcon(iconKey, name) +
+      '<span class="settings-copy"><strong>' + escapeHtml(label) + "</strong><span>" + escapeHtml(desc) + "</span></span>" +
+      '<span class="switch-control" data-active="' + String(!!enabled) + '" aria-hidden="true"><span></span></span></button>';
+  }
+
+  function settingsStatusRow(label, desc, status, iconKey, tone) {
+    return '<div class="settings-row">' + settingIcon(iconKey, tone) +
+      '<span class="settings-copy"><strong>' + escapeHtml(label) + "</strong><span>" + escapeHtml(desc) + "</span></span>" +
+      '<span class="settings-status" data-tone="' + escapeHtml(tone || "neutral") + '">' + escapeHtml(status) + "</span></div>";
+  }
+
+  function nativeHapticAvailable() {
+    return !!(window.LIFT_IS_NATIVE && window.LiftAndroid && typeof window.LiftAndroid.haptic === "function");
+  }
+
+  function nativeAndroidInfo() {
+    try {
+      if (window.LIFT_IS_NATIVE && window.LiftAndroid && typeof window.LiftAndroid.getAndroidInfo === "function") {
+        return JSON.parse(window.LiftAndroid.getAndroidInfo() || "{}");
+      }
+    } catch (err) {}
+    return {};
+  }
+
+  function androidIntegrationRows() {
+    var info = nativeAndroidInfo();
+    var native = !!window.LIFT_IS_NATIVE;
+    var notificationStatus = notificationStatusText();
+    return [
+      settingsStatusRow("Native shell", native ? ((info.manufacturer || "Android") + " " + (info.model || "device")) : "Install the APK for bridge features.", native ? "On" : "PWA", "gear", native ? "success" : "neutral"),
+      settingsStatusRow("System bars", "Light screens use dark status/navigation icons; dark mode flips them.", "Synced", "sun", "success"),
+      settingSwitch("workoutNotifications", "Live workout notification", notificationStatus, !!state.settings.workoutNotifications, "bell"),
+      settingsStatusRow("Home widget", "Workout widget updates through the Android bridge in the native app.", native ? "Ready" : "APK only", "grid", native ? "success" : "neutral"),
+      settingsStatusRow("Native export", "Backup and workout images use Android share/save targets when installed.", canUseNative("shareJsonFile") || canUseNative("saveBackupFile") ? "Ready" : "Web", "upload", canUseNative("shareJsonFile") || canUseNative("saveBackupFile") ? "success" : "neutral")
+    ];
+  }
+
+  function notificationStatusText() {
     var status = "Unavailable in this browser.";
     if ("Notification" in window) {
       if (Notification.permission === "granted") status = "Allowed. Lift will keep one live workout notification active while you train.";
       else if (Notification.permission === "denied") status = "Blocked. Re-enable notifications from Chrome site settings for this app.";
       else status = state.settings.notifSkipped ? "Off. Turn this on to ask again next time." : "Ask on the next workout start.";
     }
-    return '<div class="overview-card"><strong>Notification status</strong><p>' + escapeHtml(status) + "</p></div>";
+    return status;
   }
 
   function goalsSheet() {
@@ -1258,6 +1365,8 @@
       runtime.plate = options;
     }
     renderSheet();
+    renderBottomNav();
+    renderFab();
   }
 
   function closeSheet() {
@@ -1267,6 +1376,7 @@
     runtime.activeTab = "today";
     renderSheet();
     renderBottomNav();
+    renderFab();
   }
 
   function isCaveatNote(note) {
@@ -1893,7 +2003,15 @@
       bar.setAttribute("stroke-dashoffset", String(circumference * (1 - progress)));
     }
     var fab = document.querySelector(".rest-fab");
-    if (fab) fab.dataset.active = String(rest.running || remaining < numberOr(rest.duration, state.settings.defaultRest));
+    if (fab) {
+      var nextActive = String(!!rest.running);
+      if (fab.dataset.active !== nextActive) {
+        fab.dataset.active = nextActive;
+        syncRestFabLayout();
+      } else {
+        fab.dataset.active = nextActive;
+      }
+    }
     updateWorkoutNotification(false);
   }
 
@@ -2318,6 +2436,9 @@
       haptic(3);
       saveState();
       render();
+    } else if (action === "setting-choice" || action === "setting-toggle") {
+      haptic(3);
+      applySettingValue(btn.dataset.setting, btn.dataset.value);
     } else if (action === "open-sheet") {
       haptic(3);
       openSheet(btn.dataset.sheet);
@@ -2617,57 +2738,58 @@
     var target = event.target;
     var action = target.dataset.action;
     if (action === "setting") {
-      var key = target.dataset.setting;
-      var value = target.value;
-      if (key === "defaultRest") state.settings.defaultRest = clamp(numberOr(value, 90), 15, 600);
-      else if (key === "weightStep") state.settings.weightStep = Math.max(0.5, numberOr(value, 2.5));
-      else if (key === "barWeight") state.settings.barWeight = displayToKg(value);
-      else if (key === "haptics" || key === "sound") state.settings[key] = value === "true";
-      else if (key === "autoStartRest" || key === "voiceRestCue") {
-        if (key === "voiceRestCue" && value === "true" && !(typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window)) {
-          state.settings[key] = false;
-        } else {
-          state.settings[key] = value === "true";
-          if (key === "voiceRestCue" && value === "true") {
-            var voice = feature("voice");
-            if (voice && typeof voice.testVoice === "function") voice.testVoice(makeCtx());
-          }
-        }
-      }
-      else if (key === "workoutNotifications") {
-        state.settings.workoutNotifications = value === "true";
-        state.settings.notifSkipped = value !== "true";
-        saveState();
-        if (value === "true") {
-          if ("Notification" in window && Notification.permission === "denied") {
-            toast("Notifications are blocked. Re-enable them in Chrome site settings.");
-          } else {
-            var notifications = feature("notifications");
-            if (notifications && typeof notifications.ensurePermission === "function") {
-              notifications.ensurePermission(makeCtx()).then(function (permission) {
-                if (permission === "granted" && isWorkoutRunning(state.activeDayId)) updateWorkoutNotification(true);
-                renderSheet();
-              });
-            }
-          }
-        } else {
-          clearWorkoutNotification();
-        }
-        render();
-        return;
-      }
-      else if (key === "goal-weeklySessions") state.goals.weeklySessions = clamp(numberOr(value, DEFAULT_GOALS.weeklySessions), 1, 14);
-      else if (key === "goal-weeklyVolumeKg") state.goals.weeklyVolumeKg = displayToKg(value);
-      else if (key === "goal-dailySteps") state.goals.dailySteps = clamp(numberOr(value, DEFAULT_GOALS.dailySteps), 100, 100000);
-      else if (key === "goal-monthlyVolumeKg") state.goals.monthlyVolumeKg = displayToKg(value);
-      else state.settings[key] = value;
-      if (key === "theme") applyTheme(state.settings.theme);
-      saveState();
-      render();
+      applySettingValue(target.dataset.setting, target.value);
     } else if (action === "progress-exercise") {
       runtime.progressExercise = target.value;
       renderSheet();
     }
+  }
+
+  function applySettingValue(key, value) {
+    if (!key) return;
+    if (key === "defaultRest") state.settings.defaultRest = clamp(numberOr(value, 90), 15, 600);
+    else if (key === "weightStep") state.settings.weightStep = Math.max(0.5, numberOr(value, 2.5));
+    else if (key === "barWeight") state.settings.barWeight = displayToKg(value);
+    else if (key === "haptics" || key === "sound") state.settings[key] = value === "true";
+    else if (key === "autoStartRest" || key === "voiceRestCue") {
+      if (key === "voiceRestCue" && value === "true" && !(typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window)) {
+        state.settings[key] = false;
+      } else {
+        state.settings[key] = value === "true";
+        if (key === "voiceRestCue" && value === "true") {
+          var voice = feature("voice");
+          if (voice && typeof voice.testVoice === "function") voice.testVoice(makeCtx());
+        }
+      }
+    } else if (key === "workoutNotifications") {
+      state.settings.workoutNotifications = value === "true";
+      state.settings.notifSkipped = value !== "true";
+      saveState();
+      if (value === "true") {
+        if ("Notification" in window && Notification.permission === "denied") {
+          toast("Notifications are blocked. Re-enable them in Chrome site settings.");
+        } else {
+          var notifications = feature("notifications");
+          if (notifications && typeof notifications.ensurePermission === "function") {
+            notifications.ensurePermission(makeCtx()).then(function (permission) {
+              if (permission === "granted" && isWorkoutRunning(state.activeDayId)) updateWorkoutNotification(true);
+              renderSheet();
+            });
+          }
+        }
+      } else {
+        clearWorkoutNotification();
+      }
+      render();
+      return;
+    } else if (key === "goal-weeklySessions") state.goals.weeklySessions = clamp(numberOr(value, DEFAULT_GOALS.weeklySessions), 1, 14);
+    else if (key === "goal-weeklyVolumeKg") state.goals.weeklyVolumeKg = displayToKg(value);
+    else if (key === "goal-dailySteps") state.goals.dailySteps = clamp(numberOr(value, DEFAULT_GOALS.dailySteps), 100, 100000);
+    else if (key === "goal-monthlyVolumeKg") state.goals.monthlyVolumeKg = displayToKg(value);
+    else state.settings[key] = value;
+    if (key === "theme") applyTheme(state.settings.theme);
+    saveState();
+    render();
   }
 
   function checkForUpdates() {
