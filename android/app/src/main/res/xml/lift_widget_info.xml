@@ -9,5 +9,4 @@
     android:targetCellWidth="3"
     android:targetCellHeight="2"
     android:updatePeriodMillis="0"
-    android:generatedPreviewCategories="home_screen"
     android:widgetCategory="home_screen" />

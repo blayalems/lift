@@ -3,9 +3,11 @@ package io.github.blayalems.lift
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.appwidget.AppWidgetProviderInfo
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.SystemClock
 import android.view.View
 import android.widget.RemoteViews
@@ -15,6 +17,7 @@ class LiftWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, manager: AppWidgetManager, appWidgetIds: IntArray) {
         val snap = loadSnap(context)
+        updateGeneratedPreview(context, manager)
         appWidgetIds.forEach { id ->
             manager.updateAppWidget(id, views(context, snap))
         }
@@ -65,10 +68,22 @@ class LiftWidgetProvider : AppWidgetProvider() {
                 }
                 .apply()
             val manager = context.getSystemService(AppWidgetManager::class.java) ?: return
+            updateGeneratedPreview(context, manager)
             val ids = manager.getAppWidgetIds(ComponentName(context, LiftWidgetProvider::class.java))
             if (ids.isEmpty()) return
             val remoteViews = views(context, snap)
             ids.forEach { id -> manager.updateAppWidget(id, remoteViews) }
+        }
+
+        private fun updateGeneratedPreview(context: Context, manager: AppWidgetManager) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return
+            runCatching {
+                manager.setWidgetPreview(
+                    ComponentName(context, LiftWidgetProvider::class.java),
+                    AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN,
+                    views(context, null),
+                )
+            }
         }
 
         private fun views(context: Context, snap: JSONObject?): RemoteViews {
