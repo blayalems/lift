@@ -15,6 +15,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Base64
 import android.util.Log
@@ -44,11 +45,14 @@ class LiftBridge(private val context: Context) {
         const val CHANNEL_ID = "lift_workout"
         private const val LIFT_PINK = 0xFFE63B5D.toInt()
         private const val TAG = "LiftBridge"
+        private const val HAPTIC_FALLBACK_MIN_MS = 60L
     }
 
     init {
         createChannel()
     }
+
+    @Volatile private var lastFallbackHapticMs = 0L
 
     @JavascriptInterface
     fun onWorkoutState(json: String) {
@@ -57,7 +61,7 @@ class LiftBridge(private val context: Context) {
             clearWorkout()
             return
         }
-        LiftWidgetProvider.updateAll(context, snap)
+        LiftWidgetProvider.updateFromWorkoutState(context, snap)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
@@ -235,9 +239,7 @@ class LiftBridge(private val context: Context) {
         val vibrator = getVibrator()
         return try {
             if (pattern.size <= 1) {
-                Handler(Looper.getMainLooper()).post {
-                    decor?.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                }
+                performFallbackHaptic(decor)
                 return true
             }
             if (vibrator != null && vibrator.hasVibrator()) {
@@ -250,16 +252,21 @@ class LiftBridge(private val context: Context) {
                 }
                 true
             } else {
-                Handler(Looper.getMainLooper()).post {
-                    decor?.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                }
+                performFallbackHaptic(decor)
                 true
             }
         } catch (e: Exception) {
-            Handler(Looper.getMainLooper()).post {
-                decor?.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-            }
+            performFallbackHaptic(decor)
             false
+        }
+    }
+
+    private fun performFallbackHaptic(decor: android.view.View?) {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastFallbackHapticMs < HAPTIC_FALLBACK_MIN_MS) return
+        lastFallbackHapticMs = now
+        Handler(Looper.getMainLooper()).post {
+            decor?.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
         }
     }
 
