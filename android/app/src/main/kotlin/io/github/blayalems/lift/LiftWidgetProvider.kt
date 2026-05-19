@@ -6,6 +6,8 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
+import android.view.View
 import android.widget.RemoteViews
 import org.json.JSONObject
 
@@ -21,12 +23,45 @@ class LiftWidgetProvider : AppWidgetProvider() {
     companion object {
         private const val PREFS_NAME = "lift_widget"
         private const val PREFS_KEY_SNAP = "snap"
+        private const val PREFS_KEY_SIGNATURE = "signature"
+        private const val PREFS_KEY_LAST_UPDATE_MS = "last_update_ms"
+        private const val MIN_WIDGET_UPDATE_MS = 30_000L
+
+        fun updateFromWorkoutState(context: Context, snap: JSONObject?) {
+            if (snap == null || snap.optString("phase") == "idle") {
+                updateAll(context, null)
+                return
+            }
+
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val nextSignature = widgetSignature(snap)
+            val previousSignature = prefs.getString(PREFS_KEY_SIGNATURE, "")
+            val now = System.currentTimeMillis()
+            val lastUpdate = prefs.getLong(PREFS_KEY_LAST_UPDATE_MS, 0L)
+            if (nextSignature == previousSignature && now - lastUpdate < MIN_WIDGET_UPDATE_MS) {
+                return
+            }
+
+            updateAll(context, snap, nextSignature, now)
+        }
 
         fun updateAll(context: Context, snap: JSONObject?) {
+            updateAll(context, snap, snap?.let { widgetSignature(it) }, System.currentTimeMillis())
+        }
+
+        private fun updateAll(context: Context, snap: JSONObject?, signature: String?, updateTimeMs: Long) {
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .edit()
                 .apply {
-                    if (snap == null) remove(PREFS_KEY_SNAP) else putString(PREFS_KEY_SNAP, snap.toString())
+                    if (snap == null) {
+                        remove(PREFS_KEY_SNAP)
+                        remove(PREFS_KEY_SIGNATURE)
+                        remove(PREFS_KEY_LAST_UPDATE_MS)
+                    } else {
+                        putString(PREFS_KEY_SNAP, snap.toString())
+                        putString(PREFS_KEY_SIGNATURE, signature ?: widgetSignature(snap))
+                        putLong(PREFS_KEY_LAST_UPDATE_MS, updateTimeMs)
+                    }
                 }
                 .apply()
             val manager = context.getSystemService(AppWidgetManager::class.java) ?: return
@@ -45,9 +80,10 @@ class LiftWidgetProvider : AppWidgetProvider() {
             val setIndex = snap?.optInt("setIndex", 0) ?: 0
             val totalSets = snap?.optInt("totalSets", 0) ?: 0
             val restRemaining = snap?.optLong("restRemainingSec", 0L) ?: 0L
+            val isResting = phase == "resting" && restRemaining > 0L
 
             val status = when (phase) {
-                "resting" -> "Rest ${formatRest(restRemaining)}"
+                "resting" -> "Rest"
                 "rest-done" -> "Rest done"
                 "complete" -> "Workout complete"
                 "idle" -> "Ready to train"
@@ -79,13 +115,28 @@ class LiftWidgetProvider : AppWidgetProvider() {
                 setTextViewText(R.id.widget_status, status)
                 setTextViewText(R.id.widget_detail, detail)
                 setOnClickPendingIntent(R.id.widget_root, openIntent)
+                setViewVisibility(R.id.widget_status, if (isResting) View.GONE else View.VISIBLE)
+                setViewVisibility(R.id.widget_chronometer, if (isResting) View.VISIBLE else View.GONE)
+                if (isResting) {
+                    setChronometer(
+                        R.id.widget_chronometer,
+                        SystemClock.elapsedRealtime() + restRemaining * 1000L,
+                        "Rest %s",
+                        true,
+                    )
+                    setChronometerCountDown(R.id.widget_chronometer, true)
+                }
             }
         }
 
-        private fun formatRest(seconds: Long): String {
-            val clamped = seconds.coerceAtLeast(0L)
-            return "%d:%02d".format(clamped / 60, clamped % 60)
-        }
+        private fun widgetSignature(snap: JSONObject): String = listOf(
+            snap.optString("phase", "idle"),
+            snap.optString("dayTitle", ""),
+            snap.optString("exName", ""),
+            snap.optInt("currentExercise", 0).toString(),
+            snap.optInt("setIndex", 0).toString(),
+            snap.optInt("totalSets", 0).toString(),
+        ).joinToString("|")
 
         private fun loadSnap(context: Context): JSONObject? {
             val raw = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
