@@ -49,7 +49,7 @@ class WorkoutService : Service() {
                     return START_NOT_STICKY
                 }
 
-                LiftWidgetProvider.updateAll(this, snap)
+                LiftWidgetProvider.updateFromWorkoutState(this, snap)
                 val notification = buildNotification(snap)
                 // FOREGROUND_SERVICE_TYPE_HEALTH requires the 3-arg form on API 34+.
                 // Guard startForeground so any platform/runtime restriction can't crash the app.

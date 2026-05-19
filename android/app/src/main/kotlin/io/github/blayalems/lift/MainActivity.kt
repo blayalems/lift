@@ -3,16 +3,20 @@ package io.github.blayalems.lift
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Color
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.webkit.*
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import org.json.JSONObject
 
@@ -29,6 +33,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private var pendingAction: String? = null
     private var pendingAssetRefreshVersion: Int = 0
+    @Volatile private var nativeBridgeReady: Boolean = false
 
     // File chooser callback held while the system picker is open
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
@@ -50,8 +55,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
+        val splashStartedAt = SystemClock.elapsedRealtime()
+        splashScreen.setKeepOnScreenCondition {
+            !nativeBridgeReady && SystemClock.elapsedRealtime() - splashStartedAt < 8_000L
+        }
         super.onCreate(savedInstanceState)
-        applySystemBars("light")
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        applySystemBars(if (isSystemDarkMode()) "dark" else "light")
         requestNotifPermissionIfNeeded()
 
         webView = WebView(this).also { wv ->
@@ -96,13 +107,21 @@ class MainActivity : AppCompatActivity() {
 
     fun applySystemBars(theme: String?) {
         val dark = theme == "dark"
-        window.statusBarColor = Color.parseColor(if (dark) "#161616" else "#F2F2F3")
-        window.navigationBarColor = Color.parseColor(if (dark) "#0A0A0A" else "#FAFAFA")
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isStatusBarContrastEnforced = false
+            window.isNavigationBarContrastEnforced = false
+        }
         WindowInsetsControllerCompat(window, window.decorView).apply {
             isAppearanceLightStatusBars = !dark
             isAppearanceLightNavigationBars = !dark
         }
     }
+
+    private fun isSystemDarkMode(): Boolean =
+        (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -182,6 +201,7 @@ class MainActivity : AppCompatActivity() {
                     if(window.__liftNativeHooked)return;
                     window.__liftNativeHooked=true;
                     window.LIFT_IS_NATIVE=true;
+                    window.dispatchEvent(new Event('liftNativeReady'));
                     window.__liftPendingNativeActions=window.__liftPendingNativeActions||[];
                     window.__liftDispatchNativeAction=function(a){
                         if(!a)return;
@@ -190,11 +210,14 @@ class MainActivity : AppCompatActivity() {
                         }
                         window.dispatchEvent(new CustomEvent('liftNativeAction',{detail:String(a)}));
                     };
+                    return window.LIFT_IS_NATIVE === true;
                 })();
-            """.trimIndent(), null)
+            """.trimIndent()) { nativeBridgeReady = it == "true" }
 
             if (pendingAssetRefreshVersion > 0) {
-                refreshPwaAssetsAfterApkUpdate(view, pendingAssetRefreshVersion)
+                val refreshVersion = pendingAssetRefreshVersion
+                pendingAssetRefreshVersion = 0
+                refreshPwaAssetsAfterApkUpdate(view, refreshVersion)
                 return
             }
 
@@ -238,7 +261,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshPwaAssetsAfterApkUpdate(view: WebView, versionCode: Int) {
-        pendingAssetRefreshVersion = 0
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .edit()
             .putInt(PREFS_KEY_VC, versionCode)

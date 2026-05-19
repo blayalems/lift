@@ -8,6 +8,7 @@
     <color name="white">#FFFFFFFF</color>
     <color name="status_bar_light">#FFF2F2F3</color>
     <color name="navigation_bar_light">#FFFAFAFA</color>
+    <color name="splash_background">#FFF2F2F3</color>
 
     <!-- v1.4: Material 3 Expressive — monochrome neutrals (no hue). -->
     <color name="md_primary">#FF1C1C1E</color>
