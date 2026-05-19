@@ -18,7 +18,7 @@ This pass modernizes the Lift Android PWA wrapper for Android 12-16 behavior whi
 
 - Widget layout no longer uses a raw `<View>` rail. The rail is now a `FrameLayout` for RemoteViews launcher compatibility.
 - Widget metadata now includes `targetCellWidth="3"` and `targetCellHeight="2"`.
-- Generated widget previews use the official `android:generatedPreviewCategories="home_screen"` metadata path. I did not add `android:widgetFeatures="generatedPreviews"` because current Android docs expose generated previews through generated preview categories / preview APIs, while `widgetFeatures` is for different feature flags.
+- Generated widget previews are registered through the API 35 `AppWidgetManager.setWidgetPreview(...)` runtime API. The XML attribute `android:generatedPreviewCategories` is not accepted by the resource linker in this project, and `android:widgetFeatures="generatedPreviews"` is not one of the documented `widgetFeatures` values.
 - Widget rest countdown uses a native `Chronometer`, reducing per-second RemoteViews churn.
 - Widget IPC is throttled by a stable phase/day/exercise/set signature plus a 30-second floor for repeated identical updates.
 - `WorkoutService` routes widget writes through the same throttled widget update path.
