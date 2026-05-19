@@ -713,7 +713,9 @@
     html += renderRestFab();
 
     app.innerHTML = html;
-    app.dataset.hasRestFab = String(!!app.querySelector(".rest-fab"));
+    var restFab = app.querySelector(".rest-fab");
+    app.dataset.hasRestFab = String(!!restFab);
+    app.style.setProperty("--rest-fab-h", restFab ? (restFab.offsetHeight + 18) + "px" : "0px");
     renderSheet();
     renderSummaryOverlay();
     renderBottomNav();

@@ -192,10 +192,9 @@
       display: flex;
       gap: 8px;
       overflow-x: auto;
-      padding: 18px 18px 8px;
+      padding: 18px 30px 8px 18px;
       scrollbar-width: none;
       scroll-padding-inline: 18px;
-      padding-right: 30px;
     }
     .week-strip::-webkit-scrollbar, .day-strip::-webkit-scrollbar { display: none; }
     .week-tab {
@@ -501,7 +500,8 @@
     .rest-actions .icon-btn { background: color-mix(in oklab, var(--glass-soft) 90%, transparent); }
     .rest-fab[data-active="true"] .rest-actions .icon-btn { color: white; background: rgba(255,255,255,.2); }
     .rest-fab[data-active="true"] .rest-actions .icon-btn.primary { color: #e63b5d; background: white; }
-    .rest-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; padding-left: 54px; }
+    .rest-presets { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; margin-top: 9px; padding: 0 12px 2px 54px; scrollbar-width: none; }
+    .rest-presets::-webkit-scrollbar { display: none; }
     .preset { min-height: 28px; border-radius: 999px; padding: 0 9px; background: var(--glass-soft); border: 1px solid var(--glass-border); font-size: 12px; font-weight: 800; color: var(--fg-dim); }
     .rest-fab[data-active="true"] .preset { background: rgba(255,255,255,.18); color: white; }
 
@@ -1273,7 +1273,7 @@
     .bottom-nav-btn[data-badge="true"]::after {
       content: '';
       position: absolute;
-      top: 12px;
+      top: 8px;
       right: calc(50% - 22px);
       min-width: 8px; height: 8px;
       border-radius: 999px;
@@ -1288,7 +1288,7 @@
 
     /* Adjust #app and rest-fab for bottom nav presence */
     #app { padding-bottom: calc(var(--bottom-nav-h) + 48px + var(--safe-bot)); }
-    #app[data-has-rest-fab="true"] { padding-bottom: calc(var(--bottom-nav-h) + 220px + var(--safe-bot)); }
+    #app[data-has-rest-fab="true"] { padding-bottom: calc(var(--bottom-nav-h) + var(--rest-fab-h, 220px) + var(--safe-bot)); }
     .rest-fab {
       bottom: calc(var(--bottom-nav-h) + 14px + env(safe-area-inset-bottom, 0px));
     }
