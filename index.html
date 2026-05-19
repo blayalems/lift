@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,viewport-fit=cover" />
   <meta name="description" content="Offline progressive overload workout tracker for the May-June 2026 cycle." />
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f5f5" />
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f2f3" />
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#161616" />
-  <meta id="theme-color-active" name="theme-color" content="#f5f5f5" />
+  <meta id="theme-color-active" name="theme-color" content="#f2f2f3" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,400;8..144,500;8..144,600;8..144,700;8..144,800;8..144,900&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -28,7 +28,7 @@
         document.documentElement.dataset.theme = resolved;
         document.documentElement.dataset.themeChoice = theme;
         var meta = document.getElementById("theme-color-active");
-        if (meta) meta.setAttribute("content", resolved === "dark" ? "#161616" : "#f5f5f5");
+        if (meta) meta.setAttribute("content", resolved === "dark" ? "#161616" : "#f2f2f3");
       } catch (err) {
         document.documentElement.dataset.theme = "light";
         document.documentElement.dataset.themeChoice = "system";
@@ -154,7 +154,7 @@
       position: sticky;
       top: 0;
       z-index: 30;
-      padding: calc(env(safe-area-inset-top, 0px) + 14px) 18px 12px;
+      padding: calc(env(safe-area-inset-top, 0px) + 8px) 18px 10px;
       background: var(--bg-wash); /* solid fallback for color-mix */
       background: color-mix(in oklab, var(--glass-strong) 78%, transparent);
       border-bottom: 1px solid var(--glass-border);
@@ -508,7 +508,7 @@
     .sheet-backdrop {
       position: fixed;
       inset: 0;
-      z-index: 80;
+      z-index: 100;
       background: rgba(10, 10, 14, .44);
       opacity: 0;
       pointer-events: none;
@@ -519,9 +519,9 @@
       position: fixed;
       left: 50%;
       bottom: 0;
-      z-index: 90;
+      z-index: 110;
       width: min(100%, 520px);
-      max-height: min(86dvh, 760px);
+      max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 12px);
       transform: translate(-50%, 105%);
       background: color-mix(in oklab, var(--glass-strong) 90%, transparent);
       border: 1px solid var(--glass-border);
@@ -554,7 +554,7 @@
       backdrop-filter: saturate(190%) blur(28px);
     }
     .sheet-title { font-size: 18px; font-weight: 850; letter-spacing: 0; }
-    .sheet-body { padding: 16px 18px calc(24px + var(--safe-bot)); overflow: auto; max-height: calc(min(86dvh, 760px) - 62px); }
+    .sheet-body { padding: 16px 18px calc(32px + var(--safe-bot)); overflow: auto; max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 84px); }
     .sheet-grid { display: grid; gap: 13px; }
     .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .menu-section {
@@ -944,7 +944,7 @@
       --md-surface-dim: #d6d6d8;
       --md-surface-bright: #fafafa;
       --md-surface-container-lowest: #ffffff;
-      --md-surface-container-low: #f5f5f5;
+      --md-surface-container-low: #f2f2f3;
       --md-surface-container: #f0f0f0;
       --md-surface-container-high: #ebebeb;
       --md-surface-container-highest: #e5e5e5;
@@ -970,7 +970,7 @@
       --md-emphasized: cubic-bezier(.2, 0, 0, 1);
 
       /* Bottom nav metrics — used by #app padding to leave room. */
-      --bottom-nav-h: 84px;
+      --bottom-nav-h: calc(74px + env(safe-area-inset-bottom, 0px));
       --bottom-nav-gap: 14px;
     }
 
@@ -1032,7 +1032,7 @@
       position: fixed;
       inset: 0 0 auto 0;
       height: env(safe-area-inset-top, 0px);
-      background: var(--md-surface-container-low, #f5f5f5);
+      background: var(--md-surface-container-low, #f2f2f3);
       z-index: 70;
       pointer-events: none;
       transition: background .2s ease;
@@ -1206,7 +1206,7 @@
       transform: translateX(-50%);
       width: 100%;
       max-width: var(--app-max);
-      padding: 0 0 max(env(safe-area-inset-bottom, 0px), 8px);
+      padding: 0 0 calc(env(safe-area-inset-bottom, 0px) + 10px);
       background: var(--md-surface-container); /* fallback for color-mix */
       background: color-mix(in oklab, var(--md-surface-container) 96%, transparent);
       border-top: 1px solid color-mix(in oklab, var(--md-outline-variant) 50%, transparent);
@@ -1287,10 +1287,12 @@
     }
 
     /* Adjust #app and rest-fab for bottom nav presence */
-    #app { padding-bottom: calc(var(--bottom-nav-h) + 48px + var(--safe-bot)); }
-    #app[data-has-rest-fab="true"] { padding-bottom: calc(var(--bottom-nav-h) + var(--rest-fab-h, 220px) + var(--safe-bot)); }
+    body { --rest-fab-offset: 0px; }
+    #app { padding-bottom: calc(var(--bottom-nav-h) + var(--rest-fab-offset) + 36px); }
+    #app[data-has-rest-fab="true"] { --rest-fab-offset: var(--rest-fab-h, 220px); }
     .rest-fab {
-      bottom: calc(var(--bottom-nav-h) + 14px + env(safe-area-inset-bottom, 0px));
+      z-index: 60;
+      bottom: calc(var(--bottom-nav-h) + 12px);
     }
     .toast-stack {
       bottom: calc(var(--bottom-nav-h) + 70px + env(safe-area-inset-bottom, 0px));
@@ -1972,7 +1974,14 @@
     .health-icon[data-target="google"] { background: linear-gradient(135deg, #1c1c1e, #79797a); }
     .health-icon[data-target="strava"] { background: linear-gradient(135deg, #38383a, #8a8a8c); }
     .health-icon[data-target="generic"] { background: linear-gradient(135deg, #1c1c1e, #ebebed); color: #1c1c1e; }
-  </style>
+  
+body.sheet-open .bottom-nav { pointer-events: none; opacity: 0; visibility: hidden; }
+.rest-fab[data-active="false"] .rest-presets { display:none; }
+.rest-fab[data-active="false"] { width:min(calc(100% - 64px), 360px); padding:10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); }
+.rest-fab[data-active="false"] .rest-main { grid-template-columns:36px 1fr auto; }
+.rest-fab[data-active="false"] .rest-ring, .rest-fab[data-active="false"] .rest-ring svg { width:36px; height:36px; }
+.rest-fab[data-active="false"] .rest-time { font-size:16px; margin-top:0; }
+</style>
 </head>
 <body>
   <div class="status-bar-bg" aria-hidden="true"></div>

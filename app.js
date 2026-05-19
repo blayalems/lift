@@ -8,7 +8,7 @@
   var sheetBackdrop = document.getElementById("sheet-backdrop");
   var summaryOverlay = document.getElementById("summary-overlay");
 
-  var APP_VERSION = "1.4.2";
+  var APP_VERSION = "1.4.3";
   window.LIFT_APP_VERSION = APP_VERSION;
 
   var STORE_KEY = "lift.v3.state";
@@ -575,7 +575,7 @@
     document.documentElement.dataset.themeChoice = selected;
     // Update theme-color meta so the Android system status bar adapts.
     var meta = document.getElementById("theme-color-active");
-    if (meta) meta.setAttribute("content", resolved === "dark" ? "#161616" : "#f5f5f5");
+    if (meta) meta.setAttribute("content", resolved === "dark" ? "#161616" : "#f2f2f3");
     try { localStorage.setItem(THEME_KEY, selected); } catch (err) {}
   }
 
