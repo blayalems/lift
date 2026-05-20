@@ -8,7 +8,7 @@
   var sheetBackdrop = document.getElementById("sheet-backdrop");
   var summaryOverlay = document.getElementById("summary-overlay");
 
-  var APP_VERSION = "1.4.7";
+  var APP_VERSION = "1.4.8";
   window.LIFT_APP_VERSION = APP_VERSION;
 
   var STORE_KEY = "lift.v3.state";
@@ -39,6 +39,18 @@
     weeklyVolumeKg: 10000,
     dailySteps: 7000,
     monthlyVolumeKg: 40000
+  };
+  var HAPTICS = {
+    tap: 10,
+    select: 14,
+    completeSet: [12, 24, 18],
+    pr: [20, 30, 20, 40, 30],
+    warning: [35, 40, 35],
+    success: [16, 32, 24],
+    workoutStart: [12, 60, 12],
+    workoutFinish: [16, 32, 24],
+    restStart: 14,
+    restDone: [16, 32, 24]
   };
   var REST_PRESETS = [60, 90, 120, 180];
   var MONTHS = {
@@ -149,9 +161,10 @@
 
   function haptic(pattern) {
     if (!(state && state.settings && state.settings.haptics)) return;
-    if (nativeHaptic(pattern)) return;
+    var resolved = typeof pattern === "string" ? HAPTICS[pattern] : pattern;
+    if (nativeHaptic(resolved)) return;
     if (navigator.vibrate) {
-      navigator.vibrate(pattern || 18);
+      navigator.vibrate(resolved || HAPTICS.tap);
     }
   }
 
@@ -614,6 +627,25 @@
     return ({ consolidate: "Consolidate", load: "Load", loadplus: "Load+", deload: "Deload", test: "Test" })[phase] || phase || "Plan";
   }
 
+  function neuralPhase(phase, day) {
+    var normalized = normalizePhase(phase);
+    var type = String(day && day.type || "").toLowerCase();
+    if (normalized === "test") return "test";
+    if (normalized === "deload" || type === "rest") return "deload";
+    if (normalized === "load" || normalized === "loadplus") return "load";
+    if (normalized === "consolidate") return "consolidate";
+    return "train";
+  }
+
+  function neuralExerciseTone(ex, complete, caveat) {
+    var tag = normalizeTag(ex && ex.tag);
+    if (tag.indexOf("pr") >= 0 || tag === "new-bracket") return "test";
+    if (caveat) return "warning";
+    if (complete) return "complete";
+    if (ex && ex.primary) return "primary";
+    return "train";
+  }
+
   function normalizePhase(phase) {
     var value = String(phase || "").toLowerCase().replace(/\s+/g, "");
     if (value === "load+") return "loadplus";
@@ -682,14 +714,15 @@
       html += recap.renderWeeklyRecapCard(makeCtx());
     }
 
-    html += '<section class="hero" data-type="' + escapeHtml(day.type || "legs") + '">';
+    var nxPhase = neuralPhase(week.phase, day);
+    html += '<section class="hero" data-type="' + escapeHtml(day.type || "legs") + '" data-nx-phase="' + escapeHtml(nxPhase) + '">';
     html += '<div class="hero-kicker">' + escapeHtml((day.month || "") + " " + (day.dom || "")) + "</div>";
     html += '<div class="hero-title">' + escapeHtml(day.title || "Workout") + "</div>";
     html += '<div class="hero-sub">' + escapeHtml(day.subtitle || (total ? "Training day" : "Recovery day")) + "</div>";
     if (total) {
       html += '<div class="hero-meta">';
-      html += '<div class="hero-stat"><div class="v">' + completed + "/" + total + '</div><div class="l">Sets</div></div>';
-      html += '<div class="hero-stat"><div class="v">' + cleanNumber(kgToDisplay(volume), 0) + '</div><div class="l">' + escapeHtml(unitLabel()) + ' volume</div></div>';
+      html += '<div class="hero-stat nx-metric"><div class="v">' + completed + "/" + total + '</div><div class="l">Sets</div></div>';
+      html += '<div class="hero-stat nx-metric"><div class="v">' + cleanNumber(kgToDisplay(volume), 0) + '</div><div class="l">' + escapeHtml(unitLabel()) + ' volume</div></div>';
       html += '<div class="hero-stat"><div class="v" data-elapsed="' + escapeHtml(day.id) + '">' + formatDuration(workoutElapsed(day.id)) + '</div><div class="l">' + (ds.finishedAt ? "Done" : isWorkoutRunning(day.id) ? "Running" : "Time") + "</div></div>";
       html += "</div>";
       html += '<div class="hero-progress"><span style="width:' + clamp(percent, 0, 100) + '%"></span></div>';
@@ -879,7 +912,8 @@
     var sets = exerciseSets(day, exIndex);
     var complete = sets.length > 0 && sets.every(function (_, si) { return !!ds.completed[exIndex + "." + si]; });
     var caveat = isCaveatNote(ex.note) && Number(ds.readiness || 10) < 7;
-    var html = '<article class="ex-card" data-complete="' + String(complete) + '" data-caveat="' + String(caveat) + '">';
+    var tone = neuralExerciseTone(ex, complete, caveat);
+    var html = '<article class="ex-card" data-complete="' + String(complete) + '" data-caveat="' + String(caveat) + '" data-nx-tone="' + escapeHtml(tone) + '">';
     html += '<div class="ex-head"><div class="ex-num">' + (exIndex + 1) + '</div><div>';
     html += '<div class="ex-topline"><div><div class="ex-name">' + escapeHtml(ex.name || "Exercise") + '</div><div class="ex-target">' + escapeHtml(ex.target || "") + '</div></div></div>';
     html += '<div class="ex-tags">';
@@ -1441,7 +1475,7 @@
       saveRest();
     }
     saveState();
-    haptic([12, 60, 12]);
+    haptic("workoutStart");
     requestWakeLock();
     showWorkoutNotification();
     if (showToast !== false) toast("Workout started.");
@@ -1458,7 +1492,7 @@
     saveState();
     releaseWakeLock();
     clearWorkoutNotification();
-    haptic([40, 80, 40]);
+    haptic("workoutFinish");
     toast("Workout finished.");
     if (completedSetCount(getDay(state.activeDayId), state) > 0) {
       runtime.summaryDayId = state.activeDayId;
@@ -1752,7 +1786,7 @@
       var display = kgToDisplay(current.weight) + direction * numberOr(state.settings.weightStep, 2.5);
       updateSetValue(exIndex, setIndex, field, display, true);
     }
-    haptic(3);
+    haptic("tap");
     render();
   }
 
@@ -1764,7 +1798,7 @@
     var key = exIndex + "." + setIndex;
     if (ds.completed[key]) {
       delete ds.completed[key];
-      haptic(5);
+      haptic("warning");
       saveState();
       render();
       updateWorkoutNotification(true);
@@ -1779,7 +1813,7 @@
       state.prs[ex.name] = { weight: value.weight, reps: value.reps, date: day.id };
       toast("PR: " + ex.name + " at " + formatWeight(value.weight) + " " + unitLabel() + ".");
     }
-    haptic(pr ? [10, 50, 20] : 8);
+    haptic(pr ? "pr" : "completeSet");
     if (state.settings.autoStartRest !== false) {
       startRest(numberOr(ex.defaultRest, state.settings.defaultRest), ex.name);
     }
@@ -1817,7 +1851,7 @@
     } else {
       toast("Exercise completed as planned.");
     }
-    haptic(prCount ? [10, 50, 20] : [8, 30, 8]);
+    haptic(prCount ? "pr" : "completeSet");
     if (state.settings.autoStartRest !== false) {
       startRest(numberOr(ex.defaultRest, state.settings.defaultRest), ex.name);
     }
@@ -1900,7 +1934,7 @@
     else rest.pausedRemaining = remaining;
     if (remaining > 0) rest.completedAt = 0;
     saveRest();
-    haptic(4);
+    haptic("select");
     render();
     updateWorkoutNotification(true);
   }
@@ -1920,7 +1954,7 @@
       rest.completedAt = 0;
     }
     saveRest();
-    haptic(8);
+    haptic("restStart");
     render();
     updateWorkoutNotification(true);
   }
@@ -1928,7 +1962,7 @@
   function presetRest(seconds) {
     rest = { duration: seconds, pausedRemaining: seconds, endsAt: 0, running: false, label: "Rest", completedAt: seconds <= 0 ? Date.now() : 0 };
     saveRest();
-    haptic(5);
+    haptic("select");
     render();
     updateWorkoutNotification(true);
   }
@@ -1951,7 +1985,7 @@
   }
 
   function notifyRestDone() {
-    haptic([160, 80, 160]);
+    haptic("restDone");
     if (state.settings.sound) beep();
     var voice = feature("voice");
     if (voice && typeof voice.speakRestDone === "function") {
@@ -2905,8 +2939,9 @@
       var nextUrl = location.pathname + (nextSearch ? "?" + nextSearch : "") + location.hash;
       history.replaceState(null, "", nextUrl);
 
-      if (shortcut === "today") {
+      if (shortcut === "today" || shortcut === "start-workout") {
         goToday();
+        if (shortcut === "start-workout") startWorkout({ showToast: false });
         return;
       }
 
