@@ -2387,6 +2387,92 @@ body.sheet-mode-page .bottom-nav {
 .rest-fab[data-active="false"] .rest-main { grid-template-columns:36px 1fr auto; }
 .rest-fab[data-active="false"] .rest-ring, .rest-fab[data-active="false"] .rest-ring svg { width:36px; height:36px; }
 .rest-fab[data-active="false"] .rest-time { font-size:16px; margin-top:0; }
+
+html[data-visual-style="neural"] {
+  --nx-phase: var(--nx-primary);
+  --nx-phase-soft: color-mix(in oklab, var(--nx-phase) 14%, var(--md-surface-container));
+  --md-secondary-container: color-mix(in oklab, var(--nx-primary) 18%, var(--md-surface-container-high));
+  --md-on-secondary-container: var(--md-on-surface);
+}
+html[data-visual-style="neural"] .hero[data-nx-phase="consolidate"] { --nx-phase: var(--nx-secondary); }
+html[data-visual-style="neural"] .hero[data-nx-phase="load"] { --nx-phase: var(--nx-tertiary); }
+html[data-visual-style="neural"] .hero[data-nx-phase="deload"] { --nx-phase: var(--nx-neutral); }
+html[data-visual-style="neural"] .hero[data-nx-phase="test"] { --nx-phase: var(--nx-pr); }
+html[data-visual-style="neural"] .hero {
+  border-radius: var(--nx-radius-xl);
+  background:
+    radial-gradient(circle at 18% 8%, color-mix(in oklab, white 30%, transparent), transparent 30%),
+    linear-gradient(135deg, color-mix(in oklab, var(--nx-phase) 88%, white 10%), color-mix(in oklab, var(--nx-phase) 55%, #101014 45%));
+  box-shadow: var(--nx-surface-glow), inset 0 1px 0 rgba(255,255,255,.28);
+}
+html[data-visual-style="neural"] .hero-title {
+  font-variation-settings: "opsz" 60, "wght" 900;
+  line-height: .98;
+}
+html[data-visual-style="neural"] .nx-metric .v,
+html[data-visual-style="neural"] .rest-time,
+html[data-visual-style="neural"] .metric-card .value,
+html[data-visual-style="neural"] .baseline-card .value {
+  font-variation-settings: "opsz" 34, "wght" 880;
+  font-variant-numeric: tabular-nums;
+}
+html[data-visual-style="neural"] .ex-card {
+  border-radius: var(--nx-radius-lg);
+  transition: transform var(--nx-motion-med) var(--nx-ease-spring), box-shadow var(--nx-motion-med) var(--nx-ease-emphasized), border-color var(--nx-motion-fast) ease;
+}
+html[data-visual-style="neural"] .ex-card[data-nx-tone="primary"] { border-color: color-mix(in oklab, var(--nx-primary) 36%, var(--md-outline-variant)); }
+html[data-visual-style="neural"] .ex-card[data-nx-tone="test"] { border-color: color-mix(in oklab, var(--nx-pr) 46%, var(--md-outline-variant)); }
+html[data-visual-style="neural"] .ex-card[data-nx-tone="warning"] { border-color: color-mix(in oklab, var(--nx-warning) 50%, var(--md-outline-variant)); }
+html[data-visual-style="neural"] .ex-card[data-complete="true"] {
+  background: color-mix(in oklab, var(--nx-success) 10%, var(--md-surface-container));
+}
+html[data-visual-style="neural"] .set-row {
+  transition: transform var(--nx-motion-fast) var(--nx-ease-emphasized), background var(--nx-motion-med) ease, box-shadow var(--nx-motion-med) ease;
+}
+html[data-visual-style="neural"] .set-row[data-done="true"] {
+  animation: nx-set-complete var(--nx-motion-slow) var(--nx-ease-spring);
+  background: color-mix(in oklab, var(--nx-success) 20%, var(--md-surface-container));
+}
+html[data-visual-style="neural"] .set-row[data-pr="true"] {
+  background: linear-gradient(135deg, color-mix(in oklab, var(--nx-pr) 26%, var(--md-surface-container)), color-mix(in oklab, var(--nx-primary) 18%, var(--md-surface-container)));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--nx-pr) 48%, transparent), 0 18px 42px -34px var(--nx-pr);
+}
+html[data-visual-style="neural"] .pr-pill {
+  color: var(--nx-pr);
+}
+html[data-visual-style="neural"] .sheet[data-mode="modal"] {
+  border-radius: var(--nx-radius-xl) var(--nx-radius-xl) 0 0;
+  transform: translate(-50%, 105%);
+  transition: transform var(--nx-motion-slow) var(--nx-ease-spring);
+}
+html[data-visual-style="neural"] .sheet[data-mode="modal"][data-open="true"] {
+  transform: translate(-50%, 0);
+}
+html[data-visual-style="neural"] .sheet-backdrop[data-open="true"] {
+  backdrop-filter: blur(18px);
+}
+html[data-visual-style="neural"] .rest-fab[data-active="true"] {
+  background: linear-gradient(135deg, var(--nx-primary), var(--nx-secondary));
+  animation: nx-rest-breathe 2.2s ease-in-out infinite;
+}
+html[data-visual-style="neural"] .rest-fab[data-active="true"] .rest-ring {
+  filter: drop-shadow(0 0 14px rgba(255,255,255,.28));
+}
+html[data-visual-style="neural"] .range-row input[type="range"] {
+  accent-color: var(--nx-primary);
+}
+html[data-visual-style="neural"] .settings-segment button[data-active="true"] {
+  background: color-mix(in oklab, var(--nx-primary) 18%, var(--md-secondary-container));
+}
+@keyframes nx-set-complete {
+  0% { transform: scale(1); }
+  42% { transform: scale(1.025); }
+  100% { transform: scale(1); }
+}
+@keyframes nx-rest-breathe {
+  0%, 100% { transform: translateX(-50%) scale(1); }
+  50% { transform: translateX(-50%) scale(1.018); }
+}
 </style>
 </head>
 <body>
