@@ -8,7 +8,7 @@
   var sheetBackdrop = document.getElementById("sheet-backdrop");
   var summaryOverlay = document.getElementById("summary-overlay");
 
-  var APP_VERSION = "1.4.6";
+  var APP_VERSION = "1.4.7";
   window.LIFT_APP_VERSION = APP_VERSION;
 
   var STORE_KEY = "lift.v3.state";
@@ -24,6 +24,7 @@
     defaultRest: 90,
     weightStep: 2.5,
     theme: "system",
+    visualStyle: "classic",
     haptics: true,
     sound: true,
     workoutNotifications: true,
@@ -578,6 +579,13 @@
     if (meta) meta.setAttribute("content", resolved === "dark" ? "#161616" : "#f2f2f3");
     syncNativeSystemBars(resolved);
     try { localStorage.setItem(THEME_KEY, selected); } catch (err) {}
+  }
+
+  function applyVisualStyle(style) {
+    var allowed = { classic: true, expressive: true, neural: true };
+    var selected = allowed[style] ? style : "classic";
+    document.documentElement.dataset.visualStyle = selected;
+    if (state && state.settings) state.settings.visualStyle = selected;
   }
 
   function syncNativeSystemBars(resolved) {
@@ -1144,6 +1152,7 @@
       settingsHero() +
       settingsGroup("Display", [
         settingChoiceGroup("theme", "Theme", "Match Android, force light, or force dark.", s.theme, [["system", "System"], ["light", "Light"], ["dark", "Dark"]], "sun"),
+        settingChoiceGroup("visualStyle", "Visual style", "Keep today's UI stable or opt into expressive motion and surfaces.", s.visualStyle || "classic", [["classic", "Calm"], ["expressive", "Expressive"], ["neural", "Neural"]], "rings"),
         settingChoiceGroup("units", "Units", "Use the units you log with most often.", s.units, [["kg", "kg"], ["lb", "lb"]], "plate")
       ]) +
       settingsGroup("Workout defaults", [
@@ -2788,6 +2797,7 @@
     else if (key === "goal-monthlyVolumeKg") state.goals.monthlyVolumeKg = displayToKg(value);
     else state.settings[key] = value;
     if (key === "theme") applyTheme(state.settings.theme);
+    if (key === "visualStyle") applyVisualStyle(state.settings.visualStyle);
     saveState();
     render();
   }
@@ -2911,6 +2921,7 @@
 
   function init() {
     applyTheme(state.settings.theme);
+    applyVisualStyle(state.settings.visualStyle);
     saveState();
     render();
     registerServiceWorker();
