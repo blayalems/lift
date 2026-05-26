@@ -1,0 +1,31 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "Lift is a small installable PWA that merges the May 12-June 14, 2026 progressive-overload plan with an interactive workout tracker. It now also includes platform-style fitness surfaces: activity rings, personal records, badges, post-workout summaries, a training heatmap, journal feed, goals, step logging, workout library templates, and backup/export tools.",
+  "main": "app.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blayalems/lift.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/blayalems/lift/issues"
+  },
+  "homepage": "https://github.com/blayalems/lift#readme",
+  "devDependencies": {
+    "jest": "^30.4.2",
+    "jest-environment-jsdom": "^30.4.1"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "setupFilesAfterEnv": [
+      "<rootDir>/tests/setup.js"
+    ]
+  }
+}

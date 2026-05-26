@@ -3050,4 +3050,12 @@
   }
 
   init();
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = {
+      formatDuration: formatDuration,
+      numberOr: numberOr,
+      pad2: pad2
+    };
+  }
 })();
