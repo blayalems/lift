@@ -354,9 +354,24 @@
     return (PLAN.weeks || []).find(function (week) { return week.id === id; }) || (PLAN.weeks || [])[0];
   }
 
+  var _dayMapCache = null;
   function getDay(id) {
-    var found = allDays().find(function (entry) { return entry.day.id === id; });
-    return found ? found.day : null;
+    if (!_dayMapCache) {
+      _dayMapCache = {};
+      (PLAN.weeks || []).forEach(function (week) {
+        (week.days || []).forEach(function (day) {
+          _dayMapCache[day.id] = day;
+        });
+      });
+    }
+    var day = _dayMapCache[id];
+    if (!day) return null;
+
+    var ds = (state && state.days && state.days[id]) || {};
+    var custom = Array.isArray(ds.customExercises) ? ds.customExercises : [];
+    return custom.length
+      ? Object.assign({}, day, { exercises: (day.exercises || []).concat(custom) })
+      : day;
   }
 
   function feature(name) {
