@@ -3049,5 +3049,12 @@
     }
   }
 
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      escapeHtml: typeof escapeHtml !== 'undefined' ? escapeHtml : null
+    };
+  }
+
   init();
 })();
