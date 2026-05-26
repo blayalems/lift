@@ -661,14 +661,22 @@
 
   function render() {
     if (!PLAN || !Array.isArray(PLAN.weeks) || !PLAN.weeks.length) {
-      app.innerHTML = '<div class="app-empty">Plan data is missing. Confirm that data.js loads before app.js.</div>';
+      app.textContent = "";
+      var emptyPlanDiv = document.createElement("div");
+      emptyPlanDiv.className = "app-empty";
+      emptyPlanDiv.textContent = "Plan data is missing. Confirm that data.js loads before app.js.";
+      app.appendChild(emptyPlanDiv);
       return;
     }
     runtime.now = Date.now();
     var week = getWeek(state.activeWeekId) || PLAN.weeks[0];
     var day = getDay(state.activeDayId) || (week.days || [])[0];
     if (!day) {
-      app.innerHTML = '<div class="app-empty">No workout days found in the plan.</div>';
+      app.textContent = "";
+      var emptyDayDiv = document.createElement("div");
+      emptyDayDiv.className = "app-empty";
+      emptyDayDiv.textContent = "No workout days found in the plan.";
+      app.appendChild(emptyDayDiv);
       return;
     }
     state.activeWeekId = week.id;
