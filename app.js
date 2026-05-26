@@ -96,7 +96,6 @@
   var state = loadState();
   var rest = loadRest();
   var wakeLock = null;
-  var renderQueued = false;
 
   function escapeHtml(value) {
     return String(value == null ? "" : value).replace(/[&<>"']/g, function (ch) {
@@ -2420,15 +2419,6 @@
       node.style.transition = "opacity .18s ease, transform .18s ease";
       setTimeout(function () { node.remove(); }, 220);
     }, 2800);
-  }
-
-  function queueRender() {
-    if (renderQueued) return;
-    renderQueued = true;
-    requestAnimationFrame(function () {
-      renderQueued = false;
-      render();
-    });
   }
 
   function goToday() {
