@@ -355,9 +355,33 @@
     return (PLAN.weeks || []).find(function (week) { return week.id === id; }) || (PLAN.weeks || [])[0];
   }
 
+  var _planDayIndex = null;
+  var _planWeekIndex = null;
+
+  function buildPlanIndexes() {
+    if (_planDayIndex) return;
+    _planDayIndex = {};
+    _planWeekIndex = {};
+    if (!PLAN || !Array.isArray(PLAN.weeks)) return;
+    PLAN.weeks.forEach(function (week) {
+      (week.days || []).forEach(function (day) {
+        _planDayIndex[day.id] = day;
+        _planWeekIndex[day.id] = week;
+      });
+    });
+  }
+
   function getDay(id) {
-    var found = allDays().find(function (entry) { return entry.day.id === id; });
-    return found ? found.day : null;
+    buildPlanIndexes();
+    var baseDay = _planDayIndex[id];
+    if (!baseDay) return null;
+
+    var ds = (state && state.days && state.days[id]) || {};
+    var custom = Array.isArray(ds.customExercises) ? ds.customExercises : [];
+    if (custom.length) {
+      return Object.assign({}, baseDay, { exercises: (baseDay.exercises || []).concat(custom) });
+    }
+    return baseDay;
   }
 
   function feature(name) {
@@ -430,8 +454,8 @@
   }
 
   function weekForDayId(dayId) {
-    var found = allDays().find(function (entry) { return entry.day.id === dayId; });
-    return found ? found.week : null;
+    buildPlanIndexes();
+    return _planWeekIndex[dayId] || null;
   }
 
   function parseWeekBounds(week) {
