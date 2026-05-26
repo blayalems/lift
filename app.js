@@ -1296,14 +1296,6 @@
       "</div>";
   }
 
-  function fieldSelect(name, label, value, options) {
-    var html = '<div class="field-block"><label for="setting-' + name + '">' + escapeHtml(label) + '</label><select id="setting-' + name + '" data-action="setting" data-setting="' + name + '">';
-    options.forEach(function (opt) {
-      html += '<option value="' + escapeHtml(opt[0]) + '"' + (String(value) === String(opt[0]) ? " selected" : "") + ">" + escapeHtml(opt[1]) + "</option>";
-    });
-    return html + "</select></div>";
-  }
-
   function fieldNumber(name, label, value, min, max, step) {
     return '<div class="field-block"><label for="setting-' + name + '">' + escapeHtml(label) + '</label><input id="setting-' + name + '" data-action="setting" data-setting="' + name + '" type="number" min="' + min + '" max="' + max + '" step="' + step + '" value="' + escapeHtml(cleanNumber(value, 2)) + '"></div>';
   }
