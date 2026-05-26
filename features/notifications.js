@@ -156,15 +156,48 @@
     var overlay = document.getElementById("notification-permission");
     if (!overlay) return Promise.resolve("allow");
 
-    overlay.innerHTML =
-      '<div class="notif-permission-card" role="dialog" aria-modal="true" aria-labelledby="notif-title">' +
-      '<div class="notif-permission-icon" aria-hidden="true">' + bellIcon() + "</div>" +
-      '<h2 id="notif-title">Keep your workout live</h2>' +
-      '<p>Lift can show the current set, rest countdown, and quick actions in the Android notification shade while the workout is running.</p>' +
-      '<div class="notif-permission-actions">' +
-      '<button class="action-btn" data-notif-permission="allow">Allow notifications</button>' +
-      '<button class="action-btn secondary" data-notif-permission="skip">Skip for now</button>' +
-      "</div></div>";
+    overlay.innerHTML = "";
+
+    var card = document.createElement("div");
+    card.className = "notif-permission-card";
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-modal", "true");
+    card.setAttribute("aria-labelledby", "notif-title");
+
+    var iconWrapper = document.createElement("div");
+    iconWrapper.className = "notif-permission-icon";
+    iconWrapper.setAttribute("aria-hidden", "true");
+    iconWrapper.appendChild(bellIconElement());
+
+    var title = document.createElement("h2");
+    title.id = "notif-title";
+    title.textContent = "Keep your workout live";
+
+    var text = document.createElement("p");
+    text.textContent = "Lift can show the current set, rest countdown, and quick actions in the Android notification shade while the workout is running.";
+
+    var actions = document.createElement("div");
+    actions.className = "notif-permission-actions";
+
+    var allowBtn = document.createElement("button");
+    allowBtn.className = "action-btn";
+    allowBtn.setAttribute("data-notif-permission", "allow");
+    allowBtn.textContent = "Allow notifications";
+
+    var skipBtn = document.createElement("button");
+    skipBtn.className = "action-btn secondary";
+    skipBtn.setAttribute("data-notif-permission", "skip");
+    skipBtn.textContent = "Skip for now";
+
+    actions.appendChild(allowBtn);
+    actions.appendChild(skipBtn);
+
+    card.appendChild(iconWrapper);
+    card.appendChild(title);
+    card.appendChild(text);
+    card.appendChild(actions);
+
+    overlay.appendChild(card);
     overlay.dataset.open = "true";
 
     return new Promise(function (resolve) {
@@ -186,8 +219,27 @@
     if (typeof ctx.saveState === "function") ctx.saveState();
   }
 
-  function bellIcon() {
-    return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>';
+  function bellIconElement() {
+    var ns = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "2");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+
+    var path1 = document.createElementNS(ns, "path");
+    path1.setAttribute("d", "M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9");
+
+    var path2 = document.createElementNS(ns, "path");
+    path2.setAttribute("d", "M10 21h4");
+
+    svg.appendChild(path1);
+    svg.appendChild(path2);
+
+    return svg;
   }
 
   window.LIFT_FEATURES.notifications = {
