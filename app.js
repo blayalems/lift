@@ -153,6 +153,11 @@
     return Math.max(min, Math.min(max, n));
   }
 
+  // Expose for testing if module is defined
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports.clamp = clamp;
+  }
+
   function numberOr(value, fallback) {
     var n = Number(value);
     return Number.isFinite(n) ? n : fallback;
