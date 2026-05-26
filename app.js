@@ -341,18 +341,34 @@
 
   function allDays() {
     if (!PLAN || !Array.isArray(PLAN.weeks)) return [];
-    var days = [];
-    PLAN.weeks.forEach(function (week) {
-      (week.days || []).forEach(function (day) {
-        var ds = (state && state.days && state.days[day.id]) || {};
-        var custom = Array.isArray(ds.customExercises) ? ds.customExercises : [];
-        var mergedDay = custom.length
-          ? Object.assign({}, day, { exercises: (day.exercises || []).concat(custom) })
-          : day;
-        days.push({ week: week, day: mergedDay });
+
+    var cache = allDays._flatCache;
+    if (!cache || cache.plan !== PLAN || cache.weeks !== PLAN.weeks || cache.weekCount !== PLAN.weeks.length) {
+      var flat = [];
+      PLAN.weeks.forEach(function (week) {
+        (week.days || []).forEach(function (day) {
+          flat.push({ week: week, day: day });
+        });
       });
+      cache = {
+        plan: PLAN,
+        weeks: PLAN.weeks,
+        weekCount: PLAN.weeks.length,
+        flat: flat
+      };
+      allDays._flatCache = cache;
+    }
+
+    return cache.flat.map(function (entry) {
+      var day = entry.day;
+      var ds = (state && state.days && state.days[day.id]) || {};
+      var custom = Array.isArray(ds.customExercises) ? ds.customExercises : [];
+      var mergedDay = custom.length
+        ? Object.assign({}, day, { exercises: (day.exercises || []).concat(custom) })
+        : day;
+
+      return { week: entry.week, day: mergedDay };
     });
-    return days;
   }
 
   function getWeek(id) {
