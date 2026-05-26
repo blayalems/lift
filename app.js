@@ -521,12 +521,6 @@
     return base;
   }
 
-  function plannedSetCount(day) {
-    return (day.exercises || []).reduce(function (sum, ex) {
-      return sum + ((ex.sets || []).length);
-    }, 0);
-  }
-
   function totalSetCount(day) {
     return (day.exercises || []).reduce(function (sum, ex, exIndex) {
       return sum + exerciseSets(day, exIndex).length;
