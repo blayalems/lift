@@ -96,7 +96,6 @@
   var state = loadState();
   var rest = loadRest();
   var wakeLock = null;
-  var renderQueued = false;
 
   function escapeHtml(value) {
     return String(value == null ? "" : value).replace(/[&<>"']/g, function (ch) {
@@ -337,27 +336,61 @@
 
   function allDays() {
     if (!PLAN || !Array.isArray(PLAN.weeks)) return [];
-    var days = [];
-    PLAN.weeks.forEach(function (week) {
-      (week.days || []).forEach(function (day) {
-        var ds = (state && state.days && state.days[day.id]) || {};
-        var custom = Array.isArray(ds.customExercises) ? ds.customExercises : [];
-        var mergedDay = custom.length
-          ? Object.assign({}, day, { exercises: (day.exercises || []).concat(custom) })
-          : day;
-        days.push({ week: week, day: mergedDay });
+
+    var cache = allDays._flatCache;
+    if (!cache || cache.plan !== PLAN || cache.weeks !== PLAN.weeks || cache.weekCount !== PLAN.weeks.length) {
+      var flat = [];
+      PLAN.weeks.forEach(function (week) {
+        (week.days || []).forEach(function (day) {
+          flat.push({ week: week, day: day });
+        });
       });
+      cache = {
+        plan: PLAN,
+        weeks: PLAN.weeks,
+        weekCount: PLAN.weeks.length,
+        flat: flat
+      };
+      allDays._flatCache = cache;
+    }
+
+    return cache.flat.map(function (entry) {
+      var day = entry.day;
+      var ds = (state && state.days && state.days[day.id]) || {};
+      var custom = Array.isArray(ds.customExercises) ? ds.customExercises : [];
+      var mergedDay = custom.length
+        ? Object.assign({}, day, { exercises: (day.exercises || []).concat(custom) })
+        : day;
+
+      return { week: entry.week, day: mergedDay };
     });
-    return days;
   }
 
   function getWeek(id) {
     return (PLAN.weeks || []).find(function (week) { return week.id === id; }) || (PLAN.weeks || [])[0];
   }
 
+  var _dayMapCache = null;
+  var _weekMapCache = null;
   function getDay(id) {
-    var found = allDays().find(function (entry) { return entry.day.id === id; });
-    return found ? found.day : null;
+    if (!_dayMapCache) {
+      _dayMapCache = {};
+      _weekMapCache = {};
+      (PLAN.weeks || []).forEach(function (week) {
+        (week.days || []).forEach(function (day) {
+          _dayMapCache[day.id] = day;
+          _weekMapCache[day.id] = week;
+        });
+      });
+    }
+    var day = _dayMapCache[id];
+    if (!day) return null;
+
+    var ds = (state && state.days && state.days[id]) || {};
+    var custom = Array.isArray(ds.customExercises) ? ds.customExercises : [];
+    return custom.length
+      ? Object.assign({}, day, { exercises: (day.exercises || []).concat(custom) })
+      : day;
   }
 
   function feature(name) {
@@ -430,8 +463,8 @@
   }
 
   function weekForDayId(dayId) {
-    var found = allDays().find(function (entry) { return entry.day.id === dayId; });
-    return found ? found.week : null;
+    if (!_weekMapCache) getDay(dayId);
+    return _weekMapCache[dayId] || null;
   }
 
   function parseWeekBounds(week) {
@@ -519,12 +552,6 @@
       base.push({ reps: last.reps, weight: last.weight, extra: true });
     }
     return base;
-  }
-
-  function plannedSetCount(day) {
-    return (day.exercises || []).reduce(function (sum, ex) {
-      return sum + ((ex.sets || []).length);
-    }, 0);
   }
 
   function totalSetCount(day) {
@@ -661,14 +688,22 @@
 
   function render() {
     if (!PLAN || !Array.isArray(PLAN.weeks) || !PLAN.weeks.length) {
-      app.innerHTML = '<div class="app-empty">Plan data is missing. Confirm that data.js loads before app.js.</div>';
+      app.textContent = "";
+      var emptyPlanDiv = document.createElement("div");
+      emptyPlanDiv.className = "app-empty";
+      emptyPlanDiv.textContent = "Plan data is missing. Confirm that data.js loads before app.js.";
+      app.appendChild(emptyPlanDiv);
       return;
     }
     runtime.now = Date.now();
     var week = getWeek(state.activeWeekId) || PLAN.weeks[0];
     var day = getDay(state.activeDayId) || (week.days || [])[0];
     if (!day) {
-      app.innerHTML = '<div class="app-empty">No workout days found in the plan.</div>';
+      app.textContent = "";
+      var emptyDayDiv = document.createElement("div");
+      emptyDayDiv.className = "app-empty";
+      emptyDayDiv.textContent = "No workout days found in the plan.";
+      app.appendChild(emptyDayDiv);
       return;
     }
     state.activeWeekId = week.id;
@@ -1301,14 +1336,6 @@
       fieldNumber("goal-monthlyVolumeKg", "Monthly volume (" + unitLabel() + ")", kgToDisplay(g.monthlyVolumeKg), 1000, 500000, 1000) +
       '<div class="sheet-actions"><button class="action-btn" data-action="open-sheet" data-sheet="rings">' + icon("chart") + "View rings</button></div>" +
       "</div>";
-  }
-
-  function fieldSelect(name, label, value, options) {
-    var html = '<div class="field-block"><label for="setting-' + name + '">' + escapeHtml(label) + '</label><select id="setting-' + name + '" data-action="setting" data-setting="' + name + '">';
-    options.forEach(function (opt) {
-      html += '<option value="' + escapeHtml(opt[0]) + '"' + (String(value) === String(opt[0]) ? " selected" : "") + ">" + escapeHtml(opt[1]) + "</option>";
-    });
-    return html + "</select></div>";
   }
 
   function fieldNumber(name, label, value, min, max, step) {
@@ -2428,15 +2455,6 @@
     }, 2800);
   }
 
-  function queueRender() {
-    if (renderQueued) return;
-    renderQueued = true;
-    requestAnimationFrame(function () {
-      renderQueued = false;
-      render();
-    });
-  }
-
   function goToday() {
     var selection = chooseInitialSelection(state);
     state.activeWeekId = selection.weekId;
@@ -3049,13 +3067,15 @@
     }
   }
 
-  init();
-
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
+      clamp: clamp,
+      escapeHtml: escapeHtml,
       formatDuration: formatDuration,
       numberOr: numberOr,
       pad2: pad2
     };
+  } else {
+    init();
   }
 })();
