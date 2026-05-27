@@ -153,11 +153,6 @@
     return Math.max(min, Math.min(max, n));
   }
 
-  // Expose for testing if module is defined
-  if (typeof module !== "undefined" && module.exports) {
-    module.exports.clamp = clamp;
-  }
-
   function numberOr(value, fallback) {
     var n = Number(value);
     return Number.isFinite(n) ? n : fallback;
@@ -376,12 +371,15 @@
   }
 
   var _dayMapCache = null;
+  var _weekMapCache = null;
   function getDay(id) {
     if (!_dayMapCache) {
       _dayMapCache = {};
+      _weekMapCache = {};
       (PLAN.weeks || []).forEach(function (week) {
         (week.days || []).forEach(function (day) {
           _dayMapCache[day.id] = day;
+          _weekMapCache[day.id] = week;
         });
       });
     }
@@ -465,8 +463,8 @@
   }
 
   function weekForDayId(dayId) {
-    var found = allDays().find(function (entry) { return entry.day.id === dayId; });
-    return found ? found.week : null;
+    if (!_weekMapCache) getDay(dayId);
+    return _weekMapCache[dayId] || null;
   }
 
   function parseWeekBounds(week) {
@@ -3069,5 +3067,15 @@
     }
   }
 
-  init();
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = {
+      clamp: clamp,
+      escapeHtml: escapeHtml,
+      formatDuration: formatDuration,
+      numberOr: numberOr,
+      pad2: pad2
+    };
+  } else {
+    init();
+  }
 })();
