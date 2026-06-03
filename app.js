@@ -24,7 +24,7 @@
     defaultRest: 90,
     weightStep: 2.5,
     theme: "system",
-    visualStyle: "classic",
+    visualStyle: "neural",
     haptics: true,
     sound: true,
     workoutNotifications: true,
