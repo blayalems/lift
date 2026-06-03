@@ -27,13 +27,15 @@
           : theme;
         document.documentElement.dataset.theme = resolved;
         document.documentElement.dataset.themeChoice = theme;
-        document.documentElement.dataset.visualStyle = "classic";
+        var state = JSON.parse(localStorage.getItem("lift.v3.state") || "null");
+        var visualStyle = state && state.settings && state.settings.visualStyle ? state.settings.visualStyle : "neural";
+        document.documentElement.dataset.visualStyle = /^(classic|expressive|neural)$/.test(visualStyle) ? visualStyle : "neural";
         var meta = document.getElementById("theme-color-active");
         if (meta) meta.setAttribute("content", resolved === "dark" ? "#161616" : "#f2f2f3");
       } catch (err) {
         document.documentElement.dataset.theme = "light";
         document.documentElement.dataset.themeChoice = "system";
-        document.documentElement.dataset.visualStyle = "classic";
+        document.documentElement.dataset.visualStyle = "neural";
       }
     })();
   </script>
@@ -2463,6 +2465,202 @@ html[data-visual-style="neural"] .range-row input[type="range"] {
 }
 html[data-visual-style="neural"] .settings-segment button[data-active="true"] {
   background: color-mix(in oklab, var(--nx-primary) 18%, var(--md-secondary-container));
+}
+
+/* ---------- AntiSlopUI pass: one signature surface, quiet supporting UI ---------- */
+html[data-visual-style="neural"] body::before {
+  background:
+    radial-gradient(760px 420px at 18% -8%, color-mix(in oklab, var(--nx-tertiary) 20%, transparent), transparent 64%),
+    radial-gradient(680px 460px at 92% 12%, color-mix(in oklab, var(--nx-primary) 18%, transparent), transparent 68%),
+    linear-gradient(180deg, var(--md-surface-container-lowest), var(--md-surface));
+  filter: none;
+  opacity: .92;
+}
+html[data-visual-style="neural"] .topbar {
+  border-bottom-color: color-mix(in oklab, var(--md-outline-variant) 58%, transparent);
+  box-shadow: 0 10px 30px -28px rgba(0,0,0,.42);
+}
+html[data-visual-style="neural"] .title,
+html[data-visual-style="neural"] .hero-title,
+html[data-visual-style="neural"] .section-title,
+html[data-visual-style="neural"] .ex-name {
+  font-family: var(--nx-font-display);
+  text-wrap: balance;
+}
+html[data-visual-style="neural"] .title {
+  font-variation-settings: "opsz" 32, "wght" 850;
+}
+html[data-visual-style="neural"] .week-strip,
+html[data-visual-style="neural"] .day-strip {
+  gap: 10px;
+}
+html[data-visual-style="neural"] .week-tab,
+html[data-visual-style="neural"] .day-pill,
+html[data-visual-style="neural"] .chip-btn,
+html[data-visual-style="neural"] .icon-btn {
+  transition:
+    transform var(--nx-motion-med) var(--nx-ease-spring),
+    background var(--nx-motion-fast) ease,
+    border-color var(--nx-motion-fast) ease,
+    box-shadow var(--nx-motion-fast) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  html[data-visual-style="neural"] .week-tab:hover,
+  html[data-visual-style="neural"] .day-pill:hover,
+  html[data-visual-style="neural"] .menu-card:hover,
+  html[data-visual-style="neural"] .ex-card:hover {
+    transform: translateY(-2px);
+  }
+}
+html[data-visual-style="neural"] .hero {
+  isolation: isolate;
+  border-radius: clamp(26px, 5vw, 42px);
+  background:
+    linear-gradient(140deg, rgba(255,255,255,.22), transparent 30%),
+    radial-gradient(360px 260px at 84% 16%, rgba(255,255,255,.26), transparent 58%),
+    linear-gradient(135deg, color-mix(in oklab, var(--nx-phase) 82%, #111114), color-mix(in oklab, var(--nx-pr) 62%, #111114));
+  box-shadow:
+    0 28px 90px -46px color-mix(in oklab, var(--nx-phase) 78%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.30);
+}
+html[data-visual-style="neural"] .hero::before {
+  content: "";
+  position: absolute;
+  inset: -42% -18% auto auto;
+  width: min(58vw, 360px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    repeating-conic-gradient(from 20deg, rgba(255,255,255,.22) 0 8deg, transparent 8deg 18deg);
+  opacity: .32;
+  filter: blur(.5px);
+  transform: rotate(-8deg);
+  z-index: 0;
+}
+html[data-visual-style="neural"] .hero::after {
+  background:
+    linear-gradient(90deg, transparent, rgba(255,255,255,.16), transparent),
+    linear-gradient(180deg, rgba(255,255,255,.10), transparent 46%);
+  opacity: .76;
+}
+html[data-visual-style="neural"] .hero-title {
+  max-width: 13ch;
+  font-size: clamp(32px, 7.4vw, 56px);
+  line-height: .96;
+  font-variation-settings: "opsz" 72, "wght" 900;
+}
+html[data-visual-style="neural"] .hero-meta {
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,.20);
+  border-radius: 22px;
+  background: rgba(255,255,255,.10);
+}
+html[data-visual-style="neural"] .hero-progress {
+  height: 10px;
+  background: rgba(255,255,255,.20);
+}
+html[data-visual-style="neural"] .hero-progress span {
+  background: linear-gradient(90deg, #fff, rgba(255,255,255,.72));
+  box-shadow: 0 0 18px rgba(255,255,255,.42);
+}
+html[data-visual-style="neural"] .hero-btn {
+  border-radius: 18px;
+  transition:
+    transform var(--nx-motion-med) var(--nx-ease-spring),
+    background var(--nx-motion-fast) ease,
+    box-shadow var(--nx-motion-fast) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  html[data-visual-style="neural"] .hero-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 18px 30px -24px rgba(0,0,0,.55);
+  }
+}
+html[data-visual-style="neural"] .notice,
+html[data-visual-style="neural"] .warmup,
+html[data-visual-style="neural"] .overview-card,
+html[data-visual-style="neural"] .ex-card,
+html[data-visual-style="neural"] .rest-panel {
+  background: color-mix(in oklab, var(--md-surface-container) 82%, transparent);
+  border-color: color-mix(in oklab, var(--md-outline-variant) 76%, transparent);
+  box-shadow: 0 18px 48px -42px rgba(0,0,0,.46);
+}
+html[data-visual-style="neural"] .ex-card {
+  position: relative;
+  overflow: hidden;
+}
+html[data-visual-style="neural"] .ex-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: color-mix(in oklab, var(--nx-phase) 70%, transparent);
+  opacity: .75;
+}
+html[data-visual-style="neural"] .ex-head {
+  grid-template-columns: 42px 1fr;
+  gap: 12px;
+}
+html[data-visual-style="neural"] .ex-num {
+  width: 42px;
+  height: 42px;
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--nx-phase) 12%, var(--md-surface-container-high));
+  color: color-mix(in oklab, var(--nx-phase) 88%, var(--md-on-surface));
+}
+html[data-visual-style="neural"] .set-row {
+  grid-template-columns: 38px minmax(0,1.1fr) minmax(0,.9fr) 40px;
+  border: 1px solid color-mix(in oklab, var(--md-outline-variant) 62%, transparent);
+  background: color-mix(in oklab, var(--md-surface-container-high) 72%, transparent);
+}
+html[data-visual-style="neural"] .number-control {
+  background: var(--md-surface-container-lowest);
+  border-color: color-mix(in oklab, var(--md-outline-variant) 84%, transparent);
+}
+html[data-visual-style="neural"] .bottom-nav {
+  width: min(calc(100% - 24px), 540px);
+  left: 50%;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  border-radius: 28px;
+  border: 1px solid color-mix(in oklab, var(--md-outline-variant) 72%, transparent);
+  background: color-mix(in oklab, var(--md-surface-container-low) 84%, transparent);
+  box-shadow: 0 22px 64px -40px rgba(0,0,0,.58);
+}
+html[data-visual-style="neural"] .bottom-nav-btn {
+  transition: transform var(--nx-motion-med) var(--nx-ease-spring), color var(--nx-motion-fast) ease;
+}
+html[data-visual-style="neural"] .bottom-nav-btn[data-active="true"] {
+  color: var(--md-on-surface);
+}
+html[data-visual-style="neural"] .bottom-nav-btn[data-active="true"] .nav-icon-wrap {
+  background: linear-gradient(135deg, color-mix(in oklab, var(--nx-primary) 24%, var(--md-surface-container-high)), color-mix(in oklab, var(--nx-tertiary) 18%, var(--md-surface-container-high)));
+  box-shadow: 0 12px 24px -18px var(--nx-primary);
+}
+@media (hover: hover) and (pointer: fine) {
+  html[data-visual-style="neural"] .bottom-nav-btn:hover {
+    transform: translateY(-3px);
+  }
+  html[data-visual-style="neural"] .bottom-nav-btn:hover .nav-icon-wrap {
+    transform: scale(1.08);
+  }
+}
+html[data-visual-style="neural"] .sheet[data-type="menu"] .menu-card {
+  background: var(--md-surface-container);
+  box-shadow: none;
+}
+html[data-visual-style="neural"] .toast {
+  animation: lift-toast-in var(--nx-motion-med) var(--nx-ease-spring) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-visual-style="neural"] .rest-fab[data-active="true"],
+  html[data-visual-style="neural"] .set-row[data-done="true"],
+  html[data-visual-style="neural"] .toast {
+    animation: none;
+  }
+  html[data-visual-style="neural"] :is(.week-tab, .day-pill, .menu-card, .ex-card, .hero-btn, .bottom-nav-btn):hover {
+    transform: none;
+  }
 }
 @keyframes nx-set-complete {
   0% { transform: scale(1); }
