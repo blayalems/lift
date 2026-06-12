@@ -254,7 +254,7 @@
       backdrop-filter: saturate(180%) blur(22px);
     }
     .chip-btn { padding: 0 12px; font-size: 13px; white-space: nowrap; }
-    .icon-btn { width: 38px; height: 38px; padding: 0; }
+    .icon-btn { width: var(--tap); height: var(--tap); padding: 0; }
     .chip-btn:active, .icon-btn:active { transform: scale(0.93); transition: transform .08s ease, background .08s ease, border-color .08s ease; }
     .hero-btn:active, .tool-btn:active { transform: scale(0.96); transition: transform .08s ease, background .08s ease; }
     .set-btn:active { transform: scale(0.92); transition: transform .08s ease; }
@@ -481,16 +481,16 @@
     .number-control {
       min-width: 0;
       display: grid;
-      grid-template-columns: 26px minmax(0,1fr) 26px;
+      grid-template-columns: 32px minmax(0,1fr) 32px;
       align-items: center;
       gap: 3px;
       background: color-mix(in oklab, var(--glass-strong) 74%, transparent);
       border: 1px solid var(--glass-border);
       border-radius: 12px;
-      min-height: 42px;
+      min-height: var(--tap);
       overflow: hidden;
     }
-    .set-btn { width: 26px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: var(--fg-dim); font-weight: 900; }
+    .set-btn { width: 32px; height: var(--tap); display: inline-flex; align-items: center; justify-content: center; color: var(--fg-dim); font-weight: 900; }
     .set-input-wrap { min-width: 0; text-align: center; }
     .set-input {
       width: 100%;
@@ -505,8 +505,18 @@
       font-variant-numeric: tabular-nums;
     }
     .unit-label { display: block; margin-top: 1px; color: var(--fg-faint); font-size: 10px; font-weight: 760; line-height: 1; text-transform: uppercase; }
+    button.plate-mini {
+      display: inline-block;
+      margin-top: 2px;
+      padding: 2px 8px 3px;
+      border-radius: 999px;
+      background: color-mix(in oklab, var(--fg) 7%, transparent);
+      color: var(--fg-dim);
+      cursor: pointer;
+    }
+    button.plate-mini:active { transform: scale(0.94); }
     .check-btn {
-      width: 34px; height: 34px; border-radius: 999px;
+      width: 38px; height: 38px; border-radius: 999px;
       border: 2px solid var(--line-strong);
       display: inline-flex; align-items: center; justify-content: center;
       justify-self: end;
@@ -884,7 +894,7 @@
       .hero { margin-inline: 24px; }
       .hero-title { max-width: 18ch; font-size: 34px; }
       .exercise-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
-      .set-row { grid-template-columns: 30px minmax(0,1fr) minmax(0,.86fr) 36px; }
+      .set-row { grid-template-columns: 30px minmax(0,1fr) minmax(0,.86fr) 38px; }
       .menu-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
       .metric-grid { grid-template-columns: repeat(4, minmax(0,1fr)); }
       .badge-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
@@ -958,8 +968,9 @@
       .hero-btn { min-height: 42px; padding-inline: 8px; font-size: 13px; }
       .content { padding-inline: 14px; }
       .set-row { grid-template-columns: 28px minmax(0,1fr) minmax(0,.86fr) 34px; gap: 5px; padding: 7px 6px; }
-      .number-control { grid-template-columns: 22px minmax(0,1fr) 22px; }
-      .set-btn { width: 22px; }
+      .number-control { grid-template-columns: 26px minmax(0,1fr) 26px; }
+      .set-btn { width: 26px; }
+      .check-btn { width: 34px; height: 34px; }
       .set-input { font-size: 14px; }
       .unit-label { font-size: 9px; }
       .rest-main { grid-template-columns: 46px 1fr auto; gap: 8px; }
@@ -1505,7 +1516,7 @@
       font-size: 12px;
     }
     .nav-drawer-foot .icon-btn {
-      width: 38px; height: 38px;
+      width: var(--tap); height: var(--tap);
       background: color-mix(in oklab, var(--md-surface-container-high) 92%, transparent);
       border-color: var(--md-outline-variant);
     }
@@ -1579,7 +1590,7 @@
     }
     .cal-head strong { font-size: 18px; font-variation-settings: "wght" 750; }
     .cal-head .cal-nav { display: flex; gap: 6px; }
-    .cal-head .icon-btn { width: 36px; height: 36px; }
+    .cal-head .icon-btn { width: 40px; height: 40px; }
     .cal-dow-row {
       display: grid;
       grid-template-columns: repeat(7, 1fr);

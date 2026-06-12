@@ -8,7 +8,7 @@
   var sheetBackdrop = document.getElementById("sheet-backdrop");
   var summaryOverlay = document.getElementById("summary-overlay");
 
-  var APP_VERSION = "1.4.8";
+  var APP_VERSION = "1.5.0";
   window.LIFT_APP_VERSION = APP_VERSION;
 
   var STORE_KEY = "lift.v3.state";
@@ -863,7 +863,10 @@
     backdrop.dataset.open = String(!!runtime.drawerOpen);
 
     var version = window.LIFT_APP_VERSION || APP_VERSION;
-    var streak = trainingStreak();
+    var streaksMod = feature("streaks");
+    var streak = streaksMod && typeof streaksMod.streakCount === "function"
+      ? streaksMod.streakCount(makeCtx())
+      : trainingStreak();
     var html = '';
     html += '<div class="nav-drawer-head"><div class="nav-drawer-brand">' +
       '<div class="nav-drawer-mark">L</div>' +
@@ -892,7 +895,7 @@
 
     html += '<div class="nav-section-head">Trends</div>';
     html += navItem("rings", "Activity rings", "rings");
-    html += navItem("streaks", "Streaks &amp; weekly", "today");
+    html += navItem("streaks", "Streaks & weekly", "today");
     html += navItem("strength", "1RM estimator", "chart");
     html += navItem("prs", "Personal records", "badge");
     html += navItem("calendar", "Calendar month view", "today");
@@ -904,7 +907,7 @@
     html += '<div class="nav-section-head">Data</div>';
     html += navItem("overview", "Plan overview", "today");
     html += navItem("copy", "Export log", "copy");
-    html += navItem("healthkit", "Health &amp; Fit export", "heart");
+    html += navItem("healthkit", "Health & Fit export", "heart");
     html += navItem("backup", "Backups", "upload");
     html += navItem("settings", "Settings", "gear");
 
@@ -1090,9 +1093,9 @@
       measurements: "Body Measurements",
       calendar: "Calendar",
       marketplace: "Templates Marketplace",
-      healthkit: "Health &amp; Fit Export",
-      strength: "1RM &amp; Strength",
-      streaks: "Streaks &amp; Weekly",
+      healthkit: "Health & Fit Export",
+      strength: "1RM & Strength",
+      streaks: "Streaks & Weekly",
       quickadd: "Quick Add Exercise"
     }[type] || "Sheet";
   }
@@ -1239,7 +1242,7 @@
       '<div class="settings-actions">' +
       '<button class="action-btn" data-action="export-data">' + icon("download") + "Export</button>" +
       '<button class="action-btn secondary" data-action="import-data">' + icon("upload") + "Import</button>" +
-      '<button class="action-btn secondary" data-action="check-update">' + icon("refresh") + "Check update</button>" +
+      '<button class="action-btn secondary" data-action="check-updates">' + icon("refresh") + "Check update</button>" +
       '<button class="action-btn danger" data-action="reset-all">' + icon("trash") + "Reset</button>" +
       "</div>" +
       '<p class="settings-footnote">Local-first storage. Export before clearing browser data or changing devices.</p>' +
@@ -2292,7 +2295,11 @@
     }).sort(function (a, b) { return b.day.id.localeCompare(a.day.id); });
     var count = 0;
     for (var i = 0; i < days.length; i += 1) {
-      if (dayStatus(days[i].day, state) !== "done") break;
+      if (dayStatus(days[i].day, state) !== "done") {
+        // Today's session not being finished yet should not reset the streak.
+        if (days[i].day.id === today && count === 0) continue;
+        break;
+      }
       count += 1;
     }
     return count;
@@ -2880,7 +2887,15 @@
       });
   }
 
+  // True only when a service worker already controlled the page at load time.
+  // On the very first visit the new worker claims the page (controllerchange +
+  // LIFT_SW_UPDATED both fire), but that is an install, not an update.
+  var swHadController = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+  var swUpdateHandled = false;
+
   function applyPendingReload() {
+    if (!swHadController || swUpdateHandled || runtime.pendingReload) return;
+    swUpdateHandled = true;
     var day = getDay(state.activeDayId);
     if (day && isWorkoutRunning(day.id)) {
       runtime.pendingReload = true;
