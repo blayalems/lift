@@ -127,9 +127,9 @@
       '<div style="display:flex;align-items:flex-end;gap:6px;height:120px;margin-top:14px;padding:0 4px">';
     hist.forEach(function (h) {
       var pct = (h.sessions / max) * 100;
-      html += '<div style="flex:1;display:grid;gap:4px;justify-items:center">' +
-        '<div style="width:100%;height:100%;display:flex;align-items:flex-end">' +
-        '<div style="width:100%;height:' + pct + '%;background:linear-gradient(180deg,var(--md-primary),var(--md-secondary));border-radius:6px;min-height:4px"></div>' +
+      html += '<div style="flex:1;display:flex;flex-direction:column;gap:4px;align-items:center;height:100%">' +
+        '<div style="width:100%;flex:1;min-height:0;display:flex;align-items:flex-end">' +
+        '<div style="width:100%;height:' + pct + '%;background:linear-gradient(180deg,var(--md-primary),var(--md-secondary));border-radius:6px;min-height:4px" title="' + h.sessions + ' sessions"></div>' +
         '</div>' +
         '<small style="font-size:9px;color:var(--md-on-surface-variant)">' + h.weekStart.slice(5).replace("-", "/") + '</small>' +
         '</div>';
