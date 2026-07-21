@@ -15,7 +15,7 @@
     ["sets-500", "500 Sets", "Log 500 completed sets."],
     ["sets-1000", "1000 Sets", "Log 1000 completed sets."],
     ["deload-completed", "Deload Complete", "Finish every planned deload training day."],
-    ["cycle-complete", "Cycle Complete", "Complete the full May-June cycle."],
+    ["cycle-complete", "Cycle Complete", "Complete the full May-August cycle."],
     ["leg-press-80", "80 kg Leg Press", "Log a Machine Leg Press set at 80 kg or more."],
     ["incline-db-30", "30 kg Incline DB", "Log an Incline DB Press set at 30 kg total or more."]
   ];

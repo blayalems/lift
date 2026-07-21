@@ -1,5 +1,5 @@
-const APP_VERSION = "1.4.8";
-const CACHE_VERSION = "lift-v17";
+const APP_VERSION = "1.6.0";
+const CACHE_VERSION = "lift-v18";
 const PRECACHE = `${CACHE_VERSION}-precache`;
 const RUNTIME = `${CACHE_VERSION}-runtime`;
 
@@ -470,7 +470,7 @@ function patchAppScriptText(source) {
     var remaining = restRemaining();
     var duration = Math.max(1, numberOr(rest.duration, state.settings.defaultRest));
     var showCompleted = numberOr(rest.completedAt, 0) > 0;
-    var isVisible = !!(rest.running || remaining > 0 || showCompleted);
+    var isVisible = !!(rest.running || remaining < duration || showCompleted);
     if (!isVisible) return "";
     var isActive = !!rest.running;
     var progress = rest.running ? clamp(remaining / duration, 0, 1) : 0;

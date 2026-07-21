@@ -29,12 +29,11 @@
     var days = (ctx.allDays && ctx.allDays()) || [];
     days.forEach(function (entry) {
       var ds = (ctx.state.days && ctx.state.days[entry.day.id]) || {};
-      if (ds.finishedAt) set[entry.day.id] = true;
-      else {
-        // Partial: at least one completed set counts as activity for streaks.
-        var hasAny = ds.completed && Object.keys(ds.completed).length > 0;
-        if (hasAny) set[entry.day.id] = true;
-      }
+      var status = typeof ctx.dayStatus === "function" ? ctx.dayStatus(entry.day, ctx.state) : null;
+      var hasValidSet = ds.completed && Object.keys(ds.completed).some(function (key) {
+        return Number((ds.completed[key] || {}).reps) > 0;
+      });
+      if (status === "done" || status === "partial" || (!status && hasValidSet)) set[entry.day.id] = true;
     });
     return set;
   }
@@ -61,7 +60,7 @@
   }
 
   function weekProgress(ctx) {
-    var goal = (ctx.state.goals && ctx.state.goals.weeklySessions) || 5;
+    var goal = (ctx.state.goals && ctx.state.goals.weeklySessions) || 4;
     var completed = completedDaysSet(ctx);
     var today = ctx.localDateId ? ctx.localDateId(new Date()) : new Date().toISOString().slice(0, 10);
     var start = isoStartOfWeek(today);
