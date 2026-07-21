@@ -14,13 +14,13 @@ describe("release metadata and service-worker patching", () => {
     const workerVersion = workerSource.match(/const APP_VERSION = "([^"]+)";/)[1];
     const androidVersion = gradleSource.match(/versionName = "([^"]+)"/)[1];
 
-    expect(appVersion).toBe("1.6.0");
+    expect(appVersion).toBe("1.6.1");
     expect(workerVersion).toBe(appVersion);
     expect(androidVersion).toBe(appVersion);
     expect(metadata.version).toBe(appVersion);
     expect(metadata.build).toBe("2026-07-22");
-    expect(gradleSource).toContain("versionCode = 21");
-    expect(workerSource).toContain('const CACHE_VERSION = "lift-v18";');
+    expect(gradleSource).toContain("versionCode = 22");
+    expect(workerSource).toContain('const CACHE_VERSION = "lift-v19";');
   });
 
   test("does not reintroduce the always-visible idle rest timer", () => {
@@ -31,7 +31,7 @@ describe("release metadata and service-worker patching", () => {
     const end = patched.indexOf("  function renderSheet(", start);
     const restBlock = patched.slice(start, end);
 
-    expect(patched).toContain('var APP_VERSION = "1.6.0";');
+    expect(patched).toContain('var APP_VERSION = "1.6.1";');
     expect(restBlock).toContain("remaining < duration");
     expect(restBlock).not.toContain("remaining > 0");
   });
