@@ -11,7 +11,7 @@
     { name: "Tricep Pushdown", scheme: { sets: 3, reps: 12, defaultRest: 60 }, tags: ["accessory"] },
     { name: "Lateral Raise", scheme: { sets: 3, reps: 15, defaultRest: 45 }, tags: ["accessory"] },
     { name: "Face Pull", scheme: { sets: 3, reps: 15, defaultRest: 60 }, tags: ["accessory"] },
-    { name: "Plank", scheme: { sets: 3, reps: "45s", defaultRest: 45 }, tags: ["core"] },
+    { name: "Plank (seconds)", scheme: { sets: 3, reps: 45, defaultRest: 45 }, tags: ["core"] },
     { name: "Hanging Leg Raise", scheme: { sets: 3, reps: 10, defaultRest: 60 }, tags: ["core"] },
     { name: "Calf Raise", scheme: { sets: 4, reps: 15, defaultRest: 45 }, tags: ["accessory"] },
     { name: "Walking Lunges", scheme: { sets: 3, reps: 12, defaultRest: 75 }, tags: ["accessory"] }
@@ -72,9 +72,19 @@
       if (ctx.toast) ctx.toast("No active day to add to.");
       return false;
     }
-    var sets = Math.max(1, Number(draft.sets) || 3);
-    var reps = draft.reps == null || draft.reps === "" ? 8 : draft.reps;
-    var weightKg = ctx.displayToKg ? ctx.displayToKg(Number(draft.weight) || 0) : Number(draft.weight) || 0;
+    var rawSets = Number(draft.sets);
+    var sets = Math.min(20, Math.max(1, Math.round(Number.isFinite(rawSets) ? rawSets : 3)));
+    var rawReps = Number(draft.reps == null || draft.reps === "" ? 8 : draft.reps);
+    if (!Number.isFinite(rawReps) || rawReps <= 0) {
+      if (ctx.toast) ctx.toast("Enter at least 1 rep.");
+      return false;
+    }
+    var reps = Math.min(999, Math.max(1, Math.round(rawReps)));
+    var rawWeight = Number(draft.weight);
+    var displayWeight = Number.isFinite(rawWeight) ? Math.max(0, rawWeight) : 0;
+    var weightKg = ctx.displayToKg ? ctx.displayToKg(displayWeight) : displayWeight;
+    var rawRest = Number(draft.restSec);
+    var defaultRest = Math.min(600, Math.max(0, Math.round(Number.isFinite(rawRest) ? rawRest : 60)));
     var sets$ = [];
     for (var i = 0; i < sets; i += 1) {
       sets$.push({ reps: reps, weight: weightKg });
@@ -83,7 +93,7 @@
       name: String(draft.name).trim(),
       target: sets + " x " + reps,
       sets: sets$,
-      defaultRest: Number(draft.restSec) || 60,
+      defaultRest: defaultRest,
       custom: true,
       addedAt: Date.now()
     };

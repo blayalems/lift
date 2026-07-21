@@ -30,18 +30,30 @@
     return cells;
   }
 
-  function statusFor(ctx, iso) {
-    var ds = (ctx.state.days && ctx.state.days[iso]) || null;
-    if (!ds) return "none";
-    if (ds.finishedAt) return "done";
-    var hasAny = ds.completed && Object.keys(ds.completed).length > 0;
-    if (hasAny) return "partial";
-    return "planned";
+  function planEntryFor(ctx, iso) {
+    var days = (ctx.allDays && ctx.allDays()) || [];
+    return days.find(function (entry) { return entry.day.id === iso; }) || null;
   }
 
   function plannedFor(ctx, iso) {
-    var days = (ctx.allDays && ctx.allDays()) || [];
-    return days.some(function (e) { return e.day.id === iso; });
+    var entry = planEntryFor(ctx, iso);
+    return !!(entry && (entry.day.exercises || []).length);
+  }
+
+  function statusFor(ctx, iso) {
+    var entry = planEntryFor(ctx, iso);
+    if (entry && !(entry.day.exercises || []).length) return "none";
+    var ds = (ctx.state.days && ctx.state.days[iso]) || null;
+    if (!ds) return "none";
+    if (entry && typeof ctx.dayStatus === "function") {
+      var status = ctx.dayStatus(entry.day, ctx.state);
+      if (status === "done" || status === "partial") return status;
+    }
+    var hasAny = ds.completed && Object.keys(ds.completed).some(function (key) {
+      return Number((ds.completed[key] || {}).reps) > 0;
+    });
+    if (hasAny || (ds.finishedAt && plannedFor(ctx, iso))) return "partial";
+    return plannedFor(ctx, iso) ? "planned" : "none";
   }
 
   function renderCalendar(ctx) {
@@ -83,21 +95,24 @@
       '</div></div>';
 
     // Summary metrics for the visible month.
-    var counts = { done: 0, partial: 0, planned: 0 };
+    var counts = { done: 0, partial: 0, due: 0, plannedAhead: 0 };
     cells.forEach(function (c) {
       if (c.other) return;
       var s = statusFor(ctx, c.iso);
       if (s === "done") counts.done += 1;
       else if (s === "partial") counts.partial += 1;
-      else if (plannedFor(ctx, c.iso)) counts.planned += 1;
+      else if (plannedFor(ctx, c.iso)) {
+        if (c.iso > today) counts.plannedAhead += 1;
+        else counts.due += 1;
+      }
     });
     html += '<div class="metric-grid">' +
       '<div class="metric-card"><div class="label">Completed</div><div class="value">' + counts.done + '</div></div>' +
       '<div class="metric-card"><div class="label">Partial</div><div class="value">' + counts.partial + '</div></div>' +
-      '<div class="metric-card"><div class="label">Planned ahead</div><div class="value">' + counts.planned + '</div></div>' +
+      '<div class="metric-card"><div class="label">Planned ahead</div><div class="value">' + counts.plannedAhead + '</div></div>' +
       '<div class="metric-card"><div class="label">Adherence</div><div class="value">' +
-      (counts.planned + counts.done + counts.partial > 0
-        ? Math.round((counts.done) / Math.max(1, counts.done + counts.partial + counts.planned) * 100) + "%"
+      (counts.due + counts.done + counts.partial > 0
+        ? Math.round((counts.done) / Math.max(1, counts.done + counts.partial + counts.due) * 100) + "%"
         : "-") +
       '</div></div></div>';
 
@@ -107,6 +122,7 @@
 
   root.calendar = {
     buildMonth: buildMonth,
+    plannedFor: plannedFor,
     statusFor: statusFor,
     renderCalendar: renderCalendar
   };

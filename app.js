@@ -8,7 +8,7 @@
   var sheetBackdrop = document.getElementById("sheet-backdrop");
   var summaryOverlay = document.getElementById("summary-overlay");
 
-  var APP_VERSION = "1.5.0";
+  var APP_VERSION = "1.6.0";
   window.LIFT_APP_VERSION = APP_VERSION;
 
   var STORE_KEY = "lift.v3.state";
@@ -35,7 +35,7 @@
     plates: [25, 20, 15, 10, 5, 2.5, 1.25]
   };
   var DEFAULT_GOALS = {
-    weeklySessions: 5,
+    weeklySessions: 4,
     weeklyVolumeKg: 10000,
     dailySteps: 7000,
     monthlyVolumeKg: 40000
@@ -53,21 +53,6 @@
     restDone: [16, 32, 24]
   };
   var REST_PRESETS = [60, 90, 120, 180];
-  var MONTHS = {
-    Jan: 0, January: 0,
-    Feb: 1, February: 1,
-    Mar: 2, March: 2,
-    Apr: 3, April: 3,
-    May: 4,
-    Jun: 5, June: 5,
-    Jul: 6, July: 6,
-    Aug: 7, August: 7,
-    Sep: 8, Sept: 8, September: 8,
-    Oct: 9, October: 9,
-    Nov: 10, November: 10,
-    Dec: 11, December: 11
-  };
-
   var runtime = {
     now: Date.now(),
     sheet: null,
@@ -245,6 +230,29 @@
     return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (paths[name] || paths.more) + "</svg>";
   }
 
+  function normalizeState(loaded) {
+    loaded = migrateToV3(loaded);
+    loaded.settings = Object.assign({}, DEFAULT_SETTINGS, loaded.settings || {});
+    loaded.days = loaded.days || {};
+    loaded.bodyweight = Array.isArray(loaded.bodyweight) ? loaded.bodyweight : [];
+    loaded.measurements = Array.isArray(loaded.measurements) ? loaded.measurements : [];
+    loaded.prs = loaded.prs || {};
+    loaded.achievements = loaded.achievements || {};
+    loaded.goals = Object.assign({}, DEFAULT_GOALS, loaded.goals || {});
+    if (numberOr(loaded.weeklyGoalPlanVersion, 0) < 1 && numberOr(loaded.goals.weeklySessions, 4) === 5) {
+      loaded.goals.weeklySessions = 4;
+    }
+    loaded.weeklyGoalPlanVersion = 1;
+    loaded.steps = loaded.steps || {};
+    loaded.calories = loaded.calories || {};
+    loaded.restingHr = Array.isArray(loaded.restingHr) ? loaded.restingHr : [];
+    loaded.customWorkouts = Array.isArray(loaded.customWorkouts) ? loaded.customWorkouts : [];
+    loaded.cloudSync = Object.assign({ provider: null, lastBackupAt: null, autoWeekly: false }, loaded.cloudSync || {});
+    loaded.weeklyRecapDismissedIso = loaded.weeklyRecapDismissedIso || null;
+    loaded.cycleReviewSeen = !!loaded.cycleReviewSeen;
+    return loaded;
+  }
+
   function loadState() {
     var loaded = null;
     try {
@@ -263,20 +271,7 @@
       loaded = { v: 3, settings: {}, days: {}, bodyweight: [], prs: {}, activeWeekId: null, activeDayId: null };
       migrateV1(loaded);
     }
-    loaded = migrateToV3(loaded);
-    loaded.settings = Object.assign({}, DEFAULT_SETTINGS, loaded.settings || {});
-    loaded.days = loaded.days || {};
-    loaded.bodyweight = Array.isArray(loaded.bodyweight) ? loaded.bodyweight : [];
-    loaded.prs = loaded.prs || {};
-    loaded.achievements = loaded.achievements || {};
-    loaded.goals = Object.assign({}, DEFAULT_GOALS, loaded.goals || {});
-    loaded.steps = loaded.steps || {};
-    loaded.calories = loaded.calories || {};
-    loaded.restingHr = Array.isArray(loaded.restingHr) ? loaded.restingHr : [];
-    loaded.customWorkouts = Array.isArray(loaded.customWorkouts) ? loaded.customWorkouts : [];
-    loaded.cloudSync = Object.assign({ provider: null, lastBackupAt: null, autoWeekly: false }, loaded.cloudSync || {});
-    loaded.weeklyRecapDismissedIso = loaded.weeklyRecapDismissedIso || null;
-    loaded.cycleReviewSeen = !!loaded.cycleReviewSeen;
+    loaded = normalizeState(loaded);
     var selection = chooseInitialSelection(loaded);
     loaded.activeWeekId = selection.weekId;
     loaded.activeDayId = selection.dayId;
@@ -468,17 +463,6 @@
   }
 
   function parseWeekBounds(week) {
-    var range = String(week.dateRange || "").replace(/\u2013|\u2014/g, "-");
-    var m = range.match(/([A-Za-z]+)\s*(\d{1,2})\s*-\s*(?:([A-Za-z]+)\s*)?(\d{1,2})/);
-    if (m && MONTHS[m[1]] != null) {
-      var endMonth = m[3] || m[1];
-      if (MONTHS[endMonth] != null) {
-        return {
-          start: new Date(2026, MONTHS[m[1]], Number(m[2])),
-          end: new Date(2026, MONTHS[endMonth], Number(m[4]))
-        };
-      }
-    }
     var ids = (week.days || []).map(function (d) { return d.id; }).sort();
     return ids.length ? { start: parseDateId(ids[0]), end: parseDateId(ids[ids.length - 1]) } : null;
   }
@@ -560,10 +544,14 @@
     }, 0);
   }
 
+  function isCompletedSet(entry) {
+    return !!entry && numberOr(entry.reps, 0) > 0;
+  }
+
   function completedSetCount(day, sourceState) {
     var ds = (sourceState || state).days[day.id] || {};
     var completed = ds.completed || {};
-    return Object.keys(completed).filter(function (key) { return completed[key]; }).length;
+    return Object.keys(completed).filter(function (key) { return isCompletedSet(completed[key]); }).length;
   }
 
   function dayStatus(day, sourceState) {
@@ -948,7 +936,7 @@
   function renderExercise(day, ex, exIndex) {
     var ds = dayState(day.id);
     var sets = exerciseSets(day, exIndex);
-    var complete = sets.length > 0 && sets.every(function (_, si) { return !!ds.completed[exIndex + "." + si]; });
+    var complete = sets.length > 0 && sets.every(function (_, si) { return isCompletedSet(ds.completed[exIndex + "." + si]); });
     var caveat = isCaveatNote(ex.note) && Number(ds.readiness || 10) < 7;
     var tone = neuralExerciseTone(ex, complete, caveat);
     var html = '<article class="ex-card" data-complete="' + String(complete) + '" data-caveat="' + String(caveat) + '" data-nx-tone="' + escapeHtml(tone) + '">';
@@ -980,8 +968,9 @@
   function renderSetRow(day, ex, exIndex, set, setIndex) {
     var key = exIndex + "." + setIndex;
     var ds = dayState(day.id);
-    var done = ds.completed[key];
-    var draft = ds.drafts[key] || {};
+    var completedEntry = ds.completed[key];
+    var done = isCompletedSet(completedEntry) ? completedEntry : null;
+    var draft = ds.drafts[key] || (!done && completedEntry) || {};
     var weight = done && done.weight != null ? done.weight : draft.weight != null ? draft.weight : set.weight;
     var reps = done && done.reps != null ? done.reps : draft.reps != null ? draft.reps : set.reps;
     var html = '<div class="set-row" data-done="' + String(!!done) + '" data-pr="' + String(!!(done && done.pr)) + '">';
@@ -1467,7 +1456,7 @@
       var ds = state.days[day.id] || {};
       var completed = ds.completed || {};
       var values = Object.keys(completed).filter(function (key) {
-        return key.split(".")[0] === String(exIndex);
+        return key.split(".")[0] === String(exIndex) && isCompletedSet(completed[key]);
       }).map(function (key) { return completed[key]; });
       if (!values.length) continue;
       var weights = values.map(function (v) { return formatWeight(v.weight); });
@@ -1519,6 +1508,8 @@
     if (summary && typeof summary.caloriesForDay === "function") {
       state.calories[state.activeDayId] = { workoutKcal: summary.caloriesForDay(makeCtx(), state.activeDayId) };
     }
+    rest = idleRest();
+    saveRest();
     saveState();
     releaseWakeLock();
     clearWorkoutNotification();
@@ -1573,7 +1564,7 @@
       var sets = exerciseSets(day, exIndex);
       for (var setIndex = 0; setIndex < sets.length; setIndex += 1) {
         var key = exIndex + "." + setIndex;
-        if (!ds.completed[key]) {
+        if (!isCompletedSet(ds.completed[key])) {
           var value = getCurrentSetValue(day, exIndex, setIndex);
           return {
             ex: exercises[exIndex],
@@ -1802,8 +1793,16 @@
     if (field === "weight") value = Math.max(0, value);
     var bucket = ds.completed[key] || ds.drafts[key] || getCurrentSetValue(day, exIndex, setIndex);
     bucket[field] = value;
-    if (ds.completed[key]) ds.completed[key] = bucket;
-    else ds.drafts[key] = bucket;
+    if (ds.completed[key] && field === "reps" && value <= 0) {
+      delete bucket.ts;
+      delete bucket.pr;
+      delete ds.completed[key];
+      ds.drafts[key] = bucket;
+    } else if (ds.completed[key]) {
+      ds.completed[key] = bucket;
+    } else {
+      ds.drafts[key] = bucket;
+    }
     saveState();
   }
 
@@ -1826,7 +1825,11 @@
     var ex = day.exercises[exIndex];
     var ds = dayState(day.id);
     var key = exIndex + "." + setIndex;
-    if (ds.completed[key]) {
+    if (ds.completed[key] && !isCompletedSet(ds.completed[key])) {
+      ds.drafts[key] = { reps: numberOr(ds.completed[key].reps, 0), weight: numberOr(ds.completed[key].weight, 0) };
+      delete ds.completed[key];
+    }
+    if (isCompletedSet(ds.completed[key])) {
       delete ds.completed[key];
       haptic("warning");
       saveState();
@@ -1835,6 +1838,12 @@
       return;
     }
     var value = getCurrentSetValue(day, exIndex, setIndex);
+    if (numberOr(value.reps, 0) <= 0) {
+      toast("Enter at least 1 rep before completing the set.");
+      saveState();
+      render();
+      return;
+    }
     var prior = maxLoggedWeight(ex.name, day.id, key);
     var pr = value.weight > prior && value.weight > 0;
     ds.completed[key] = { reps: value.reps, weight: value.weight, ts: Date.now(), pr: pr };
@@ -1865,6 +1874,10 @@
     var ex = day.exercises[exIndex];
     var ds = dayState(day.id);
     var sets = exerciseSets(day, exIndex);
+    if (sets.some(function (set) { return numberOr(set.reps, 0) <= 0; })) {
+      toast("Enter reps for failure sets individually.");
+      return;
+    }
     var prCount = 0;
     sets.forEach(function (set, setIndex) {
       var key = exIndex + "." + setIndex;
@@ -1990,11 +2003,7 @@
   }
 
   function presetRest(seconds) {
-    rest = { duration: seconds, pausedRemaining: seconds, endsAt: 0, running: false, label: "Rest", completedAt: seconds <= 0 ? Date.now() : 0 };
-    saveRest();
-    haptic("select");
-    render();
-    updateWorkoutNotification(true);
+    startRest(Math.max(1, numberOr(seconds, state.settings.defaultRest)), "Rest");
   }
 
   function completeRestIfNeeded() {
@@ -2117,7 +2126,8 @@
         (day.exercises || []).forEach(function (ex, exIndex) {
           var setLines = exerciseSets(day, exIndex).map(function (set, setIndex) {
             var key = exIndex + "." + setIndex;
-            var done = ((ds.completed || {})[key]);
+            var logged = ((ds.completed || {})[key]);
+            var done = isCompletedSet(logged) ? logged : null;
             var v = done || set;
             return (done ? "[x] " : "[ ] ") + formatWeight(v.weight) + " " + unitLabel() + " x " + v.reps + (done && done.pr ? " PR" : "");
           });
@@ -2181,8 +2191,8 @@
             state.settings = Object.assign({}, state.settings, imported.settings || {});
           } else {
             state = Object.assign({ v: imported.v || 2 }, imported);
-            state.settings = Object.assign({}, DEFAULT_SETTINGS, state.settings || {});
           }
+          state = normalizeState(state);
           var selection = chooseInitialSelection(state);
           state.activeWeekId = selection.weekId;
           state.activeDayId = selection.dayId;
@@ -2276,12 +2286,14 @@
   function cycleAdherence() {
     var total = 0;
     var done = 0;
+    var today = todayId();
     allDays().forEach(function (entry) {
+      if (entry.day.id > today) return;
       (entry.day.exercises || []).forEach(function (ex, exIndex) {
         total += (ex.sets || []).length;
         var completed = ((state.days[entry.day.id] || {}).completed || {});
         for (var i = 0; i < (ex.sets || []).length; i += 1) {
-          if (completed[exIndex + "." + i]) done += 1;
+          if (isCompletedSet(completed[exIndex + "." + i])) done += 1;
         }
       });
     });
@@ -2386,7 +2398,8 @@
       ctx.font = "500 28px system-ui, sans-serif";
       var ds = dayState(day.id);
       var sets = exerciseSets(day, exIndex).map(function (set, setIndex) {
-        var done = ds.completed[exIndex + "." + setIndex];
+        var logged = ds.completed[exIndex + "." + setIndex];
+        var done = isCompletedSet(logged) ? logged : null;
         var v = done || set;
         return (done ? "done " : "open ") + formatWeight(v.weight) + " " + unitLabel() + " x " + v.reps;
       }).join("   ");
@@ -3085,8 +3098,12 @@
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
       clamp: clamp,
+      completedSetCount: completedSetCount,
+      dayStatus: dayStatus,
       escapeHtml: escapeHtml,
       formatDuration: formatDuration,
+      isCompletedSet: isCompletedSet,
+      normalizeState: normalizeState,
       numberOr: numberOr,
       pad2: pad2
     };

@@ -139,7 +139,7 @@
   }
 
   function exportTarget(ctx, target) {
-    var stamp = new Date().toISOString().slice(0, 10);
+    var stamp = ctx.todayId ? ctx.todayId() : new Date().toISOString().slice(0, 10);
     if (target === "apple") {
       var ok = downloadFile("lift-apple-health-" + stamp + ".csv", appleHealthCsv(ctx), "text/csv");
       if (ctx.toast) ctx.toast(ok ? "Apple Health CSV exported." : "Export failed.");
