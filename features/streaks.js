@@ -2,11 +2,19 @@
 // Reads completed days from state and surfaces:
 //   - current training streak (consecutive days with any completed set)
 //   - weekly progress vs goals.weeklySessions
+//   - completed weekly sets and reps for the plan's priority muscle groups
 //   - last 12 weeks adherence sparkline.
 (function () {
   "use strict";
 
   var root = window.LIFT_FEATURES = window.LIFT_FEATURES || {};
+  var FOCUS_AREAS = [
+    { key: "upperChest", label: "Upper chest" },
+    { key: "back", label: "Lats / back" },
+    { key: "sideDelts", label: "Side delts" },
+    { key: "rearDelts", label: "Rear delts" },
+    { key: "arms", label: "Arms" }
+  ];
 
   function isoDateAddDays(iso, days) {
     var parts = iso.split("-");
@@ -24,45 +32,63 @@
     return d.toISOString().slice(0, 10);
   }
 
-  function completedDaysSet(ctx) {
+  function currentDateId(ctx) {
+    if (ctx && typeof ctx.todayId === "function") return ctx.todayId();
+    if (ctx && typeof ctx.localDateId === "function") return ctx.localDateId(new Date());
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function hasValidCompletedSet(ds) {
+    var completed = (ds && ds.completed) || {};
+    return Object.keys(completed).some(function (key) {
+      return Number((completed[key] || {}).reps) > 0;
+    });
+  }
+
+  function activityDaysSet(ctx) {
     var set = {};
     var days = (ctx.allDays && ctx.allDays()) || [];
     days.forEach(function (entry) {
       var ds = (ctx.state.days && ctx.state.days[entry.day.id]) || {};
-      var status = typeof ctx.dayStatus === "function" ? ctx.dayStatus(entry.day, ctx.state) : null;
-      var hasValidSet = ds.completed && Object.keys(ds.completed).some(function (key) {
-        return Number((ds.completed[key] || {}).reps) > 0;
-      });
-      if (status === "done" || status === "partial" || (!status && hasValidSet)) set[entry.day.id] = true;
+      if (hasValidCompletedSet(ds)) set[entry.day.id] = true;
+    });
+    return set;
+  }
+
+  function finishedSessionDaysSet(ctx) {
+    var set = {};
+    var days = (ctx.allDays && ctx.allDays()) || [];
+    days.forEach(function (entry) {
+      var ds = (ctx.state.days && ctx.state.days[entry.day.id]) || {};
+      if (ds.finishedAt && hasValidCompletedSet(ds)) set[entry.day.id] = true;
     });
     return set;
   }
 
   function streakCount(ctx) {
-    var completed = completedDaysSet(ctx);
-    var today = ctx.localDateId ? ctx.localDateId(new Date()) : new Date().toISOString().slice(0, 10);
-    var cursor = today;
+    var completed = activityDaysSet(ctx);
+    var today = currentDateId(ctx);
+    var planned = ((ctx.allDays && ctx.allDays()) || []).filter(function (entry) {
+      return entry && entry.day && entry.day.id <= today && (entry.day.exercises || []).length > 0;
+    }).sort(function (a, b) {
+      return b.day.id.localeCompare(a.day.id);
+    });
     var count = 0;
-    // Walk backwards day-by-day. Allow up to 1 missed day before breaking streak
-    // (rest day is fine — count as continuation, not increment).
-    var allow = 1;
-    for (var i = 0; i < 365; i += 1) {
-      if (completed[cursor]) {
-        count += 1;
-        allow = 1;
-      } else {
-        if (allow > 0) { allow -= 1; }
-        else break;
-      }
-      cursor = isoDateAddDays(cursor, -1);
+    // Walk backward through prescribed workouts, not raw calendar days.
+    for (var i = 0; i < planned.length; i += 1) {
+      var id = planned[i].day.id;
+      // Today's workout is not missed while the athlete still has the day to start it.
+      if (id === today && !completed[id]) continue;
+      if (!completed[id]) break;
+      count += 1;
     }
     return count;
   }
 
   function weekProgress(ctx) {
-    var goal = (ctx.state.goals && ctx.state.goals.weeklySessions) || 4;
-    var completed = completedDaysSet(ctx);
-    var today = ctx.localDateId ? ctx.localDateId(new Date()) : new Date().toISOString().slice(0, 10);
+    var goal = (ctx.state.goals && ctx.state.goals.weeklySessions) || 6;
+    var completed = finishedSessionDaysSet(ctx);
+    var today = currentDateId(ctx);
     var start = isoStartOfWeek(today);
     var count = 0;
     for (var i = 0; i < 7; i += 1) {
@@ -74,8 +100,8 @@
 
   function weeklyHistory(ctx, weeks) {
     weeks = weeks || 12;
-    var completed = completedDaysSet(ctx);
-    var today = ctx.localDateId ? ctx.localDateId(new Date()) : new Date().toISOString().slice(0, 10);
+    var completed = finishedSessionDaysSet(ctx);
+    var today = currentDateId(ctx);
     var start = isoStartOfWeek(today);
     var rows = [];
     for (var w = weeks - 1; w >= 0; w -= 1) {
@@ -87,6 +113,91 @@
       rows.push({ weekStart: weekStart, sessions: n });
     }
     return rows;
+  }
+
+  function normalizeExerciseName(name) {
+    return String(name || "")
+      .toLowerCase()
+      .replace(/&/g, " and ")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+      .replace(/\s+/g, " ");
+  }
+
+  function classifyExerciseName(name) {
+    var normalized = normalizeExerciseName(name);
+    var matches = [];
+    if (/\bupper chest\b/.test(normalized) || (/\bincline\b/.test(normalized) && /\b(?:press|fly|flye)s?\b/.test(normalized))) {
+      matches.push("upperChest");
+    }
+    if (/\b(?:lat|lats|row|rows|pulldown|pulldowns|pull up|pull ups|chin up|chin ups)\b/.test(normalized)) {
+      matches.push("back");
+    }
+    if (/\b(?:lateral raise|lateral raises|side delt|side delts)\b/.test(normalized)) {
+      matches.push("sideDelts");
+    }
+    if (/\b(?:rear delt|rear delts|face pull|face pulls|reverse pec deck|reverse fly|reverse flye|reverse flies)\b/.test(normalized)) {
+      matches.push("rearDelts");
+    }
+    var isLegCurl = /\b(?:leg|hamstring|hamstrings|lying leg|seated leg) curls?\b/.test(normalized);
+    if (/\b(?:bicep|biceps|tricep|triceps|pushdown|pushdowns|dip|dips|skull crusher|skull crushers)\b/.test(normalized) ||
+        (/\bcurls?\b/.test(normalized) && !isLegCurl) ||
+        /\btriceps? extensions?\b/.test(normalized)) {
+      matches.push("arms");
+    }
+    return matches;
+  }
+
+  function emptyFocusMetrics() {
+    var metrics = {};
+    FOCUS_AREAS.forEach(function (area) {
+      metrics[area.key] = { key: area.key, label: area.label, sets: 0, reps: 0 };
+    });
+    return metrics;
+  }
+
+  function weeklyFocus(ctx) {
+    var metrics = emptyFocusMetrics();
+    var today = currentDateId(ctx);
+    var start = isoStartOfWeek(today);
+    var end = isoDateAddDays(start, 6);
+    var days = (ctx.allDays && ctx.allDays()) || [];
+
+    days.forEach(function (entry) {
+      if (!entry || !entry.day || entry.day.id < start || entry.day.id > end) return;
+      var ds = (ctx.state.days && ctx.state.days[entry.day.id]) || {};
+      var completed = ds.completed || {};
+      (entry.day.exercises || []).forEach(function (exercise, exIndex) {
+        var areas = classifyExerciseName(exercise.name);
+        if (!areas.length) return;
+        Object.keys(completed).forEach(function (key) {
+          if (key.split(".")[0] !== String(exIndex)) return;
+          var reps = Number((completed[key] || {}).reps);
+          if (!(reps > 0)) return;
+          areas.forEach(function (area) {
+            metrics[area].sets += 1;
+            metrics[area].reps += reps;
+          });
+        });
+      });
+    });
+
+    return metrics;
+  }
+
+  function renderWeeklyFocus(ctx) {
+    var metrics = weeklyFocus(ctx);
+    var html = '<div class="overview-card"><strong>This week\'s focus</strong>' +
+      '<p>Valid completed working sets by priority area. Multi-target exercises can contribute to more than one area.</p>' +
+      '<div class="metric-grid">';
+    FOCUS_AREAS.forEach(function (area) {
+      var metric = metrics[area.key];
+      html += '<div class="metric-card"><div class="label">' + area.label + '</div>' +
+        '<div class="value">' + metric.sets + ' set' + (metric.sets === 1 ? '' : 's') + '</div>' +
+        '<div class="ring-sub">' + metric.reps + ' reps</div></div>';
+    });
+    html += '</div></div>';
+    return html;
   }
 
   function renderStreakCard(ctx) {
@@ -118,6 +229,7 @@
   function renderStreaks(ctx) {
     var html = '<div class="sheet-grid">';
     html += renderStreakCard(ctx);
+    html += renderWeeklyFocus(ctx);
 
     // Last 12 weeks bar chart.
     var hist = weeklyHistory(ctx, 12);
@@ -136,14 +248,18 @@
     html += '</div></div>';
 
     html += '<div class="overview-card"><strong>Streak rules</strong>' +
-      '<p>Any completed set counts toward the streak. One rest day is allowed without breaking continuity — two in a row resets the chain.</p></div>';
+      '<p>Any valid completed set counts for a planned training day. Planned rest days and today\'s not-yet-started workout do not break continuity; an earlier missed training day resets the chain.</p></div>';
     html += '</div>';
     return html;
   }
 
   root.streaks = {
+    classifyExerciseName: classifyExerciseName,
     streakCount: streakCount,
     weekProgress: weekProgress,
+    weeklyHistory: weeklyHistory,
+    weeklyFocus: weeklyFocus,
+    renderWeeklyFocus: renderWeeklyFocus,
     renderStreakCard: renderStreakCard,
     renderStreaks: renderStreaks
   };

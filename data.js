@@ -49,7 +49,7 @@
     meta: {
       title: "Lem Progressive Overload Plan",
       athlete: "Lem",
-      dateRange: "May 12-August 30, 2026",
+      dateRange: "May 12-September 27, 2026",
       timeZone: "Asia/Manila",
       source: "reference/lem_progressive_overload_may_june_2026.html",
       enrichmentSource: "reference/Workout Tracker.html",
@@ -1246,38 +1246,52 @@
         sub: "Resume without catch-up",
         subtitle: "Resume without catch-up",
         dateRange: "Jul 20-26",
-        notice: "The export shows pull, legs, and chest completed July 16-18 on three consecutive days. Monday through Wednesday are deliberate recovery, not missed workouts. Thursday is a low-volume hamstring re-entry after no full hamstring session since June 25; Saturday resets pressing technique below the July 18 gauntlet. Do not add catch-up work.",
+        notice: "Six training days fill the missing week, with Sunday as the only full rest day. Because the export shows pull, legs, and chest completed July 16-18 on three consecutive days, every bridge session stays low-volume and submaximal: technique work Monday and Tuesday, upper-chest and side-delt technique Wednesday, posterior-chain re-entry Thursday, a light primer Friday, and a chest reset Saturday.",
         days: [
           day({
             id: "2026-07-20",
             dow: "Mon",
             dom: 20,
             month: "Jul",
-            type: "rest",
-            title: "Full Rest",
-            footer: "Full rest after the late Week 10 three-day training stack. Do not add a make-up leg session.",
-            exercises: []
+            type: "legs",
+            title: "Legs & Core - Technique",
+            footer: "Use RPE 5-6 after the late Week 10 training stack. Smooth reps only.",
+            exercises: [
+              exercise({ name: "Machine Leg Press", target: "75 kg - 2 x 10", primary: true, tag: "reset", defaultRest: 120, sets: repeatSet(2, 10, 75) }),
+              exercise({ name: "Smith Machine Squats", target: "30 kg - 2 x 10", defaultRest: 120, sets: repeatSet(2, 10, 30) }),
+              exercise({ name: "Seated Leg Curls", target: "35 kg - 2 x 12", sets: repeatSet(2, 12, 35) }),
+              exercise({ name: "Seated Calf Raises", target: "30 kg - 2 x 15", sets: repeatSet(2, 15, 30) }),
+              exercise({ name: "Abdominal Machine", target: "40 kg - 2 x 12", sets: repeatSet(2, 12, 40) })
+            ]
           }),
           day({
             id: "2026-07-21",
             dow: "Tue",
             dom: 21,
             month: "Jul",
-            type: "rest",
-            title: "Active Recovery",
-            footer: "20-30 min easy walking and gentle mobility only. No lifting.",
-            exercises: []
+            type: "pull",
+            title: "Back & Biceps - Technique",
+            footer: "Keep two or three reps in reserve on every set. This is a reset, not another test day.",
+            exercises: [
+              exercise({ name: "Lat Pulldown", target: "40 kg - 2 x 10", primary: true, tag: "reset", defaultRest: 120, sets: repeatSet(2, 10, 40) }),
+              exercise({ name: "Seated Cable Row", target: "40 kg - 2 x 10", defaultRest: 120, sets: repeatSet(2, 10, 40) }),
+              exercise({ name: "High Cable Row / Face Pull", target: "35 kg - 2 x 12", sets: repeatSet(2, 12, 35) }),
+              exercise({ name: "DB Bicep Curls", target: "16 kg total - 2 x 10", sets: repeatSet(2, 10, 16) })
+            ]
           }),
           day({
             id: "2026-07-22",
             dow: "Wed",
             dom: 22,
             month: "Jul",
-            type: "rest",
-            title: "Full Rest",
-            subtitle: "Prepare for the hinge re-entry.",
-            footer: "No catch-up lifting. Arrive fresh for the first hinge session in four weeks.",
-            exercises: []
+            type: "primer",
+            title: "Upper Chest & Side Delts - Technique",
+            subtitle: "Second upper-chest exposure, low fatigue.",
+            footer: "Stay at RPE 5-6. This is technique volume for the muscles that need more work, not a second chest test.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "20 kg total - 2 x 8", primary: true, tag: "technique", defaultRest: 120, sets: repeatSet(2, 8, 20) }),
+              exercise({ name: "Cable Lateral Raises", target: "5 kg - 2 x 12", sets: repeatSet(2, 12, 5) })
+            ]
           }),
           day({
             id: "2026-07-23",
@@ -1299,10 +1313,15 @@
             dow: "Fri",
             dom: 24,
             month: "Jul",
-            type: "rest",
-            title: "Full Rest",
-            footer: "Full rest between the bridge sessions. No Friday primer.",
-            exercises: []
+            type: "primer",
+            title: "Lats & Rear Delts - Technique",
+            footer: "Use controlled contractions and leave three reps in reserve. Do not turn Friday into a heavy pull day.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "20 kg - 2 x 10 / side", primary: true, tag: "technique", defaultRest: 120, sets: repeatSet(2, 10, 20) }),
+              exercise({ name: "Rear Delt Fly", target: "15 kg - 2 x 12", sets: repeatSet(2, 12, 15) }),
+              exercise({ name: "DB Bicep Curls", target: "16 kg total - 1 x 10", tag: "arms", sets: repeatSet(1, 10, 16) }),
+              exercise({ name: "Tricep Pushdowns", target: "22.5 kg - 1 x 12", tag: "arms", sets: repeatSet(1, 12, 22.5) })
+            ]
           }),
           day({
             id: "2026-07-25",
@@ -1316,7 +1335,7 @@
               exercise({ name: "Incline DB Press", target: "25 kg total - 2 x 8", primary: true, tag: "reset", defaultRest: 150, note: "12.5 kg per hand. Use this as technique work before 30 kg returns next week.", sets: repeatSet(2, 8, 25) }),
               exercise({ name: "Machine Chest Press", target: "25 kg - 2 x 10", defaultRest: 120, sets: repeatSet(2, 10, 25) }),
               exercise({ name: "Machine Pec Fly", target: "25 kg - 2 x 10", sets: repeatSet(2, 10, 25) }),
-              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 1 x 12", sets: repeatSet(1, 12, 7.5) })
+              exercise({ name: "Cable Lateral Raises", target: "5 kg - 2 x 12", sets: repeatSet(2, 12, 5) })
             ]
           }),
           day({
@@ -1336,10 +1355,10 @@
         num: 12,
         title: "Week 12 - Reset & Rebuild",
         phase: "Consolidate",
-        sub: "Four-day recovery split",
-        subtitle: "Four-day recovery split",
+        sub: "Six-day split, four progressive days",
+        subtitle: "Six-day split, four progressive days",
         dateRange: "Jul 27-Aug 2",
-        notice: "The export showed the Week 10 lower-body sessions sliding late, hamstrings and the Friday primer being skipped, then the 30 kg incline test falling to 6 / 7 / 7 / 4. This block removes the primer and protects Wednesday and Friday for recovery. Use 2-3 minutes on primary lifts; do not compress missed sessions into back-to-back catch-up days.",
+        notice: "Train Monday through Saturday and keep Sunday as the only full rest day. The four progression sessions remain Monday, Tuesday, Thursday, and Saturday; Wednesday adds upper-chest and side-delt volume, while Friday adds lats, rear delts, and brief direct arm work. Keep both secondary days submaximal and use 2-3 minutes on primary lifts.",
         days: [
           day({
             id: "2026-07-27",
@@ -1377,11 +1396,14 @@
             dow: "Wed",
             dom: 29,
             month: "Jul",
-            type: "rest",
-            title: "Active Recovery",
-            subtitle: "Recover before the hinge session.",
-            footer: "20-30 min easy walk plus gentle hip and shoulder mobility. No lifting and no missed-session catch-up.",
-            exercises: []
+            type: "primer",
+            title: "Upper Chest & Side Delts",
+            subtitle: "Second weekly upper-chest exposure.",
+            footer: "Use controlled reps and keep two or three reps in reserve. Saturday remains the heavier chest day.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "20 kg total - 2 x 10", primary: true, tag: "volume", defaultRest: 120, sets: repeatSet(2, 10, 20) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 12", sets: repeatSet(2, 12, 7.5) })
+            ]
           }),
           day({
             id: "2026-07-30",
@@ -1404,11 +1426,16 @@
             dow: "Fri",
             dom: 31,
             month: "Jul",
-            type: "rest",
-            title: "Full Rest",
-            subtitle: "Protect Saturday performance.",
-            footer: "Full rest. The Friday primer is removed so chest gets a true recovery day.",
-            exercises: []
+            type: "primer",
+            title: "Lats, Rear Delts & Arms",
+            subtitle: "Second pull exposure plus brief arm work.",
+            footer: "Keep the back work controlled and stop the brief arm sets with one or two reps in reserve.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "20 kg - 2 x 10 / side", primary: true, tag: "lat volume", defaultRest: 120, sets: repeatSet(2, 10, 20) }),
+              exercise({ name: "Rear Delt Fly", target: "17.5 kg - 2 x 12", sets: repeatSet(2, 12, 17.5) }),
+              exercise({ name: "DB Bicep Curls", target: "16 kg total - 1 x 12", tag: "arms", sets: repeatSet(1, 12, 16) }),
+              exercise({ name: "Tricep Pushdowns", target: "25 kg - 1 x 12", tag: "arms", sets: repeatSet(1, 12, 25) })
+            ]
           }),
           day({
             id: "2026-08-01",
@@ -1423,7 +1450,6 @@
               exercise({ name: "Machine Chest Press", target: "35 kg - 3 x 8", defaultRest: 120, sets: repeatSet(3, 8, 35) }),
               exercise({ name: "Machine Pec Fly", target: "35 kg - 2 x 10", defaultRest: 120, sets: repeatSet(2, 10, 35) }),
               exercise({ name: "Assisted Dips", target: "40 kg assist - 2 x 8", note: "Keep one or two reps in reserve.", sets: repeatSet(2, 8, 40) }),
-              exercise({ name: "DB Shoulder Press", target: "16 kg total - 2 x 10", sets: repeatSet(2, 10, 16) }),
               exercise({ name: "Cable Lateral Raises", target: "10 kg - 2 x 12", sets: repeatSet(2, 12, 10) })
             ]
           }),
@@ -1447,7 +1473,7 @@
         sub: "Add reps, not load",
         subtitle: "Add reps, not load",
         dateRange: "Aug 3-9",
-        notice: "Keep the four-day split. This week adds one rep per working set on the proven lifts while hamstrings return to the June working range.",
+        notice: "Keep the six-day rhythm with Sunday fully off. Add reps on the four main days, then progress Wednesday upper-chest/delts and Friday lats/rear-delts with brief direct arm work only while those sessions stay at RPE 6-7.",
         days: [
           day({
             id: "2026-08-03",
@@ -1483,10 +1509,13 @@
             dow: "Wed",
             dom: 5,
             month: "Aug",
-            type: "rest",
-            title: "Active Recovery",
-            footer: "20-30 min easy walk and mobility only. Keep fatigue low enough to make Thursday repeatable.",
-            exercises: []
+            type: "primer",
+            title: "Upper Chest & Side Delts",
+            footer: "Add reps, not strain. Keep two reps in reserve so Thursday remains repeatable.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "20 kg total - 2 x 11", primary: true, tag: "volume", defaultRest: 120, sets: repeatSet(2, 11, 20) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 13", sets: repeatSet(2, 13, 7.5) })
+            ]
           }),
           day({
             id: "2026-08-06",
@@ -1509,10 +1538,15 @@
             dow: "Fri",
             dom: 7,
             month: "Aug",
-            type: "rest",
-            title: "Full Rest",
-            footer: "Full rest. Eat, hydrate, and arrive at Saturday without residual pressing fatigue.",
-            exercises: []
+            type: "primer",
+            title: "Lats, Rear Delts & Arms",
+            footer: "Second pull exposure plus brief direct arm work. No grinding reps and no failure work before Saturday chest.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "20 kg - 2 x 11 / side", primary: true, tag: "lat volume", defaultRest: 120, sets: repeatSet(2, 11, 20) }),
+              exercise({ name: "Rear Delt Fly", target: "17.5 kg - 2 x 13", sets: repeatSet(2, 13, 17.5) }),
+              exercise({ name: "Incline DB Curls", target: "16 kg total - 1 x 13", tag: "arms", sets: repeatSet(1, 13, 16) }),
+              exercise({ name: "Tricep Pushdowns", target: "25 kg - 1 x 13", tag: "arms", sets: repeatSet(1, 13, 25) })
+            ]
           }),
           day({
             id: "2026-08-08",
@@ -1526,7 +1560,6 @@
               exercise({ name: "Machine Chest Press", target: "35 kg - 3 x 9", defaultRest: 120, sets: repeatSet(3, 9, 35) }),
               exercise({ name: "Machine Pec Fly", target: "35 kg - 2 x 11", defaultRest: 120, sets: repeatSet(2, 11, 35) }),
               exercise({ name: "Assisted Dips", target: "40 kg assist - 2 x 9", note: "Keep one or two reps in reserve.", sets: repeatSet(2, 9, 40) }),
-              exercise({ name: "DB Shoulder Press", target: "18 kg total - 2 x 8", sets: repeatSet(2, 8, 18) }),
               exercise({ name: "Cable Lateral Raises", target: "10 kg - 2 x 13", sets: repeatSet(2, 13, 10) })
             ]
           }),
@@ -1550,7 +1583,7 @@
         sub: "Finish the top of each rep range",
         subtitle: "Finish the top of each rep range",
         dateRange: "Aug 10-16",
-        notice: "This is the peak accumulation week. Earn each target from Week 13; repeat the prior week on any exercise that missed a set.",
+        notice: "This is the peak six-day accumulation week. Earn each target from Week 13 and repeat the prior prescription on any exercise that missed a set. Wednesday emphasizes upper chest and delts; Friday emphasizes lats and rear delts with brief direct arm work and no failure work.",
         days: [
           day({
             id: "2026-08-10",
@@ -1586,10 +1619,13 @@
             dow: "Wed",
             dom: 12,
             month: "Aug",
-            type: "rest",
-            title: "Active Recovery",
-            footer: "Easy walking and mobility only. Accumulated fatigue should be noticeable but not disruptive.",
-            exercises: []
+            type: "primer",
+            title: "Upper Chest & Side Delts - Peak Volume",
+            footer: "Peak volume, not peak effort. Keep one or two clean reps in reserve on every set.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "20 kg total - 2 x 12", primary: true, tag: "volume", defaultRest: 120, sets: repeatSet(2, 12, 20) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 15", tag: "delt volume", sets: repeatSet(2, 15, 7.5) })
+            ]
           }),
           day({
             id: "2026-08-13",
@@ -1611,10 +1647,15 @@
             dow: "Fri",
             dom: 14,
             month: "Aug",
-            type: "rest",
-            title: "Full Rest",
-            footer: "Full rest before the peak chest session. No primer and no make-up work.",
-            exercises: []
+            type: "primer",
+            title: "Lats, Rear Delts & Arms",
+            footer: "Keep every rep controlled. Stop the brief arm sets one rep short of failure so Saturday pressing stays clean.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "20 kg - 2 x 12 / side", primary: true, tag: "lat volume", defaultRest: 120, sets: repeatSet(2, 12, 20) }),
+              exercise({ name: "Rear Delt Fly", target: "17.5 kg - 2 x 15", sets: repeatSet(2, 15, 17.5) }),
+              exercise({ name: "Incline DB Curls", target: "16 kg total - 1 x 15", tag: "arms", sets: repeatSet(1, 15, 16) }),
+              exercise({ name: "Tricep Pushdowns", target: "25 kg - 1 x 15", tag: "arms", sets: repeatSet(1, 15, 25) })
+            ]
           }),
           day({
             id: "2026-08-15",
@@ -1629,7 +1670,6 @@
               exercise({ name: "Machine Chest Press", target: "35 kg - 3 x 10", defaultRest: 120, sets: repeatSet(3, 10, 35) }),
               exercise({ name: "Machine Pec Fly", target: "35 kg - 2 x 12", defaultRest: 120, sets: repeatSet(2, 12, 35) }),
               exercise({ name: "Assisted Dips", target: "40 kg assist - 2 x 10", note: "Controlled reps, one or two left in reserve.", sets: repeatSet(2, 10, 40) }),
-              exercise({ name: "DB Shoulder Press", target: "18 kg total - 2 x 10", sets: repeatSet(2, 10, 18) }),
               exercise({ name: "Cable Lateral Raises", target: "10 kg - 2 x 15", sets: repeatSet(2, 15, 10) })
             ]
           }),
@@ -1653,7 +1693,7 @@
         sub: "Absorb three weeks of work",
         subtitle: "Absorb three weeks of work",
         dateRange: "Aug 17-23",
-        notice: "Planned deload: roughly one-third fewer sets and 15-25% less load. Keep the same four-day rhythm so recovery does not turn into schedule drift.",
+        notice: "Planned six-day deload: keep Monday through Saturday training and Sunday fully off, but cut the secondary days and main sessions to roughly half volume at easy loads. Every set should finish with at least three reps in reserve.",
         days: [
           day({
             id: "2026-08-17",
@@ -1689,10 +1729,13 @@
             dow: "Wed",
             dom: 19,
             month: "Aug",
-            type: "rest",
-            title: "Full Rest",
-            footer: "Full rest. Skip optional cardio this week if sleep or soreness is off baseline.",
-            exercises: []
+            type: "primer",
+            title: "Upper Chest & Delts (Deload)",
+            footer: "Technique only at RPE 5. Keep the session short and leave the gym fresher than you entered.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "20 kg total - 1 x 10", primary: true, defaultRest: 120, sets: repeatSet(1, 10, 20) }),
+              exercise({ name: "Cable Lateral Raises", target: "5 kg - 1 x 12", sets: repeatSet(1, 12, 5) })
+            ]
           }),
           day({
             id: "2026-08-20",
@@ -1713,10 +1756,15 @@
             dow: "Fri",
             dom: 21,
             month: "Aug",
-            type: "rest",
-            title: "Full Rest",
-            footer: "Full rest. Keep Saturday easy too; the goal is to leave the gym fresher than you entered.",
-            exercises: []
+            type: "primer",
+            title: "Lats, Rear Delts & Arms (Deload)",
+            footer: "One easy pass through each movement. No pump chasing and no failure work.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "15 kg - 1 x 10 / side", primary: true, defaultRest: 120, sets: repeatSet(1, 10, 15) }),
+              exercise({ name: "Rear Delt Fly", target: "15 kg - 1 x 12", sets: repeatSet(1, 12, 15) }),
+              exercise({ name: "Incline DB Curls", target: "12 kg total - 1 x 12", tag: "arms", sets: repeatSet(1, 12, 12) }),
+              exercise({ name: "Tricep Pushdowns", target: "20 kg - 1 x 12", tag: "arms", sets: repeatSet(1, 12, 20) })
+            ]
           }),
           day({
             id: "2026-08-22",
@@ -1730,8 +1778,7 @@
               exercise({ name: "Incline DB Press", target: "25 kg total - 2 x 8", primary: true, defaultRest: 120, sets: repeatSet(2, 8, 25) }),
               exercise({ name: "Machine Chest Press", target: "25 kg - 2 x 10", sets: repeatSet(2, 10, 25) }),
               exercise({ name: "Machine Pec Fly", target: "25 kg - 2 x 10", sets: repeatSet(2, 10, 25) }),
-              exercise({ name: "DB Shoulder Press", target: "16 kg total - 1 x 10", sets: repeatSet(1, 10, 16) }),
-              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 1 x 12", sets: repeatSet(1, 12, 7.5) })
+              exercise({ name: "Cable Lateral Raises", target: "5 kg - 1 x 12", sets: repeatSet(1, 12, 5) })
             ]
           }),
           day({
@@ -1749,12 +1796,12 @@
       {
         id: "w16",
         num: 16,
-        title: "Week 16 - Test Week",
+        title: "Week 16 - Controlled Baseline",
         phase: "Test",
-        sub: "Controlled PRs, no gauntlets",
-        subtitle: "Controlled PRs, no gauntlets",
+        sub: "Record clean working baselines",
+        subtitle: "Record clean working baselines",
         dateRange: "Aug 24-30",
-        notice: "Test the progress built in Weeks 12-14 without repeating Week 10's fatigue stack. Wednesday and Friday remain protected recovery days, and the incline target is 4 x 8 at 30 kg - not 35 kg.",
+        notice: "Record controlled baselines from the progress built in Weeks 12-14 without repeating Week 10's fatigue stack. Every test load is conditional on completing the Week 14 target cleanly; otherwise repeat the last fully completed load. Keep Wednesday and Friday at RPE 5-6, and use Week 16 results as the loads to consolidate in Week 17. The incline target remains 4 x 8 at 30 kg - not 35 kg.",
         days: [
           day({
             id: "2026-08-24",
@@ -1790,10 +1837,13 @@
             dow: "Wed",
             dom: 26,
             month: "Aug",
-            type: "rest",
-            title: "Active Recovery",
-            footer: "20-30 min easy walk and mobility. Do not move Thursday's session forward.",
-            exercises: []
+            type: "primer",
+            title: "Upper Chest & Delts - Test Primer",
+            footer: "Technique-only volume. Finish every set with at least three reps in reserve and do not move Thursday forward.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "20 kg total - 1 x 8", primary: true, defaultRest: 120, sets: repeatSet(1, 8, 20) }),
+              exercise({ name: "Cable Lateral Raises", target: "5 kg - 1 x 12", sets: repeatSet(1, 12, 5) })
+            ]
           }),
           day({
             id: "2026-08-27",
@@ -1815,10 +1865,15 @@
             dow: "Fri",
             dom: 28,
             month: "Aug",
-            type: "rest",
-            title: "Full Rest",
-            footer: "Full rest. Saturday's chest result matters more than checking a fifth-session box.",
-            exercises: []
+            type: "primer",
+            title: "Lats, Rear Delts & Arms - Test Primer",
+            footer: "Easy quality reps only. Saturday's chest result matters more than Friday load or pump.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "15 kg - 1 x 8 / side", primary: true, defaultRest: 120, sets: repeatSet(1, 8, 15) }),
+              exercise({ name: "Rear Delt Fly", target: "15 kg - 1 x 10", sets: repeatSet(1, 10, 15) }),
+              exercise({ name: "Incline DB Curls", target: "12 kg total - 1 x 10", tag: "arms", sets: repeatSet(1, 10, 12) }),
+              exercise({ name: "Tricep Pushdowns", target: "20 kg - 1 x 10", tag: "arms", sets: repeatSet(1, 10, 20) })
+            ]
           }),
           day({
             id: "2026-08-29",
@@ -1833,8 +1888,7 @@
               exercise({ name: "Machine Chest Press", target: "37.5 kg - 3 x 8", tag: "PR attempt", defaultRest: 150, sets: repeatSet(3, 8, 37.5) }),
               exercise({ name: "Machine Pec Fly", target: "40 kg - 2 x 8", defaultRest: 120, sets: repeatSet(2, 8, 40) }),
               exercise({ name: "Assisted Dips", target: "35 kg assist - 2 x 8", tag: "rep PR", note: "Keep one rep in reserve; shoulder comfort is the gate.", sets: repeatSet(2, 8, 35) }),
-              exercise({ name: "DB Shoulder Press", target: "20 kg total - 2 x 8", tag: "rep PR", sets: repeatSet(2, 8, 20) }),
-              exercise({ name: "Cable Lateral Raises", target: "12.5 kg - 2 x 10", tag: "rep PR", sets: repeatSet(2, 10, 12.5) })
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 1 x 12", sets: repeatSet(1, 12, 7.5) })
             ]
           }),
           day({
@@ -1843,9 +1897,333 @@
             dom: 30,
             month: "Aug",
             type: "rest",
-            title: "Cycle Complete / Full Rest",
-            footer: "Full rest. Export the completed block before programming the next cycle.",
+            title: "Block Transition / Full Rest",
+            footer: "Full rest. Record Week 16 outcomes; Week 17 begins by repeating the last clean loads.",
             exercises: []
+          })
+        ]
+      },
+      {
+        id: "w17",
+        num: 17,
+        title: "Week 17 - Post-Test Consolidation",
+        phase: "Consolidate",
+        sub: "Own the clean baseline",
+        subtitle: "Own the clean baseline",
+        dateRange: "Aug 31-Sep 6",
+        notice: "Repeat the Week 16 load only when every prescribed rep was clean. If a baseline attempt missed, use the last fully completed load and keep the listed reps. Do not increase load this week; Wednesday and Friday remain short priority sessions and Sunday is fully off.",
+        days: [
+          day({
+            id: "2026-08-31",
+            dow: "Mon",
+            dom: 31,
+            month: "Aug",
+            type: "legs",
+            title: "Legs & Core - Consolidate",
+            exercises: [
+              exercise({ name: "Machine Leg Press", target: "97.5 kg - 3 x 8", primary: true, tag: "consolidate", defaultRest: 180, sets: repeatSet(3, 8, 97.5) }),
+              exercise({ name: "Smith Machine Squats", target: "42.5 kg - 3 x 8", defaultRest: 150, sets: repeatSet(3, 8, 42.5) }),
+              exercise({ name: "Seated Leg Curls", target: "50 kg - 3 x 10", defaultRest: 120, sets: repeatSet(3, 10, 50) }),
+              exercise({ name: "Seated Calf Raises", target: "45 kg - 3 x 15", defaultRest: 90, sets: repeatSet(3, 15, 45) }),
+              exercise({ name: "Abdominal Machine", target: "60 kg - 3 x 10", defaultRest: 90, sets: repeatSet(3, 10, 60) })
+            ]
+          }),
+          day({
+            id: "2026-09-01",
+            dow: "Tue",
+            dom: 1,
+            month: "Sep",
+            type: "pull",
+            title: "Back & Biceps - Consolidate",
+            exercises: [
+              exercise({ name: "Lat Pulldown", target: "52.5 kg - 3 x 8", primary: true, tag: "consolidate", defaultRest: 150, sets: repeatSet(3, 8, 52.5) }),
+              exercise({ name: "Seated Cable Row", target: "52.5 kg - 3 x 8", defaultRest: 150, sets: repeatSet(3, 8, 52.5) }),
+              exercise({ name: "High Cable Row / Face Pull", target: "47.5 kg - 3 x 10", defaultRest: 120, sets: repeatSet(3, 10, 47.5) }),
+              exercise({ name: "DB Bicep Curls", target: "22.5 kg total - 3 x 8", defaultRest: 90, sets: repeatSet(3, 8, 22.5) })
+            ]
+          }),
+          day({
+            id: "2026-09-02",
+            dow: "Wed",
+            dom: 2,
+            month: "Sep",
+            type: "primer",
+            title: "Upper Chest & Side Delts",
+            footer: "RPE 6 with three reps in reserve. Saturday remains the heavier upper-chest session.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "20 kg total - 2 x 10", primary: true, tag: "volume", defaultRest: 120, sets: repeatSet(2, 10, 20) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 12", defaultRest: 75, sets: repeatSet(2, 12, 7.5) })
+            ]
+          }),
+          day({
+            id: "2026-09-03",
+            dow: "Thu",
+            dom: 3,
+            month: "Sep",
+            type: "ham",
+            title: "Hamstrings & Glutes - Consolidate",
+            exercises: [
+              exercise({ name: "DB Romanian Deadlift", target: "42.5 kg total - 3 x 8", primary: true, tag: "consolidate", defaultRest: 180, sets: repeatSet(3, 8, 42.5) }),
+              exercise({ name: "High/Wide Leg Press", target: "87.5 kg - 3 x 8", defaultRest: 150, sets: repeatSet(3, 8, 87.5) }),
+              exercise({ name: "Lying Leg Curls", target: "50 kg - 3 x 10", defaultRest: 120, sets: repeatSet(3, 10, 50) }),
+              exercise({ name: "Walking Lunges", target: "20 kg total - 2 x 12", defaultRest: 120, sets: repeatSet(2, 12, 20) }),
+              exercise({ name: "Abdominal Machine", target: "57.5 kg - 2 x 10", defaultRest: 90, sets: repeatSet(2, 10, 57.5) })
+            ]
+          }),
+          day({
+            id: "2026-09-04",
+            dow: "Fri",
+            dom: 4,
+            month: "Sep",
+            type: "primer",
+            title: "Lats, Rear Delts & Arms",
+            footer: "RPE 6-7. Use one focused set each for biceps and triceps, stopping one or two reps short of failure before Saturday.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "20 kg - 2 x 10 / side", primary: true, tag: "lat volume", defaultRest: 120, sets: repeatSet(2, 10, 20) }),
+              exercise({ name: "Rear Delt Fly", target: "17.5 kg - 2 x 12", defaultRest: 90, sets: repeatSet(2, 12, 17.5) }),
+              exercise({ name: "Incline DB Curls", target: "16 kg total - 1 x 12", tag: "arms", defaultRest: 90, sets: repeatSet(1, 12, 16) }),
+              exercise({ name: "Tricep Pushdowns", target: "25 kg - 1 x 12", tag: "arms", defaultRest: 90, sets: repeatSet(1, 12, 25) })
+            ]
+          }),
+          day({
+            id: "2026-09-05",
+            dow: "Sat",
+            dom: 5,
+            month: "Sep",
+            type: "chest",
+            title: "Chest - Own the Baseline",
+            footer: "Repeat the Week 16 result cleanly. Do not add load or forced reps.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "30 kg total - 4 x 8", primary: true, tag: "consolidate", defaultRest: 180, sets: repeatSet(4, 8, 30) }),
+              exercise({ name: "Machine Chest Press", target: "37.5 kg - 3 x 8", defaultRest: 150, sets: repeatSet(3, 8, 37.5) }),
+              exercise({ name: "Machine Pec Fly", target: "40 kg - 2 x 8", defaultRest: 120, sets: repeatSet(2, 8, 40) }),
+              exercise({ name: "Assisted Dips", target: "35 kg assist - 2 x 8", defaultRest: 120, sets: repeatSet(2, 8, 35) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 12", defaultRest: 75, sets: repeatSet(2, 12, 7.5) })
+            ]
+          }),
+          day({
+            id: "2026-09-06",
+            dow: "Sun",
+            dom: 6,
+            month: "Sep",
+            type: "rest",
+            title: "Full Rest",
+            footer: "Full rest. No catch-up training.",
+            exercises: []
+          })
+        ]
+      },
+      {
+        id: "w18",
+        num: 18,
+        title: "Week 18 - Rep Build",
+        phase: "Load",
+        sub: "Add one rep, keep load",
+        subtitle: "Add one rep, keep load",
+        dateRange: "Sep 7-13",
+        notice: "Add only the listed rep after Week 17 was clean; otherwise repeat Week 17. Keep every load unchanged and avoid failure work so six-day frequency remains sustainable.",
+        days: [
+          day({
+            id: "2026-09-07", dow: "Mon", dom: 7, month: "Sep", type: "legs", title: "Legs & Core - Rep Build",
+            exercises: [
+              exercise({ name: "Machine Leg Press", target: "97.5 kg - 3 x 9", primary: true, tag: "reps", defaultRest: 180, sets: repeatSet(3, 9, 97.5) }),
+              exercise({ name: "Smith Machine Squats", target: "42.5 kg - 3 x 9", defaultRest: 150, sets: repeatSet(3, 9, 42.5) }),
+              exercise({ name: "Seated Leg Curls", target: "50 kg - 3 x 11", defaultRest: 120, sets: repeatSet(3, 11, 50) }),
+              exercise({ name: "Seated Calf Raises", target: "45 kg - 3 x 18", defaultRest: 90, sets: repeatSet(3, 18, 45) }),
+              exercise({ name: "Abdominal Machine", target: "60 kg - 3 x 11", defaultRest: 90, sets: repeatSet(3, 11, 60) })
+            ]
+          }),
+          day({
+            id: "2026-09-08", dow: "Tue", dom: 8, month: "Sep", type: "pull", title: "Back & Biceps - Rep Build",
+            exercises: [
+              exercise({ name: "Lat Pulldown", target: "52.5 kg - 3 x 9", primary: true, tag: "reps", defaultRest: 150, sets: repeatSet(3, 9, 52.5) }),
+              exercise({ name: "Seated Cable Row", target: "52.5 kg - 3 x 9", defaultRest: 150, sets: repeatSet(3, 9, 52.5) }),
+              exercise({ name: "High Cable Row / Face Pull", target: "47.5 kg - 3 x 11", defaultRest: 120, sets: repeatSet(3, 11, 47.5) }),
+              exercise({ name: "DB Bicep Curls", target: "22.5 kg total - 3 x 9", defaultRest: 90, sets: repeatSet(3, 9, 22.5) })
+            ]
+          }),
+          day({
+            id: "2026-09-09", dow: "Wed", dom: 9, month: "Sep", type: "primer", title: "Upper Chest & Side Delts - Rep Build",
+            footer: "Add reps, not strain. Keep three reps in reserve.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "20 kg total - 2 x 11", primary: true, tag: "volume", defaultRest: 120, sets: repeatSet(2, 11, 20) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 13", defaultRest: 75, sets: repeatSet(2, 13, 7.5) })
+            ]
+          }),
+          day({
+            id: "2026-09-10", dow: "Thu", dom: 10, month: "Sep", type: "ham", title: "Hamstrings & Glutes - Rep Build",
+            exercises: [
+              exercise({ name: "DB Romanian Deadlift", target: "42.5 kg total - 3 x 9", primary: true, tag: "reps", defaultRest: 180, sets: repeatSet(3, 9, 42.5) }),
+              exercise({ name: "High/Wide Leg Press", target: "87.5 kg - 3 x 9", defaultRest: 150, sets: repeatSet(3, 9, 87.5) }),
+              exercise({ name: "Lying Leg Curls", target: "50 kg - 3 x 11", defaultRest: 120, sets: repeatSet(3, 11, 50) }),
+              exercise({ name: "Walking Lunges", target: "20 kg total - 2 x 12", defaultRest: 120, sets: repeatSet(2, 12, 20) }),
+              exercise({ name: "Abdominal Machine", target: "57.5 kg - 2 x 11", defaultRest: 90, sets: repeatSet(2, 11, 57.5) })
+            ]
+          }),
+          day({
+            id: "2026-09-11", dow: "Fri", dom: 11, month: "Sep", type: "primer", title: "Lats, Rear Delts & Arms",
+            footer: "Progress reps while keeping the session submaximal. No failure before Saturday.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "20 kg - 2 x 11 / side", primary: true, tag: "lat volume", defaultRest: 120, sets: repeatSet(2, 11, 20) }),
+              exercise({ name: "Rear Delt Fly", target: "17.5 kg - 2 x 13", defaultRest: 90, sets: repeatSet(2, 13, 17.5) }),
+              exercise({ name: "Incline DB Curls", target: "16 kg total - 1 x 13", tag: "arms", defaultRest: 90, sets: repeatSet(1, 13, 16) }),
+              exercise({ name: "Tricep Pushdowns", target: "25 kg - 1 x 13", tag: "arms", defaultRest: 90, sets: repeatSet(1, 13, 25) })
+            ]
+          }),
+          day({
+            id: "2026-09-12", dow: "Sat", dom: 12, month: "Sep", type: "chest", title: "Chest - Rep Build",
+            footer: "Add one rep per set only if Week 17 was clean. Use three-minute rests on incline press.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "30 kg total - 4 x 9", primary: true, tag: "reps", defaultRest: 180, sets: repeatSet(4, 9, 30) }),
+              exercise({ name: "Machine Chest Press", target: "37.5 kg - 3 x 9", defaultRest: 150, sets: repeatSet(3, 9, 37.5) }),
+              exercise({ name: "Machine Pec Fly", target: "40 kg - 2 x 9", defaultRest: 120, sets: repeatSet(2, 9, 40) }),
+              exercise({ name: "Assisted Dips", target: "35 kg assist - 2 x 9", defaultRest: 120, sets: repeatSet(2, 9, 35) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 13", defaultRest: 75, sets: repeatSet(2, 13, 7.5) })
+            ]
+          }),
+          day({ id: "2026-09-13", dow: "Sun", dom: 13, month: "Sep", type: "rest", title: "Full Rest", footer: "Full rest. No catch-up training.", exercises: [] })
+        ]
+      },
+      {
+        id: "w19",
+        num: 19,
+        title: "Week 19 - Top of the Range",
+        phase: "Load +",
+        sub: "Finish clean, no forced reps",
+        subtitle: "Finish clean, no forced reps",
+        dateRange: "Sep 14-20",
+        notice: "Use the same loads for a third week and finish the rep range. Only progress an exercise when Week 18 was complete; otherwise repeat Week 18. The 30 kg incline bracket opens to 35 kg only after all four sets of ten are clean.",
+        days: [
+          day({
+            id: "2026-09-14", dow: "Mon", dom: 14, month: "Sep", type: "legs", title: "Legs & Core - Top Reps",
+            exercises: [
+              exercise({ name: "Machine Leg Press", target: "97.5 kg - 3 x 10", primary: true, tag: "rep PR", defaultRest: 180, sets: repeatSet(3, 10, 97.5) }),
+              exercise({ name: "Smith Machine Squats", target: "42.5 kg - 3 x 10", defaultRest: 150, sets: repeatSet(3, 10, 42.5) }),
+              exercise({ name: "Seated Leg Curls", target: "50 kg - 3 x 12", defaultRest: 120, sets: repeatSet(3, 12, 50) }),
+              exercise({ name: "Seated Calf Raises", target: "45 kg - 3 x 20", defaultRest: 90, sets: repeatSet(3, 20, 45) }),
+              exercise({ name: "Abdominal Machine", target: "60 kg - 3 x 12", defaultRest: 90, sets: repeatSet(3, 12, 60) })
+            ]
+          }),
+          day({
+            id: "2026-09-15", dow: "Tue", dom: 15, month: "Sep", type: "pull", title: "Back & Biceps - Top Reps",
+            exercises: [
+              exercise({ name: "Lat Pulldown", target: "52.5 kg - 3 x 10", primary: true, tag: "rep PR", defaultRest: 150, sets: repeatSet(3, 10, 52.5) }),
+              exercise({ name: "Seated Cable Row", target: "52.5 kg - 3 x 10", defaultRest: 150, sets: repeatSet(3, 10, 52.5) }),
+              exercise({ name: "High Cable Row / Face Pull", target: "47.5 kg - 3 x 12", defaultRest: 120, sets: repeatSet(3, 12, 47.5) }),
+              exercise({ name: "DB Bicep Curls", target: "22.5 kg total - 3 x 10", defaultRest: 90, sets: repeatSet(3, 10, 22.5) })
+            ]
+          }),
+          day({
+            id: "2026-09-16", dow: "Wed", dom: 16, month: "Sep", type: "primer", title: "Upper Chest & Side Delts - Top Reps",
+            footer: "RPE 6-7 only. Saturday owns the milestone work.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "20 kg total - 2 x 12", primary: true, tag: "volume", defaultRest: 120, sets: repeatSet(2, 12, 20) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 15", defaultRest: 75, sets: repeatSet(2, 15, 7.5) })
+            ]
+          }),
+          day({
+            id: "2026-09-17", dow: "Thu", dom: 17, month: "Sep", type: "ham", title: "Hamstrings & Glutes - Top Reps",
+            exercises: [
+              exercise({ name: "DB Romanian Deadlift", target: "42.5 kg total - 3 x 10", primary: true, tag: "rep PR", defaultRest: 180, sets: repeatSet(3, 10, 42.5) }),
+              exercise({ name: "High/Wide Leg Press", target: "87.5 kg - 3 x 10", defaultRest: 150, sets: repeatSet(3, 10, 87.5) }),
+              exercise({ name: "Lying Leg Curls", target: "50 kg - 3 x 12", defaultRest: 120, sets: repeatSet(3, 12, 50) }),
+              exercise({ name: "Walking Lunges", target: "20 kg total - 2 x 12", defaultRest: 120, sets: repeatSet(2, 12, 20) }),
+              exercise({ name: "Abdominal Machine", target: "57.5 kg - 2 x 12", defaultRest: 90, sets: repeatSet(2, 12, 57.5) })
+            ]
+          }),
+          day({
+            id: "2026-09-18", dow: "Fri", dom: 18, month: "Sep", type: "primer", title: "Lats, Rear Delts & Arms",
+            footer: "Keep the session submaximal and stop every set before failure so Saturday remains protected.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "20 kg - 2 x 12 / side", primary: true, tag: "lat volume", defaultRest: 120, sets: repeatSet(2, 12, 20) }),
+              exercise({ name: "Rear Delt Fly", target: "17.5 kg - 2 x 15", defaultRest: 90, sets: repeatSet(2, 15, 17.5) }),
+              exercise({ name: "Incline DB Curls", target: "16 kg total - 1 x 15", tag: "arms", defaultRest: 90, sets: repeatSet(1, 15, 16) }),
+              exercise({ name: "Tricep Pushdowns", target: "25 kg - 1 x 15", tag: "arms", defaultRest: 90, sets: repeatSet(1, 15, 25) })
+            ]
+          }),
+          day({
+            id: "2026-09-19", dow: "Sat", dom: 19, month: "Sep", type: "chest", title: "Chest - 30 kg Milestone",
+            footer: "Four clean sets of ten, not a grinder, complete the 30 kg bracket. Do not try 35 kg today.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "30 kg total - 4 x 10", primary: true, tag: "PR target", defaultRest: 180, note: "Attempt only if Week 18 completed all four sets of nine cleanly. No forced reps.", sets: repeatSet(4, 10, 30) }),
+              exercise({ name: "Machine Chest Press", target: "37.5 kg - 3 x 10", defaultRest: 150, sets: repeatSet(3, 10, 37.5) }),
+              exercise({ name: "Machine Pec Fly", target: "40 kg - 2 x 10", defaultRest: 120, sets: repeatSet(2, 10, 40) }),
+              exercise({ name: "Assisted Dips", target: "35 kg assist - 2 x 10", defaultRest: 120, sets: repeatSet(2, 10, 35) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 15", defaultRest: 75, sets: repeatSet(2, 15, 7.5) })
+            ]
+          }),
+          day({ id: "2026-09-20", dow: "Sun", dom: 20, month: "Sep", type: "rest", title: "Full Rest", footer: "Full rest before the deload week.", exercises: [] })
+        ]
+      },
+      {
+        id: "w20",
+        num: 20,
+        title: "Week 20 - Deload & Reset",
+        phase: "Deload",
+        sub: "Keep frequency, shed fatigue",
+        subtitle: "Keep frequency, shed fatigue",
+        dateRange: "Sep 21-27",
+        notice: "Keep the six-day schedule but cut volume to 38 easy sets. Use RPE 5-6, finish every set with at least three reps in reserve, and make no PR attempts. Sunday is the only training-free day.",
+        days: [
+          day({
+            id: "2026-09-21", dow: "Mon", dom: 21, month: "Sep", type: "legs", title: "Legs & Core (Deload)",
+            exercises: [
+              exercise({ name: "Machine Leg Press", target: "80 kg - 2 x 10", primary: true, defaultRest: 120, sets: repeatSet(2, 10, 80) }),
+              exercise({ name: "Smith Machine Squats", target: "32.5 kg - 2 x 10", defaultRest: 120, sets: repeatSet(2, 10, 32.5) }),
+              exercise({ name: "Seated Leg Curls", target: "40 kg - 2 x 12", defaultRest: 90, sets: repeatSet(2, 12, 40) }),
+              exercise({ name: "Seated Calf Raises", target: "35 kg - 2 x 15", defaultRest: 90, sets: repeatSet(2, 15, 35) }),
+              exercise({ name: "Abdominal Machine", target: "45 kg - 2 x 12", defaultRest: 90, sets: repeatSet(2, 12, 45) })
+            ]
+          }),
+          day({
+            id: "2026-09-22", dow: "Tue", dom: 22, month: "Sep", type: "pull", title: "Back & Biceps (Deload)",
+            exercises: [
+              exercise({ name: "Lat Pulldown", target: "42.5 kg - 2 x 10", primary: true, defaultRest: 120, sets: repeatSet(2, 10, 42.5) }),
+              exercise({ name: "Seated Cable Row", target: "42.5 kg - 2 x 10", defaultRest: 120, sets: repeatSet(2, 10, 42.5) }),
+              exercise({ name: "High Cable Row / Face Pull", target: "37.5 kg - 2 x 12", defaultRest: 90, sets: repeatSet(2, 12, 37.5) }),
+              exercise({ name: "DB Bicep Curls", target: "16 kg total - 2 x 10", defaultRest: 90, sets: repeatSet(2, 10, 16) })
+            ]
+          }),
+          day({
+            id: "2026-09-23", dow: "Wed", dom: 23, month: "Sep", type: "primer", title: "Upper Chest & Side Delts (Deload)",
+            footer: "One easy technique set each. Leave fresher than you arrived.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "20 kg total - 1 x 10", primary: true, defaultRest: 120, sets: repeatSet(1, 10, 20) }),
+              exercise({ name: "Cable Lateral Raises", target: "5 kg - 1 x 12", defaultRest: 75, sets: repeatSet(1, 12, 5) })
+            ]
+          }),
+          day({
+            id: "2026-09-24", dow: "Thu", dom: 24, month: "Sep", type: "ham", title: "Hamstrings & Glutes (Deload)",
+            exercises: [
+              exercise({ name: "DB Romanian Deadlift", target: "32.5 kg total - 2 x 10", primary: true, defaultRest: 120, sets: repeatSet(2, 10, 32.5) }),
+              exercise({ name: "High/Wide Leg Press", target: "70 kg - 2 x 10", defaultRest: 120, sets: repeatSet(2, 10, 70) }),
+              exercise({ name: "Lying Leg Curls", target: "40 kg - 2 x 12", defaultRest: 90, sets: repeatSet(2, 12, 40) }),
+              exercise({ name: "Walking Lunges", target: "10 kg total - 1 x 10", defaultRest: 90, sets: repeatSet(1, 10, 10) })
+            ]
+          }),
+          day({
+            id: "2026-09-25", dow: "Fri", dom: 25, month: "Sep", type: "primer", title: "Lats, Rear Delts & Arms (Deload)",
+            footer: "One easy pass only. No pump chasing.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "15 kg - 1 x 10 / side", primary: true, defaultRest: 120, sets: repeatSet(1, 10, 15) }),
+              exercise({ name: "Rear Delt Fly", target: "15 kg - 1 x 12", defaultRest: 90, sets: repeatSet(1, 12, 15) }),
+              exercise({ name: "Incline DB Curls", target: "12 kg total - 1 x 10", tag: "arms", defaultRest: 90, sets: repeatSet(1, 10, 12) }),
+              exercise({ name: "Tricep Pushdowns", target: "20 kg - 1 x 12", tag: "arms", defaultRest: 90, sets: repeatSet(1, 12, 20) })
+            ]
+          }),
+          day({
+            id: "2026-09-26", dow: "Sat", dom: 26, month: "Sep", type: "chest", title: "Chest (Deload)",
+            footer: "RPE 5-6. No dips, failure sets, or 35 kg attempt.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "25 kg total - 2 x 8", primary: true, defaultRest: 120, sets: repeatSet(2, 8, 25) }),
+              exercise({ name: "Machine Chest Press", target: "27.5 kg - 2 x 10", defaultRest: 90, sets: repeatSet(2, 10, 27.5) }),
+              exercise({ name: "Machine Pec Fly", target: "27.5 kg - 2 x 10", defaultRest: 90, sets: repeatSet(2, 10, 27.5) }),
+              exercise({ name: "Cable Lateral Raises", target: "5 kg - 1 x 12", defaultRest: 75, sets: repeatSet(1, 12, 5) })
+            ]
+          }),
+          day({
+            id: "2026-09-27", dow: "Sun", dom: 27, month: "Sep", type: "rest", title: "Cycle Complete / Full Rest",
+            footer: "Full rest. Export Weeks 14-20 results before programming the next block.", exercises: []
           })
         ]
       }

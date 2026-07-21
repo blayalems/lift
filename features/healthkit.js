@@ -93,18 +93,13 @@
   }
 
   function genericJson(ctx) {
-    return JSON.stringify({
+    return JSON.stringify(Object.assign({}, ctx.state || {}, {
       app: "lift",
       version: window.LIFT_APP_VERSION || "1.4.0",
       exportedAt: new Date().toISOString(),
-      settings: ctx.state.settings,
-      goals: ctx.state.goals,
-      days: ctx.state.days,
-      prs: ctx.state.prs,
-      bodyweight: ctx.state.bodyweight,
-      measurements: ctx.state.measurements,
-      achievements: ctx.state.achievements
-    }, null, 2);
+      measurements: Array.isArray(ctx.state.measurements) ? ctx.state.measurements : [],
+      progressPhotos: Array.isArray(ctx.state.progressPhotos) ? ctx.state.progressPhotos : []
+    }), null, 2);
   }
 
   function downloadFile(filename, content, mime) {

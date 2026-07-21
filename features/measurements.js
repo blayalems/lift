@@ -21,15 +21,90 @@
     { key: "forearm",  label: "Forearm",  icon: "arm" }
   ];
 
-  function todayId() {
+  function todayId(ctx) {
+    if (ctx && typeof ctx.todayId === "function") return ctx.todayId();
+    if (ctx && typeof ctx.localDateId === "function") return ctx.localDateId(new Date());
     var d = new Date();
-    return d.toISOString().slice(0, 10);
+    var month = String(d.getMonth() + 1).padStart(2, "0");
+    var day = String(d.getDate()).padStart(2, "0");
+    return d.getFullYear() + "-" + month + "-" + day;
   }
 
   function getRecords(ctx) {
     var s = ctx.state || {};
     if (!Array.isArray(s.measurements)) s.measurements = [];
     return s.measurements;
+  }
+
+  function isDateId(value) {
+    var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+    if (!match) return false;
+    var date = new Date(Date.UTC(+match[1], +match[2] - 1, +match[3]));
+    return date.getUTCFullYear() === +match[1] &&
+      date.getUTCMonth() === +match[2] - 1 &&
+      date.getUTCDate() === +match[3];
+  }
+
+  function monthKey(dateId) {
+    return isDateId(dateId) ? String(dateId).slice(0, 7) : "";
+  }
+
+  function getPhotoCheckins(ctx) {
+    var s = ctx.state || {};
+    if (!Array.isArray(s.progressPhotos)) s.progressPhotos = [];
+    s.progressPhotos = s.progressPhotos.filter(isDateId).map(String);
+    return s.progressPhotos;
+  }
+
+  function photoReminderStatus(ctx, dateId) {
+    var today = dateId || todayId(ctx);
+    var currentMonth = monthKey(today);
+    var checkins = getPhotoCheckins(ctx).filter(isDateId).slice().sort();
+    var current = checkins.filter(function (date) {
+      return monthKey(date) === currentMonth;
+    }).pop() || null;
+    return {
+      due: !!currentMonth && !current,
+      today: today,
+      month: currentMonth,
+      currentDate: current,
+      lastDate: checkins.length ? checkins[checkins.length - 1] : null
+    };
+  }
+
+  function recordPhotoCheckin(ctx, dateStr) {
+    var date = dateStr || todayId(ctx);
+    if (!isDateId(date)) {
+      if (ctx.toast) ctx.toast("Choose a valid progress-photo date.");
+      return false;
+    }
+    var selectedMonth = monthKey(date);
+    var next = getPhotoCheckins(ctx).filter(function (entry) {
+      return isDateId(entry) && monthKey(entry) !== selectedMonth;
+    });
+    next.push(date);
+    next.sort();
+    ctx.state.progressPhotos = next;
+    if (ctx.saveState) ctx.saveState();
+    if (ctx.toast) ctx.toast("Progress-photo check-in saved.");
+    return true;
+  }
+
+  function renderPhotoReminderCard(ctx) {
+    var status = photoReminderStatus(ctx);
+    if (status.due) {
+      return '<div class="overview-card progress-photo-card" data-due="true">' +
+        '<strong>Monthly progress photos due</strong>' +
+        '<p>Take front, side, and back photos with the same lighting, distance, camera height, and time of day.</p>' +
+        '<div class="sheet-actions"><button class="action-btn" data-action="photo-checkin" data-date="' +
+        ctx.escapeHtml(status.today) + '">Mark photos taken</button></div>' +
+        (status.lastDate ? '<p class="section-sub">Last check-in: ' + ctx.escapeHtml(status.lastDate) + '</p>' : '') +
+        '</div>';
+    }
+    return '<div class="overview-card progress-photo-card" data-due="false">' +
+      '<strong>Progress photos checked in</strong>' +
+      '<p>' + ctx.escapeHtml(status.currentDate || status.today) +
+      ' is logged for this month. Keep the original photos outside Lift for side-by-side comparison.</p></div>';
   }
 
   function unitForLength(ctx) {
@@ -64,9 +139,10 @@
   function renderMeasurements(ctx) {
     var records = getRecords(ctx);
     var unit = unitForLength(ctx);
-    var today = todayId();
+    var today = todayId(ctx);
 
     var html = '<div class="sheet-grid">';
+    html += renderPhotoReminderCard(ctx);
     html += '<div class="overview-card"><strong>Body measurements</strong><p>Log circumference in ' + unit +
       '. Trends use most recent vs. previous entry.</p></div>';
 
@@ -116,12 +192,19 @@
       var flat = [];
       records.slice().reverse().forEach(function (r) {
         FIELDS.forEach(function (f) {
-          if (r[f.key] != null) flat.push({ date: r.date, key: f.key, label: f.label, value: r[f.key] });
+          if (r[f.key] != null) flat.push({
+            date: r.date,
+            key: f.key,
+            label: f.label,
+            value: r[f.key],
+            note: r.notes && r.notes[f.key] ? r.notes[f.key] : ""
+          });
         });
       });
       flat.slice(0, 12).forEach(function (entry) {
         html += '<tr><td>' + ctx.escapeHtml(entry.date) + '</td><td>' + ctx.escapeHtml(entry.label) + '</td><td>' +
-          toDisplay(entry.value, unit) + ' ' + unit + '</td>' +
+          toDisplay(entry.value, unit) + ' ' + unit +
+          (entry.note ? '<br><small>' + ctx.escapeHtml(entry.note) + '</small>' : '') + '</td>' +
           '<td><button class="link-btn" data-action="measure-delete" data-date="' + ctx.escapeHtml(entry.date) +
           '" data-field="' + ctx.escapeHtml(entry.key) + '">Delete</button></td></tr>';
       });
@@ -132,14 +215,18 @@
     return html;
   }
 
-  function addEntry(ctx, fieldKey, displayValue, dateStr) {
+  function addEntry(ctx, fieldKey, displayValue, dateStr, note) {
     var unit = unitForLength(ctx);
     var cm = fromDisplay(displayValue, unit);
     if (cm == null || cm <= 0) {
       if (ctx.toast) ctx.toast("Enter a value first.");
       return false;
     }
-    var date = dateStr || todayId();
+    var date = dateStr || todayId(ctx);
+    if (!isDateId(date)) {
+      if (ctx.toast) ctx.toast("Choose a valid measurement date.");
+      return false;
+    }
     var records = getRecords(ctx);
     var existing = records.find(function (r) { return r.date === date; });
     if (!existing) {
@@ -147,6 +234,13 @@
       records.push(existing);
     }
     existing[fieldKey] = cm;
+    if (note != null) {
+      var cleanNote = String(note).trim();
+      existing.notes = existing.notes && typeof existing.notes === "object" ? existing.notes : {};
+      if (cleanNote) existing.notes[fieldKey] = cleanNote;
+      else delete existing.notes[fieldKey];
+      if (!Object.keys(existing.notes).length) delete existing.notes;
+    }
     if (ctx.saveState) ctx.saveState();
     if (ctx.toast) ctx.toast("Logged " + fieldKey + ": " + displayValue + " " + unit);
     return true;
@@ -157,8 +251,12 @@
     var existing = records.find(function (r) { return r.date === date; });
     if (!existing) return;
     delete existing[fieldKey];
+    if (existing.notes && typeof existing.notes === "object") {
+      delete existing.notes[fieldKey];
+      if (!Object.keys(existing.notes).length) delete existing.notes;
+    }
     // Drop empty record shells.
-    var keys = Object.keys(existing).filter(function (k) { return k !== "date"; });
+    var keys = FIELDS.filter(function (field) { return existing[field.key] != null; });
     if (!keys.length) {
       var idx = records.indexOf(existing);
       if (idx >= 0) records.splice(idx, 1);
@@ -168,6 +266,12 @@
 
   root.measurements = {
     FIELDS: FIELDS,
+    todayId: todayId,
+    monthKey: monthKey,
+    getPhotoCheckins: getPhotoCheckins,
+    photoReminderStatus: photoReminderStatus,
+    recordPhotoCheckin: recordPhotoCheckin,
+    renderPhotoReminderCard: renderPhotoReminderCard,
     renderMeasurements: renderMeasurements,
     addEntry: addEntry,
     deleteEntry: deleteEntry

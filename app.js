@@ -8,7 +8,7 @@
   var sheetBackdrop = document.getElementById("sheet-backdrop");
   var summaryOverlay = document.getElementById("summary-overlay");
 
-  var APP_VERSION = "1.6.1";
+  var APP_VERSION = "1.7.0";
   window.LIFT_APP_VERSION = APP_VERSION;
 
   var STORE_KEY = "lift.v3.state";
@@ -35,7 +35,7 @@
     plates: [25, 20, 15, 10, 5, 2.5, 1.25]
   };
   var DEFAULT_GOALS = {
-    weeklySessions: 4,
+    weeklySessions: 6,
     weeklyVolumeKg: 10000,
     dailySteps: 7000,
     monthlyVolumeKg: 40000
@@ -236,13 +236,18 @@
     loaded.days = loaded.days || {};
     loaded.bodyweight = Array.isArray(loaded.bodyweight) ? loaded.bodyweight : [];
     loaded.measurements = Array.isArray(loaded.measurements) ? loaded.measurements : [];
+    loaded.progressPhotos = Array.isArray(loaded.progressPhotos) ? loaded.progressPhotos : [];
     loaded.prs = loaded.prs || {};
     loaded.achievements = loaded.achievements || {};
     loaded.goals = Object.assign({}, DEFAULT_GOALS, loaded.goals || {});
-    if (numberOr(loaded.weeklyGoalPlanVersion, 0) < 1 && numberOr(loaded.goals.weeklySessions, 4) === 5) {
+    var weeklyGoalPlanVersion = numberOr(loaded.weeklyGoalPlanVersion, 0);
+    if (weeklyGoalPlanVersion < 1 && numberOr(loaded.goals.weeklySessions, 6) === 5) {
       loaded.goals.weeklySessions = 4;
     }
-    loaded.weeklyGoalPlanVersion = 1;
+    if (weeklyGoalPlanVersion < 2 && numberOr(loaded.goals.weeklySessions, 6) === 4) {
+      loaded.goals.weeklySessions = 6;
+    }
+    loaded.weeklyGoalPlanVersion = 2;
     loaded.steps = loaded.steps || {};
     loaded.calories = loaded.calories || {};
     loaded.restingHr = Array.isArray(loaded.restingHr) ? loaded.restingHr : [];
@@ -786,6 +791,7 @@
     html += renderRestFab();
 
     app.innerHTML = html;
+    alignActiveNavigation();
     syncRestFabLayout();
     renderSheet();
     renderSummaryOverlay();
@@ -793,6 +799,26 @@
     renderFab();
     renderNavDrawer();
     refreshTimers();
+  }
+
+  function alignActiveStrip(strip) {
+    if (!strip) return;
+    var active = strip.querySelector('[data-active="true"]');
+    if (!active) return;
+    var maxScroll = Math.max(0, numberOr(strip.scrollWidth, 0) - numberOr(strip.clientWidth, 0));
+    var centered = numberOr(active.offsetLeft, 0) - numberOr(strip.offsetLeft, 0) -
+      (numberOr(strip.clientWidth, 0) - numberOr(active.offsetWidth, 0)) / 2;
+    strip.scrollLeft = clamp(centered, 0, maxScroll);
+  }
+
+  function alignActiveNavigation() {
+    var schedule = typeof requestAnimationFrame === "function"
+      ? requestAnimationFrame
+      : function (callback) { setTimeout(callback, 0); };
+    schedule(function () {
+      alignActiveStrip(app.querySelector(".week-strip"));
+      alignActiveStrip(app.querySelector(".day-strip"));
+    });
   }
 
   function syncRestFabLayout() {
@@ -2187,6 +2213,8 @@
           if (merge) {
             state.days = Object.assign({}, state.days || {}, imported.days || {});
             state.bodyweight = mergeBodyweight(state.bodyweight || [], imported.bodyweight || []);
+            state.measurements = mergeMeasurements(state.measurements || [], imported.measurements || []);
+            state.progressPhotos = mergeDateIds(state.progressPhotos || [], imported.progressPhotos || []);
             state.prs = Object.assign({}, state.prs || {}, imported.prs || {});
             state.settings = Object.assign({}, state.settings, imported.settings || {});
           } else {
@@ -2215,6 +2243,30 @@
       if (row && row.date) map[row.date] = { date: row.date, kg: numberOr(row.kg, 0) };
     });
     return Object.keys(map).sort().map(function (date) { return map[date]; });
+  }
+
+  function mergeMeasurements(a, b) {
+    var map = {};
+    a.concat(b).forEach(function (row) {
+      if (!row || !/^\d{4}-\d{2}-\d{2}$/.test(String(row.date || ""))) return;
+      var date = String(row.date);
+      var prior = map[date] || { date: date };
+      var merged = Object.assign({}, prior, row, { date: date });
+      var notes = Object.assign({}, prior.notes || {}, row.notes || {});
+      if (Object.keys(notes).length) merged.notes = notes;
+      else delete merged.notes;
+      map[date] = merged;
+    });
+    return Object.keys(map).sort().map(function (date) { return map[date]; });
+  }
+
+  function mergeDateIds(a, b) {
+    var seen = {};
+    a.concat(b).forEach(function (date) {
+      var id = String(date || "");
+      if (/^\d{4}-\d{2}-\d{2}$/.test(id)) seen[id] = true;
+    });
+    return Object.keys(seen).sort();
   }
 
   function resetAll() {
@@ -2755,12 +2807,25 @@
     } else if (action === "measure-add") {
       var fieldKey = btn.dataset.field;
       var valInput = sheet.querySelector('[data-m-field="' + fieldKey + '"]');
+      var noteInput = sheet.querySelector('[data-m-note="' + fieldKey + '"]');
       var dateInput = sheet.querySelector('[data-m-date]');
       var meas = feature("measurements");
       if (meas && typeof meas.addEntry === "function" && valInput) {
-        if (meas.addEntry(makeCtx(), fieldKey, valInput.value, dateInput && dateInput.value)) {
+        if (meas.addEntry(
+          makeCtx(),
+          fieldKey,
+          valInput.value,
+          dateInput && dateInput.value,
+          noteInput && noteInput.value
+        )) {
           renderSheet();
         }
+      }
+    } else if (action === "photo-checkin") {
+      var photoMeasurements = feature("measurements");
+      if (photoMeasurements && typeof photoMeasurements.recordPhotoCheckin === "function" &&
+          photoMeasurements.recordPhotoCheckin(makeCtx(), btn.dataset.date)) {
+        renderSheet();
       }
     } else if (action === "measure-delete") {
       var meas2 = feature("measurements");
@@ -3100,9 +3165,12 @@
       clamp: clamp,
       completedSetCount: completedSetCount,
       dayStatus: dayStatus,
+      alignActiveStrip: alignActiveStrip,
       escapeHtml: escapeHtml,
       formatDuration: formatDuration,
       isCompletedSet: isCompletedSet,
+      mergeDateIds: mergeDateIds,
+      mergeMeasurements: mergeMeasurements,
       normalizeState: normalizeState,
       numberOr: numberOr,
       pad2: pad2
