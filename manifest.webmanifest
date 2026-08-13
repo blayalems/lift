@@ -1,7 +1,7 @@
 {
   "name": "Lift - Progressive Overload",
   "short_name": "Lift",
-  "description": "Offline progressive-overload strength tracker with records, rings, badges, heatmap, journal, and backups.",
+  "description": "Offline adaptive hypertrophy and recomposition companion with honest history, cardio, protein, body trends, and layered backups.",
   "id": "./",
   "start_url": "./?fullscreen=true",
   "scope": "./",

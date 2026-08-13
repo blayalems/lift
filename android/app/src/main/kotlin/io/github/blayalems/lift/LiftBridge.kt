@@ -18,6 +18,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Base64
+import android.util.AtomicFile
 import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.webkit.JavascriptInterface
@@ -29,6 +30,7 @@ import androidx.core.content.FileProvider
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 
 /**
  * Exposed to the PWA as `window.LiftAndroid`.
@@ -46,6 +48,8 @@ class LiftBridge(private val context: Context) {
         private const val LIFT_PINK = 0xFFE63B5D.toInt()
         private const val TAG = "LiftBridge"
         private const val HAPTIC_FALLBACK_MIN_MS = 60L
+        private const val STATE_MIRROR_FILE = "lift_state.json"
+        private const val MAX_STATE_MIRROR_BYTES = 20 * 1024 * 1024
     }
 
     init {
@@ -116,6 +120,57 @@ class LiftBridge(private val context: Context) {
         put("model", Build.MODEL ?: "")
         put("brand", Build.BRAND ?: "")
     }.toString()
+
+    /**
+     * Keep the PWA's canonical state in app-private storage as a second durable
+     * copy. The file is the only app file included in Android Auto Backup and
+     * device transfer rules. JavascriptInterface calls already run off the UI
+     * thread, so synchronous atomic I/O is appropriate here.
+     */
+    @JavascriptInterface
+    fun saveStateMirror(json: String): Boolean {
+        val bytes = json.toByteArray(Charsets.UTF_8)
+        if (bytes.isEmpty() || bytes.size > MAX_STATE_MIRROR_BYTES) return false
+        val valid = runCatching {
+            val parsed = JSONObject(json)
+            require(parsed.optJSONObject("days") != null) { "Missing days object" }
+        }.isSuccess
+        if (!valid) return false
+
+        val atomic = AtomicFile(File(context.filesDir, STATE_MIRROR_FILE))
+        var pending: FileOutputStream? = null
+        return try {
+            val stream = atomic.startWrite()
+            pending = stream
+            stream.write(bytes)
+            stream.fd.sync()
+            atomic.finishWrite(stream)
+            pending = null
+            true
+        } catch (e: Exception) {
+            pending?.let { runCatching { atomic.failWrite(it) } }
+            Log.w(TAG, "State mirror write failed", e)
+            false
+        }
+    }
+
+    @JavascriptInterface
+    fun loadStateMirror(): String {
+        val file = File(context.filesDir, STATE_MIRROR_FILE)
+        if (!file.isFile || file.length() <= 0L || file.length() > MAX_STATE_MIRROR_BYTES) return ""
+        return runCatching {
+            val json = file.readText(Charsets.UTF_8)
+            val parsed = JSONObject(json)
+            require(parsed.optJSONObject("days") != null) { "Missing days object" }
+            json
+        }.onFailure { Log.w(TAG, "State mirror read failed", it) }.getOrDefault("")
+    }
+
+    @JavascriptInterface
+    fun clearStateMirror(): Boolean = runCatching {
+        AtomicFile(File(context.filesDir, STATE_MIRROR_FILE)).delete()
+        true
+    }.onFailure { Log.w(TAG, "State mirror delete failed", it) }.getOrDefault(false)
 
     @JavascriptInterface
     fun saveBackupFile(filename: String, json: String) {
@@ -381,9 +436,15 @@ class LiftBridge(private val context: Context) {
     }
 
     private fun postFallbackNotification(snap: JSONObject) {
-        runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return
+        try {
             NotificationManagerCompat.from(context).notify(NOTIF_ID, buildNotification(snap))
-        }.onFailure { err ->
+        } catch (err: SecurityException) {
+            Log.w(TAG, "Fallback notification permission changed", err)
+        } catch (err: Exception) {
             Log.w(TAG, "Fallback notification failed", err)
         }
     }

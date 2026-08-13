@@ -1,7 +1,9 @@
 package io.github.blayalems.lift
 
+import android.Manifest
 import android.app.*
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.os.Build
@@ -9,6 +11,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import org.json.JSONObject
 
 /**
@@ -60,8 +63,18 @@ class WorkoutService : Service() {
                         startForeground(NOTIF_ID, notification)
                     }
                 } catch (e: Exception) {
-                    runCatching { NotificationManagerCompat.from(this).notify(NOTIF_ID, notification) }
-                        .onFailure { err -> Log.w(tag, "Fallback notification failed", err) }
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                        ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+                        PackageManager.PERMISSION_GRANTED
+                    ) {
+                        try {
+                            NotificationManagerCompat.from(this).notify(NOTIF_ID, notification)
+                        } catch (err: SecurityException) {
+                            Log.w(tag, "Fallback notification permission changed", err)
+                        } catch (err: Exception) {
+                            Log.w(tag, "Fallback notification failed", err)
+                        }
+                    }
                     stopSelf()
                     return START_NOT_STICKY
                 }

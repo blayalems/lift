@@ -1,5 +1,5 @@
-const APP_VERSION = "1.7.0";
-const CACHE_VERSION = "lift-v19";
+const APP_VERSION = "1.8.0";
+const CACHE_VERSION = "lift-v20";
 const PRECACHE = `${CACHE_VERSION}-precache`;
 const RUNTIME = `${CACHE_VERSION}-runtime`;
 
@@ -9,6 +9,15 @@ const APP_SHELL = [
   "./app.js",
   "./data.js",
   "./version.json",
+  "./features/state.js",
+  "./features/history.js",
+  "./features/persistence.js",
+  "./features/progression.js",
+  "./features/volume.js",
+  "./features/cardio.js",
+  "./features/nutrition.js",
+  "./features/body.js",
+  "./features/program.js",
   "./features/achievements.js",
   "./features/records.js",
   "./features/summary.js",
@@ -287,15 +296,10 @@ async function precacheAppShell() {
 
   await Promise.all(
     APP_SHELL.map(async (path) => {
-      try {
-        const request = new Request(path, { cache: "reload" });
-        const response = await fetch(request);
-        if (response.ok) {
-          await cache.put(request, await patchAppShellResponse(path, response));
-        }
-      } catch (_) {
-        // Keep install resilient if a static asset is missing during local edits.
-      }
+      const request = new Request(path, { cache: "reload" });
+      const response = await fetch(request);
+      if (!response.ok) throw new Error(`Precache failed for ${path}: ${response.status}`);
+      await cache.put(request, await patchAppShellResponse(path, response));
     })
   );
 }
@@ -427,6 +431,13 @@ function copyHeaders(headers, contentType) {
 }
 
 function patchAppScriptText(source) {
+  // Source control is the canonical app implementation. Runtime rewriting used
+  // to hot-patch whole functions, but that can silently replace newer logic
+  // with stale copies. Keep only the release-version safeguard.
+  return source.replace(/var APP_VERSION = "[^"]+";/, `var APP_VERSION = "${APP_VERSION}";`);
+}
+
+function legacyPatchAppScriptText(source) {
   let out = source.replace(/var APP_VERSION = "[^"]+";/, `var APP_VERSION = "${APP_VERSION}";`);
 
   out = replaceFunction(out, "openSheet", "closeSheet", `  function openSheet(type, options, opts) {

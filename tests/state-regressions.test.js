@@ -21,13 +21,15 @@ describe("state regression fixes", () => {
       achievements: {}
     });
 
-    expect(restored.v).toBe(3);
+    expect(restored.v).toBe(4);
+    expect(restored.schemaVersion).toBe(4);
     expect(restored.calories).toEqual({});
     expect(restored.steps).toEqual({});
     expect(restored.restingHr).toEqual([]);
     expect(restored.customWorkouts).toEqual([]);
     expect(restored.progressPhotos).toEqual([]);
     expect(restored.cloudSync).toEqual({ provider: null, lastBackupAt: null, autoWeekly: false });
+    expect(restored.profile.proteinTargetG).toBe(130);
     expect(restored.goals.weeklySessions).toBe(6);
   });
 

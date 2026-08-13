@@ -95,7 +95,7 @@
     if (status.due) {
       return '<div class="overview-card progress-photo-card" data-due="true">' +
         '<strong>Monthly progress photos due</strong>' +
-        '<p>Take front, side, and back photos with the same lighting, distance, camera height, and time of day.</p>' +
+        '<p>Take front, side, and back views relaxed, plus optional flexed views. Match lighting, distance, camera height, clothing, and time of day; ideally shoot before training rather than only after a pump.</p>' +
         '<div class="sheet-actions"><button class="action-btn" data-action="photo-checkin" data-date="' +
         ctx.escapeHtml(status.today) + '">Mark photos taken</button></div>' +
         (status.lastDate ? '<p class="section-sub">Last check-in: ' + ctx.escapeHtml(status.lastDate) + '</p>' : '') +
@@ -104,7 +104,7 @@
     return '<div class="overview-card progress-photo-card" data-due="false">' +
       '<strong>Progress photos checked in</strong>' +
       '<p>' + ctx.escapeHtml(status.currentDate || status.today) +
-      ' is logged for this month. Keep the original photos outside Lift for side-by-side comparison.</p></div>';
+      ' is logged for this month. Lift records only the check-in date; photos stay in storage you choose and are never silently uploaded.</p></div>';
   }
 
   function unitForLength(ctx) {
@@ -143,6 +143,7 @@
 
     var html = '<div class="sheet-grid">';
     html += renderPhotoReminderCard(ctx);
+    if (root.body && typeof root.body.renderDashboard === "function") html += root.body.renderDashboard(ctx);
     html += '<div class="overview-card"><strong>Body measurements</strong><p>Log circumference in ' + unit +
       '. Trends use most recent vs. previous entry.</p></div>';
 

@@ -8,7 +8,7 @@
   var sheetBackdrop = document.getElementById("sheet-backdrop");
   var summaryOverlay = document.getElementById("summary-overlay");
 
-  var APP_VERSION = "1.7.0";
+  var APP_VERSION = "1.8.0";
   window.LIFT_APP_VERSION = APP_VERSION;
 
   var STORE_KEY = "lift.v3.state";
@@ -39,6 +39,15 @@
     weeklyVolumeKg: 10000,
     dailySteps: 7000,
     monthlyVolumeKg: 40000
+  };
+  var DEFAULT_PROFILE = {
+    athlete: "Lem",
+    heightCm: 167,
+    goalMode: "recomposition",
+    goalStatement: "Smaller waist + visible abs while preserving muscle",
+    proteinTargetG: 130,
+    proteinRangeMinG: 120,
+    proteinRangeMaxG: 145
   };
   var HAPTICS = {
     tap: 10,
@@ -75,6 +84,13 @@
     marketFilter: "all",
     marketSelected: null,
     quickAddDraft: null,
+    historyDate: null,
+    lastLog: null,
+    focusBeforeSheet: null,
+    recoveredFrom: null,
+    recoveryCandidateAt: 0,
+    snapshotRecoveryNeeded: false,
+    primaryStateValid: false,
     strengthCalc: { weight: null, reps: 5 }
   };
 
@@ -240,6 +256,7 @@
     loaded.prs = loaded.prs || {};
     loaded.achievements = loaded.achievements || {};
     loaded.goals = Object.assign({}, DEFAULT_GOALS, loaded.goals || {});
+    loaded.profile = Object.assign({}, DEFAULT_PROFILE, loaded.profile || {});
     var weeklyGoalPlanVersion = numberOr(loaded.weeklyGoalPlanVersion, 0);
     if (weeklyGoalPlanVersion < 1 && numberOr(loaded.goals.weeklySessions, 6) === 5) {
       loaded.goals.weeklySessions = 4;
@@ -255,22 +272,84 @@
     loaded.cloudSync = Object.assign({ provider: null, lastBackupAt: null, autoWeekly: false }, loaded.cloudSync || {});
     loaded.weeklyRecapDismissedIso = loaded.weeklyRecapDismissedIso || null;
     loaded.cycleReviewSeen = !!loaded.cycleReviewSeen;
+    var program = feature("program");
+    if (program && typeof program.ensureRollingPlan === "function" && PLAN) {
+      program.ensureRollingPlan(loaded, PLAN);
+    }
+    annotateCustomExerciseIndexes(loaded);
     return loaded;
+  }
+
+  function annotateCustomExerciseIndexes(sourceState) {
+    if (!sourceState || !sourceState.days || !PLAN) return sourceState;
+    var planDays = {};
+    var weeks = (PLAN.weeks || []).filter(function (week) { return !week.generated; })
+      .concat(sourceState.rollingPlan && Array.isArray(sourceState.rollingPlan.weeks) ? sourceState.rollingPlan.weeks : []);
+    weeks.forEach(function (week) {
+      (week.days || []).forEach(function (day) { planDays[day.id] = day; });
+    });
+    Object.keys(sourceState.days).forEach(function (date) {
+      var ds = sourceState.days[date];
+      if (!ds || !Array.isArray(ds.customExercises) || !ds.customExercises.length || !planDays[date]) return;
+      ds.baseExerciseCount = (planDays[date].exercises || []).length;
+    });
+    return sourceState;
   }
 
   function loadState() {
     var loaded = null;
+    var primaryRaw = null;
+    var candidates = [];
     try {
-      loaded = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+      primaryRaw = localStorage.getItem(STORE_KEY);
+      loaded = JSON.parse(primaryRaw || "null");
+      if (loaded && !isUsableStoredState(loaded)) throw new Error("Primary state shape is invalid");
+      runtime.primaryStateValid = !!loaded;
     } catch (err) {
       loaded = null;
+      runtime.primaryStateValid = false;
     }
     if (!loaded) {
       try {
-        loaded = JSON.parse(localStorage.getItem(V2_STORE_KEY) || "null");
-      } catch (err1) {
-        loaded = null;
+        var persistence = window.LIFT_FEATURES && window.LIFT_FEATURES.persistence;
+        var nativeRaw = persistence && persistence.loadNativeMirror ? persistence.loadNativeMirror() : "";
+        var nativeState = nativeRaw ? JSON.parse(nativeRaw) : null;
+        if (isUsableStoredState(nativeState)) {
+          candidates.push({ state: nativeState, source: "Android state mirror", at: stateUpdatedAt(nativeState), priority: 4 });
+        }
+      } catch (nativeErr) {
+        // Continue through the remaining independent recovery layers.
       }
+      for (var rollbackIndex = 0; rollbackIndex < 3; rollbackIndex += 1) {
+        try {
+          var record = JSON.parse(localStorage.getItem("lift.v4.rollback." + rollbackIndex) || "null");
+          if (record && record.digest && persistence && persistence.digest && persistence.digest(String(record.json || "")) !== record.digest) continue;
+          var fallbackState = record && record.json ? JSON.parse(record.json) : null;
+          if (isUsableStoredState(fallbackState)) {
+            candidates.push({ state: fallbackState, source: "local rollback snapshot", at: Math.max(Number(record.createdAt || 0), stateUpdatedAt(fallbackState)), priority: 3 });
+          }
+        } catch (fallbackErr) {}
+      }
+      try {
+        var legacyState = JSON.parse(localStorage.getItem(V2_STORE_KEY) || "null");
+        if (isUsableStoredState(legacyState)) {
+          candidates.push({ state: legacyState, source: primaryRaw ? "legacy state after corruption" : "legacy state migration", at: stateUpdatedAt(legacyState), priority: 2 });
+        }
+      } catch (err1) {
+        // A broken legacy copy cannot block newer recovery layers.
+      }
+      try {
+        var v1State = JSON.parse(localStorage.getItem(V1_STORE_KEY) || "null");
+        if (isUsableStoredState(v1State)) candidates.push({ state: v1State, source: "v1 state migration", at: stateUpdatedAt(v1State), priority: 1 });
+      } catch (v1Err) {}
+
+      var selected = chooseRecoveryCandidate(candidates);
+      if (selected) {
+        loaded = selected.state;
+        runtime.recoveredFrom = selected.source;
+        runtime.recoveryCandidateAt = selected.at;
+      }
+      runtime.snapshotRecoveryNeeded = true;
     }
     if (!loaded) {
       loaded = { v: 3, settings: {}, days: {}, bodyweight: [], prs: {}, activeWeekId: null, activeDayId: null };
@@ -287,10 +366,54 @@
     return loaded;
   }
 
+  async function recoverDurableSnapshot() {
+    if (!runtime.snapshotRecoveryNeeded) return;
+    var persistence = feature("persistence");
+    if (!persistence || typeof persistence.latestValidSnapshot !== "function") return;
+    try {
+      var recovered = await persistence.latestValidSnapshot(false);
+      if (!recovered || !isUsableStoredState(recovered.state)) return;
+      var recoveredAt = Math.max(Number(recovered.record && recovered.record.createdAt || 0), stateUpdatedAt(recovered.state));
+      if (runtime.recoveryCandidateAt && recoveredAt < runtime.recoveryCandidateAt) return;
+      state = normalizeState(recovered.state);
+      var selection = chooseInitialSelection(state);
+      state.activeWeekId = selection.weekId;
+      state.activeDayId = selection.dayId;
+      runtime.recoveredFrom = "durable local snapshot";
+      runtime.recoveryCandidateAt = recoveredAt;
+    } catch (err) {
+      // A failed optional recovery layer must not prevent a valid fallback from loading.
+    } finally {
+      runtime.snapshotRecoveryNeeded = false;
+    }
+  }
+
+  function stateUpdatedAt(value) {
+    if (!value || typeof value !== "object") return 0;
+    return Math.max(
+      Number(value.updatedAt || 0),
+      Number(value.backup && value.backup.lastRestoreAt || 0),
+      Number(value.migration && value.migration.migratedAt || 0)
+    );
+  }
+
+  function chooseRecoveryCandidate(candidates) {
+    return (Array.isArray(candidates) ? candidates : []).filter(function (candidate) {
+      return candidate && isUsableStoredState(candidate.state);
+    }).sort(function (a, b) {
+      return Number(b.at || 0) - Number(a.at || 0) || Number(b.priority || 0) - Number(a.priority || 0);
+    })[0] || null;
+  }
+
+  function isUsableStoredState(value) {
+    return !!value && typeof value === "object" && !Array.isArray(value) && value.days && typeof value.days === "object" && !Array.isArray(value.days);
+  }
+
   function migrateToV3(loaded) {
+    var stateMod = window.LIFT_FEATURES && window.LIFT_FEATURES.state;
+    if (stateMod && typeof stateMod.migrateState === "function") return stateMod.migrateState(loaded);
     if (!loaded || typeof loaded !== "object") loaded = {};
-    if (loaded.v !== 3) loaded = Object.assign({}, loaded, { v: 3 });
-    return loaded;
+    return Object.assign({}, loaded, { v: 4, schemaVersion: 4 });
   }
 
   function migrateV1(next) {
@@ -305,12 +428,17 @@
     } catch (err2) {}
   }
 
-  function saveState() {
+  function saveState(reason) {
     state = migrateToV3(state);
     runAchievementEvaluation();
+    state.updatedAt = Date.now();
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(state));
       localStorage.setItem(THEME_KEY, state.settings.theme || "system");
+      var persistence = feature("persistence");
+      if (persistence && typeof persistence.scheduleSnapshot === "function") {
+        persistence.scheduleSnapshot(state, reason || "state-change");
+      }
     } catch (err) {
       toast("Storage is full or blocked. Export a backup before adding more data.");
     }
@@ -372,17 +500,26 @@
 
   var _dayMapCache = null;
   var _weekMapCache = null;
-  function getDay(id) {
-    if (!_dayMapCache) {
+  var _dayMapWeeksRef = null;
+  var _dayMapWeekCount = -1;
+  function ensureDayMaps() {
+    var weeks = PLAN && PLAN.weeks || [];
+    if (!_dayMapCache || _dayMapWeeksRef !== weeks || _dayMapWeekCount !== weeks.length) {
       _dayMapCache = {};
       _weekMapCache = {};
-      (PLAN.weeks || []).forEach(function (week) {
+      weeks.forEach(function (week) {
         (week.days || []).forEach(function (day) {
           _dayMapCache[day.id] = day;
           _weekMapCache[day.id] = week;
         });
       });
+      _dayMapWeeksRef = weeks;
+      _dayMapWeekCount = weeks.length;
     }
+  }
+
+  function getDay(id) {
+    ensureDayMaps();
     var day = _dayMapCache[id];
     if (!day) return null;
 
@@ -436,6 +573,7 @@
       cycleAdherence: cycleAdherence,
       trainingStreak: trainingStreak,
       dayStatus: dayStatus,
+      historyStatus: historyStatus,
       localDateId: localDateId,
       todayId: todayId,
       normalizePhase: normalizePhase,
@@ -463,7 +601,7 @@
   }
 
   function weekForDayId(dayId) {
-    if (!_weekMapCache) getDay(dayId);
+    ensureDayMaps();
     return _weekMapCache[dayId] || null;
   }
 
@@ -517,10 +655,18 @@
   }
 
   function dayState(dayId) {
-    state.days[dayId] = state.days[dayId] || { completed: {}, extraSets: {}, drafts: {} };
+    if (!state.days[dayId]) {
+      var plannedDay = getDay(dayId);
+      var status = plannedDay && !(plannedDay.exercises || []).length
+        ? "rest"
+        : dayId < todayId() ? "unknown" : "planned";
+      state.days[dayId] = { completed: {}, extraSets: {}, drafts: {}, status: status, source: "runtime" };
+    }
     state.days[dayId].completed = state.days[dayId].completed || {};
     state.days[dayId].extraSets = state.days[dayId].extraSets || {};
     state.days[dayId].drafts = state.days[dayId].drafts || {};
+    state.days[dayId].exerciseFlags = state.days[dayId].exerciseFlags || {};
+    state.days[dayId].adaptiveTargets = state.days[dayId].adaptiveTargets || {};
     return state.days[dayId];
   }
 
@@ -535,6 +681,10 @@
     var ex = (day.exercises || [])[exIndex];
     if (!ex) return [];
     var base = (ex.sets || []).map(plannedSet);
+    var target = adaptiveTarget(day, ex, exIndex);
+    if (target && Number(target.sets) > 0 && Number(target.sets) < base.length) {
+      base = base.slice(0, Number(target.sets));
+    }
     var extraCount = numberOr(dayState(day.id).extraSets[String(exIndex)], 0);
     var last = base[base.length - 1] || { reps: 0, weight: 0 };
     for (var i = 0; i < extraCount; i += 1) {
@@ -568,17 +718,36 @@
     return "rest";
   }
 
+  function historyStatus(day, sourceState) {
+    var history = feature("history");
+    if (history && typeof history.resolveStatus === "function") {
+      return history.resolveStatus(day, ((sourceState || state).days || {})[day.id], todayId());
+    }
+    var legacy = dayStatus(day, sourceState);
+    if (legacy === "done" || legacy === "partial") return "completed";
+    if (!(day.exercises || []).length) return "rest";
+    return day.id >= todayId() ? "planned" : "unknown";
+  }
+
+  function historyStatusMark(status) {
+    return ({ completed: "\u2713", reconstructed: "R", missed: "!", unknown: "?", planned: "\u2022", rest: "\u2013" })[status] || "";
+  }
+
   function totalSetCountForSource(day, sourceState) {
     return (day.exercises || []).reduce(function (sum, ex, exIndex) {
-      var extra = (((sourceState.days || {})[day.id] || {}).extraSets || {})[String(exIndex)] || 0;
-      return sum + (ex.sets || []).length + numberOr(extra, 0);
+      var sourceDay = ((sourceState.days || {})[day.id] || {});
+      var extra = (sourceDay.extraSets || {})[String(exIndex)] || 0;
+      var target = (sourceDay.adaptiveTargets || {})[String(exIndex)];
+      var plannedCount = (ex.sets || []).length;
+      if (target && Number(target.sets) > 0) plannedCount = Math.min(plannedCount, Number(target.sets));
+      return sum + plannedCount + numberOr(extra, 0);
     }, 0);
   }
 
   function completedVolume(day) {
-    var ds = dayState(day.id);
+    var ds = state.days[day.id] || { completed: {} };
     var volume = 0;
-    Object.keys(ds.completed).forEach(function (key) {
+    Object.keys(ds.completed || {}).forEach(function (key) {
       var entry = ds.completed[key];
       if (entry) volume += numberOr(entry.weight, 0) * numberOr(entry.reps, 0);
     });
@@ -679,6 +848,63 @@
     return value;
   }
 
+  function adaptiveSuggestion(day, ex, exIndex) {
+    var mod = feature("progression");
+    if (!mod || typeof mod.forExercise !== "function") return null;
+    try { return mod.forExercise(makeCtx(), day, ex, exIndex); } catch (err) { return null; }
+  }
+
+  function adaptiveTarget(day, ex, exIndex) {
+    var stored = (((state.days || {})[day.id] || {}).adaptiveTargets || {})[String(exIndex)];
+    return stored || adaptiveSuggestion(day, ex, exIndex);
+  }
+
+  function adaptiveSet(day, ex, exIndex, set, setIndex) {
+    var suggestion = adaptiveTarget(day, ex, exIndex);
+    if (!suggestion || suggestion.action === "deload" || suggestion.action === "baseline") return plannedSet(set);
+    var first = plannedSet((ex.sets || [])[0] || set);
+    var current = plannedSet(set);
+    var assisted = feature("progression") && feature("progression").isAssisted(ex);
+    var weightOffset = current.weight - first.weight;
+    var repsOffset = current.reps - first.reps;
+    return {
+      weight: Math.max(0, suggestion.weight + (assisted ? 0 : weightOffset)),
+      reps: Math.max(1, suggestion.reps + repsOffset),
+      adaptive: true,
+      reason: suggestion.reason,
+      action: suggestion.action,
+      setIndex: setIndex
+    };
+  }
+
+  function renderCompanionSnapshot(day, week) {
+    var nutrition = feature("nutrition");
+    var body = feature("body");
+    var cardio = feature("cardio");
+    var persistence = feature("persistence");
+    var protein = nutrition && nutrition.totalProtein ? nutrition.totalProtein(state, todayId()) : 0;
+    var proteinTarget = Number(state.profile && state.profile.proteinTargetG || 130);
+    var bodySnap = body && body.snapshot ? body.snapshot(state, todayId()) : {};
+    var cardioEntries = cardio && cardio.allEntries ? cardio.allEntries(state).filter(function (entry) { return entry.date === todayId() && !entry.skipped; }) : [];
+    var health = persistence && persistence.backupHealth ? persistence.backupHealth(state) : { status: "overdue" };
+    var firstExercise = (day.exercises || [])[0];
+    var cue = firstExercise ? adaptiveTarget(day, firstExercise, 0) : null;
+    var selectedDayState = (state.days || {})[day.id] || {};
+    var recoveryText = firstExercise ? (selectedDayState.readiness == null ? "Check readiness" : "Readiness " + selectedDayState.readiness + "/10") : "Full rest planned";
+    var recoverySheet = firstExercise ? "readiness" : "notes";
+    var lastText = firstExercise ? lastSessionHint(firstExercise.name, day.id) : "Recovery day";
+    if (!lastText) lastText = "No verified prior set";
+    var bodyText = bodySnap.average7Kg == null ? "Add body weight" : bodySnap.average7Kg.toFixed(1) + " kg avg" + (bodySnap.waistChangeCm != null ? " - waist " + (bodySnap.waistChangeCm <= 0 ? "down " : "up ") + Math.abs(bodySnap.waistChangeCm).toFixed(1) + " cm" : "");
+    var backupText = health.status === "protected" ? "Protected" : health.status === "needs-backup" ? "Needs backup" : "Backup overdue";
+    return '<section class="companion-card"><div class="coach-cue"><span>Coach cue</span><strong>' + escapeHtml(cue ? cue.reason : (day.type === "rest" ? "Recover today. The next hard session benefits from it." : "Beat reps, not form.")) + '</strong></div>' +
+      '<div class="companion-lines"><button data-action="open-sheet" data-sheet="progress"><span>Last time</span><strong>' + escapeHtml(lastText) + '</strong></button>' +
+      '<button data-action="open-sheet" data-sheet="' + recoverySheet + '"><span>Recovery</span><strong>' + escapeHtml(recoveryText) + '</strong></button>' +
+      '<button data-action="open-sheet" data-sheet="measurements"><span>Body trend</span><strong>' + escapeHtml(bodyText) + '</strong></button>' +
+      '<button data-action="open-sheet" data-sheet="nutrition"><span>Protein</span><strong>' + protein + ' / ' + proteinTarget + ' g</strong></button>' +
+      '<button data-action="open-sheet" data-sheet="cardio"><span>Cardio</span><strong>' + (cardioEntries.length ? cardioEntries.reduce(function (sum, entry) { return sum + Number(entry.distanceKm || 0); }, 0).toFixed(1) + ' km logged' : '1 km planned') + '</strong></button>' +
+      '<button data-action="open-sheet" data-sheet="backup"><span>Backup</span><strong data-health="' + health.status + '">' + backupText + '</strong></button></div></section>';
+  }
+
   function render() {
     if (!PLAN || !Array.isArray(PLAN.weeks) || !PLAN.weeks.length) {
       app.textContent = "";
@@ -731,8 +957,9 @@
 
     html += '<nav class="day-strip" aria-label="Days">';
     (week.days || []).forEach(function (d) {
-      html += '<button class="day-pill" data-action="select-day" data-day="' + escapeHtml(d.id) + '" data-active="' + String(d.id === day.id) + '" data-today="' + String(d.id === currentTodayId) + '" data-status="' + dayStatus(d, state) + '">';
-      html += '<div class="dow">' + escapeHtml(d.dow || "") + '</div><div class="dom">' + escapeHtml(d.dom || "") + '</div><span class="status-dot"></span>';
+      var integrityStatus = historyStatus(d, state);
+      html += '<button class="day-pill" data-action="select-day" data-day="' + escapeHtml(d.id) + '" data-active="' + String(d.id === day.id) + '" data-today="' + String(d.id === currentTodayId) + '" data-status="' + integrityStatus + '" aria-label="' + escapeHtml((d.dow || "") + " " + (d.dom || "") + ", " + integrityStatus) + '">';
+      html += '<div class="dow">' + escapeHtml(d.dow || "") + '</div><div class="dom">' + escapeHtml(d.dom || "") + '</div><span class="status-dot" aria-hidden="true">' + historyStatusMark(integrityStatus) + '</span>';
       html += "</button>";
     });
     html += "</nav>";
@@ -759,6 +986,7 @@
       html += '<button class="hero-btn" data-action="open-sheet" data-sheet="notes">' + icon("note") + "<span>Notes</span></button>";
       html += '<button class="hero-btn" data-action="open-sheet" data-sheet="copy">' + icon("copy") + "<span>Copy log</span></button>";
       html += '<button class="hero-btn" data-action="open-sheet" data-sheet="progress">' + icon("chart") + "<span>Progress</span></button>";
+      html += '<button class="hero-btn" data-action="open-history" data-date="' + escapeHtml(day.id) + '">' + icon("today") + '<span>History status</span></button>';
       html += "</div>";
     } else {
       html += '<div class="hero-actions">';
@@ -768,6 +996,8 @@
     }
     html += "</section>";
 
+    html += renderCompanionSnapshot(day, week);
+
     html += '<main class="content">';
     if (week.notice) html += '<section class="notice"><strong>Deload notice</strong><p>' + richText(week.notice) + "</p></section>";
     if (ds.readiness != null && total) {
@@ -776,8 +1006,10 @@
     }
     if (day.warmup) html += '<section class="warmup"><strong>Warm-up</strong><p>' + richText(day.warmup) + "</p></section>";
     if (total) {
-      html += '<div class="section-head"><div><div class="section-title">Workout</div><div class="section-sub">' + (day.exercises || []).length + " exercises - " + percent + "% complete</div></div>";
-      html += '<button class="link-btn" data-action="reset-day">Reset day</button></div>';
+      html += '<div class="section-head"><div><div class="section-title">Workout</div><div class="section-sub">' + (day.exercises || []).length + ' exercises - ' + percent + '% complete</div></div><div class="workout-head-actions">';
+      html += '<button class="action-btn compact" data-action="open-sheet" data-sheet="quickadd">' + icon("plus") + ' Exercise</button>';
+      if (runtime.lastLog) html += '<button class="link-btn" data-action="undo-last">Undo last</button>';
+      html += '<button class="link-btn" data-action="reset-day">Reset day</button></div></div>';
       html += '<section class="exercise-grid">';
       (day.exercises || []).forEach(function (ex, exIndex) {
         html += renderExercise(day, ex, exIndex);
@@ -838,7 +1070,10 @@
     nav.dataset.hidden = String(modalOpen);
     nav.setAttribute("aria-hidden", String(modalOpen));
     nav.querySelectorAll(".bottom-nav-btn").forEach(function (btn) {
-      btn.dataset.active = String(btn.dataset.nav === tab);
+      var active = btn.dataset.nav === tab;
+      btn.dataset.active = String(active);
+      if (active) btn.setAttribute("aria-current", "page");
+      else btn.removeAttribute("aria-current");
       btn.tabIndex = modalOpen ? -1 : 0;
     });
   }
@@ -897,6 +1132,7 @@
     html += navItem("library", "Workout library", "bag");
     html += navItem("marketplace", "Templates marketplace", "market");
     html += navItem("quickadd", "Quick-add exercise", "plus");
+    html += navItem("cardio", "1 km cardio", "shoe");
     html += navItem("plate", "Plate calculator", "plate");
     html += navItem("readiness", "Readiness check-in", "heart");
 
@@ -904,12 +1140,14 @@
     html += navItem("notes", "Workout notes", "note");
     html += navItem("bodyweight", "Body weight", "shoe");
     html += navItem("measurements", "Body measurements", "ruler");
+    html += navItem("nutrition", "Protein & supplements", "heart");
     html += navItem("steps", "Steps", "shoe");
     html += navItem("goals", "Goals", "target");
 
     html += '<div class="nav-section-head">Trends</div>';
     html += navItem("rings", "Activity rings", "rings");
     html += navItem("streaks", "Streaks & weekly", "today");
+    html += navItem("volume", "Muscle workload", "chart");
     html += navItem("strength", "1RM estimator", "chart");
     html += navItem("prs", "Personal records", "badge");
     html += navItem("calendar", "Calendar month view", "today");
@@ -923,6 +1161,7 @@
     html += navItem("copy", "Export log", "copy");
     html += navItem("healthkit", "Health & Fit export", "heart");
     html += navItem("backup", "Backups", "upload");
+    html += navItem("program", "Next training block", "refresh");
     html += navItem("settings", "Settings", "gear");
 
     html += '</div>';
@@ -965,6 +1204,8 @@
     var complete = sets.length > 0 && sets.every(function (_, si) { return isCompletedSet(ds.completed[exIndex + "." + si]); });
     var caveat = isCaveatNote(ex.note) && Number(ds.readiness || 10) < 7;
     var tone = neuralExerciseTone(ex, complete, caveat);
+    var suggestion = adaptiveTarget(day, ex, exIndex);
+    var flags = ds.exerciseFlags[String(exIndex)] || {};
     var html = '<article class="ex-card" data-complete="' + String(complete) + '" data-caveat="' + String(caveat) + '" data-nx-tone="' + escapeHtml(tone) + '">';
     html += '<div class="ex-head"><div class="ex-num">' + (exIndex + 1) + '</div><div>';
     html += '<div class="ex-topline"><div><div class="ex-name">' + escapeHtml(ex.name || "Exercise") + '</div><div class="ex-target">' + escapeHtml(ex.target || "") + '</div></div></div>';
@@ -974,12 +1215,17 @@
     html += "</div>";
     var hint = lastSessionHint(ex.name, day.id);
     if (hint) html += '<div class="last-hint">' + escapeHtml(hint) + "</div>";
+    if (suggestion) html += '<div class="adaptive-cue" data-action-kind="' + escapeHtml(suggestion.action) + '">' + escapeHtml(suggestion.reason) + '</div>';
+    html += '<div class="weight-semantics">' + escapeHtml(weightModeLabel(ex)) + '</div>';
     html += "</div></div>";
     html += '<div class="ex-actions">';
     html += '<button class="tool-btn" data-action="did-planned" data-ex="' + exIndex + '">' + icon("check") + "Did as planned</button>";
     html += '<button class="tool-btn" data-action="add-set" data-ex="' + exIndex + '">' + icon("plus") + "Set</button>";
     html += '<button class="tool-btn form-link" data-action="form-video" data-name="' + escapeHtml(ex.name) + '"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M10 16.5l6-4.5-6-4.5v9zm12-4.5c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"/></svg>Form</button>';
+    html += '<button class="tool-btn" data-action="exercise-flag" data-ex="' + exIndex + '" data-flag="formIssue" data-active="' + String(!!flags.formIssue) + '">Form issue</button>';
+    html += '<button class="tool-btn danger" data-action="exercise-flag" data-ex="' + exIndex + '" data-flag="pain" data-active="' + String(!!flags.pain) + '">Pain</button>';
     if (numberOr(ds.extraSets[String(exIndex)], 0) > 0) html += '<button class="tool-btn danger" data-action="remove-set" data-ex="' + exIndex + '">' + icon("minus") + "Remove set</button>";
+    if (ex.custom) html += '<button class="tool-btn danger" data-action="remove-custom-exercise" data-ex="' + exIndex + '">' + icon("trash") + 'Remove exercise</button>';
     html += "</div>";
     html += '<div class="sets">';
     sets.forEach(function (set, setIndex) {
@@ -997,8 +1243,10 @@
     var completedEntry = ds.completed[key];
     var done = isCompletedSet(completedEntry) ? completedEntry : null;
     var draft = ds.drafts[key] || (!done && completedEntry) || {};
-    var weight = done && done.weight != null ? done.weight : draft.weight != null ? draft.weight : set.weight;
-    var reps = done && done.reps != null ? done.reps : draft.reps != null ? draft.reps : set.reps;
+    var adaptive = adaptiveSet(day, ex, exIndex, set, setIndex);
+    var weight = done && done.weight != null ? done.weight : draft.weight != null ? draft.weight : adaptive.weight;
+    var reps = done && done.reps != null ? done.reps : draft.reps != null ? draft.reps : adaptive.reps;
+    var rir = done && done.rir != null ? done.rir : draft.rir != null ? draft.rir : "";
     var html = '<div class="set-row" data-done="' + String(!!done) + '" data-pr="' + String(!!(done && done.pr)) + '">';
     html += '<div class="set-label">S' + (setIndex + 1) + (done && done.pr ? '<span class="pr-pill">PR</span>' : "") + "</div>";
     html += '<div class="number-control">';
@@ -1012,8 +1260,25 @@
     html += '<button class="set-btn" data-action="set-step" data-ex="' + exIndex + '" data-set="' + setIndex + '" data-field="reps" data-delta="1" aria-label="Increase reps">' + icon("plus") + "</button>";
     html += "</div>";
     html += '<button class="check-btn" data-action="toggle-set" data-ex="' + exIndex + '" data-set="' + setIndex + '" aria-label="Toggle set complete">' + icon("check") + "</button>";
+    html += '<label class="rir-control"><span>RIR</span><select data-action="set-rir" data-ex="' + exIndex + '" data-set="' + setIndex + '" aria-label="Reps in reserve for set ' + (setIndex + 1) + '"><option value=""' + (rir === "" ? ' selected' : '') + '>-</option>' + [0,1,2,3,4].map(function (value) { return '<option value="' + value + '"' + (Number(rir) === value ? ' selected' : '') + '>' + value + '</option>'; }).join('') + '</select></label>';
     html += "</div>";
     return html;
+  }
+
+  function weightModeLabel(exercise) {
+    var mode = exercise && exercise.weightMode;
+    if (mode === "per_hand") return "Weight is per hand";
+    if (mode === "per_side") return "Weight is per side";
+    if (mode === "bodyweight") return "Bodyweight movement; load is optional added weight";
+    if (mode === "total" && /\b(db|dumbbell)\b/i.test(exercise && exercise.name || "")) return "Dumbbell weight is total (both hands)";
+    return "Weight is total machine / implement load";
+  }
+
+  function tagSetExercise(entry, exercise) {
+    if (!entry || !exercise) return entry;
+    entry.exerciseName = exercise.name || null;
+    if (exercise.id) entry.exerciseId = exercise.id;
+    return entry;
   }
 
   function renderRestFab() {
@@ -1046,6 +1311,10 @@
   function renderSheet() {
     if (!runtime.sheet) {
       sheet.dataset.open = "false";
+      sheet.setAttribute("aria-hidden", "true");
+      sheet.removeAttribute("aria-labelledby");
+      sheet.removeAttribute("aria-modal");
+      sheet.setAttribute("role", "dialog");
       sheet.dataset.type = "";
       sheet.dataset.mode = "";
       sheetBackdrop.dataset.open = "false";
@@ -1059,10 +1328,16 @@
     document.body.classList.add("sheet-open");
     sheetBackdrop.dataset.open = "true";
     sheet.dataset.open = "true";
+    sheet.setAttribute("aria-hidden", "false");
+    sheet.setAttribute("aria-labelledby", "sheet-title");
+    sheet.setAttribute("tabindex", "-1");
     sheet.dataset.type = runtime.sheet;
     var mode = runtime.sheetMode === "page" ? "page" : "modal";
     sheet.dataset.mode = mode;
     sheetBackdrop.dataset.mode = mode;
+    sheet.setAttribute("role", mode === "page" ? "region" : "dialog");
+    if (mode === "page") sheet.removeAttribute("aria-modal");
+    else sheet.setAttribute("aria-modal", "true");
     document.body.classList.toggle("sheet-mode-page", mode === "page");
     document.body.classList.toggle("sheet-mode-modal", mode !== "page");
     var title = sheetTitle(runtime.sheet);
@@ -1072,13 +1347,13 @@
         '<button class="sheet-back" data-action="close-sheet" aria-label="Back">' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>' +
         '</button>' +
-        '<div class="sheet-title">' + escapeHtml(title) + '</div>' +
+        '<div class="sheet-title" id="sheet-title">' + escapeHtml(title) + '</div>' +
         '<span aria-hidden="true"></span>' +
         '</div>';
     } else {
       headHtml = '<div class="sheet-grabber" aria-hidden="true"></div>' +
         '<div class="sheet-head">' +
-        '<div class="sheet-title">' + escapeHtml(title) + '</div>' +
+        '<div class="sheet-title" id="sheet-title">' + escapeHtml(title) + '</div>' +
         '<button class="icon-btn" data-action="close-sheet" aria-label="Close sheet">' + icon("close") + '</button>' +
         '</div>';
     }
@@ -1111,7 +1386,12 @@
       healthkit: "Health & Fit Export",
       strength: "1RM & Strength",
       streaks: "Streaks & Weekly",
-      quickadd: "Quick Add Exercise"
+      quickadd: "Quick Add Exercise",
+      cardio: "Post-workout Cardio",
+      nutrition: "Protein & Supplements",
+      history: "History Integrity",
+      volume: "Muscle Workload",
+      program: "Rolling Program"
     }[type] || "Sheet";
   }
 
@@ -1141,6 +1421,11 @@
     if (type === "strength") return featureSheet("strength", "renderStrength");
     if (type === "streaks") return featureSheet("streaks", "renderStreaks");
     if (type === "quickadd") return featureSheet("quickadd", "renderQuickAdd");
+    if (type === "cardio") return featureSheet("cardio", "renderCardio");
+    if (type === "nutrition") return featureSheet("nutrition", "renderNutrition");
+    if (type === "history") return featureSheet("history", "renderHistoryEditor", runtime.historyDate || state.activeDayId);
+    if (type === "volume") return featureSheet("volume", "renderVolume");
+    if (type === "program") return featureSheet("program", "renderProgram");
     return "";
   }
 
@@ -1443,8 +1728,10 @@
   }
 
   function openSheet(type, options, opts) {
+    if (!runtime.sheet && document.activeElement instanceof HTMLElement) runtime.focusBeforeSheet = document.activeElement;
     runtime.sheet = type;
     runtime.sheetMode = (opts && opts.mode) || "modal";
+    if (type === "history") runtime.historyDate = typeof options === "string" ? options : options && options.date || state.activeDayId;
     if (type === "readiness") {
       var ds = dayState(state.activeDayId);
       runtime.readinessValue = ds.readiness || 8;
@@ -1455,16 +1742,23 @@
     renderSheet();
     renderBottomNav();
     renderFab();
+    setTimeout(function () {
+      var first = sheet.querySelector("[data-action='close-sheet'], .sheet-back, button, input, select, textarea");
+      (first || sheet).focus();
+    }, 0);
   }
 
   function closeSheet() {
+    var returnFocus = runtime.focusBeforeSheet;
     runtime.sheet = null;
     runtime.sheetMode = "modal";
     runtime.pendingAction = null;
     runtime.activeTab = "today";
+    runtime.focusBeforeSheet = null;
     renderSheet();
     renderBottomNav();
     renderFab();
+    if (returnFocus && document.contains(returnFocus)) setTimeout(function () { returnFocus.focus(); }, 0);
   }
 
   function isCaveatNote(note) {
@@ -1515,6 +1809,22 @@
     }
     ds.startedAt = Date.now();
     ds.finishedAt = null;
+    ds.status = "planned";
+    ds.source = "active-workout";
+    var activeDay = getDay(state.activeDayId);
+    ds.adaptiveTargets = ds.adaptiveTargets || {};
+    (activeDay && activeDay.exercises || []).forEach(function (exercise, exIndex) {
+      var suggestion = adaptiveSuggestion(activeDay, exercise, exIndex);
+      if (!suggestion) return;
+      ds.adaptiveTargets[String(exIndex)] = {
+        action: suggestion.action,
+        weight: suggestion.weight,
+        reps: suggestion.reps,
+        sets: suggestion.sets,
+        reason: suggestion.reason,
+        frozenAt: Date.now()
+      };
+    });
     if (!rest.running) {
       rest.completedAt = 0;
       saveRest();
@@ -1530,8 +1840,15 @@
     var ds = dayState(state.activeDayId);
     if (!ds.startedAt) ds.startedAt = Date.now();
     ds.finishedAt = Date.now();
+    var finishedDay = getDay(state.activeDayId);
+    var verifiedSets = completedSetCount(finishedDay, state);
+    if (verifiedSets > 0) {
+      ds.status = "completed";
+      ds.source = "verified-log";
+      ds.trained = true;
+    }
     var summary = feature("summary");
-    if (summary && typeof summary.caloriesForDay === "function") {
+    if (verifiedSets > 0 && summary && typeof summary.caloriesForDay === "function") {
       state.calories[state.activeDayId] = { workoutKcal: summary.caloriesForDay(makeCtx(), state.activeDayId) };
     }
     rest = idleRest();
@@ -1541,7 +1858,7 @@
     clearWorkoutNotification();
     haptic("workoutFinish");
     toast("Workout finished.");
-    if (completedSetCount(getDay(state.activeDayId), state) > 0) {
+    if (verifiedSets > 0) {
       runtime.summaryDayId = state.activeDayId;
       if (!state.cycleReviewSeen && isCycleComplete()) {
         runtime.cycleReview = true;
@@ -1574,11 +1891,14 @@
   function getCurrentSetValue(day, exIndex, setIndex) {
     var ds = dayState(day.id);
     var key = exIndex + "." + setIndex;
-    var plan = exerciseSets(day, exIndex)[setIndex] || { reps: 0, weight: 0 };
+    var ex = (day.exercises || [])[exIndex] || {};
+    var rawPlan = exerciseSets(day, exIndex)[setIndex] || { reps: 0, weight: 0 };
+    var plan = adaptiveSet(day, ex, exIndex, rawPlan, setIndex);
     var entry = ds.completed[key] || ds.drafts[key] || {};
     return {
       weight: entry.weight != null ? numberOr(entry.weight, plan.weight) : plan.weight,
-      reps: entry.reps != null ? numberOr(entry.reps, plan.reps) : plan.reps
+      reps: entry.reps != null ? numberOr(entry.reps, plan.reps) : plan.reps,
+      rir: entry.rir != null ? numberOr(entry.rir, null) : null
     };
   }
 
@@ -1814,10 +2134,12 @@
     var day = getDay(state.activeDayId);
     var ds = dayState(day.id);
     var key = exIndex + "." + setIndex;
+    var exercise = (day.exercises || [])[exIndex];
     var value = field === "weight" && isDisplayValue ? displayToKg(rawValue) : numberOr(rawValue, 0);
     if (field === "reps") value = Math.max(0, Math.round(value));
     if (field === "weight") value = Math.max(0, value);
     var bucket = ds.completed[key] || ds.drafts[key] || getCurrentSetValue(day, exIndex, setIndex);
+    tagSetExercise(bucket, exercise);
     bucket[field] = value;
     if (ds.completed[key] && field === "reps" && value <= 0) {
       delete bucket.ts;
@@ -1825,6 +2147,13 @@
       delete ds.completed[key];
       ds.drafts[key] = bucket;
     } else if (ds.completed[key]) {
+      var recordMod = feature("records");
+      if (exercise && recordMod && typeof recordMod.evaluateSet === "function") {
+        var evaluation = recordMod.evaluateSet(makeCtx(), exercise, bucket, day.id, key);
+        bucket.pr = !!evaluation.isPr;
+        bucket.recordType = evaluation.type;
+        bucket.recordTypes = evaluation.types;
+      }
       ds.completed[key] = bucket;
     } else {
       ds.drafts[key] = bucket;
@@ -1856,6 +2185,7 @@
       delete ds.completed[key];
     }
     if (isCompletedSet(ds.completed[key])) {
+      runtime.lastLog = { dayId: day.id, key: key, previous: Object.assign({}, ds.completed[key]), action: "restore" };
       delete ds.completed[key];
       haptic("warning");
       saveState();
@@ -1870,13 +2200,19 @@
       render();
       return;
     }
-    var prior = maxLoggedWeight(ex.name, day.id, key);
-    var pr = value.weight > prior && value.weight > 0;
-    ds.completed[key] = { reps: value.reps, weight: value.weight, ts: Date.now(), pr: pr };
+    runtime.lastLog = { dayId: day.id, key: key, previous: ds.completed[key] ? Object.assign({}, ds.completed[key]) : null, action: "remove" };
+    var recordMod = feature("records");
+    var evaluation = recordMod && typeof recordMod.evaluateSet === "function"
+      ? recordMod.evaluateSet(makeCtx(), ex, value, day.id, key)
+      : { type: "baseline", types: ["baseline"], isPr: false };
+    var pr = !!evaluation.isPr;
+    ds.completed[key] = tagSetExercise({ reps: value.reps, weight: value.weight, rir: value.rir, ts: Date.now(), pr: pr, recordType: evaluation.type, recordTypes: evaluation.types }, ex);
     delete ds.drafts[key];
     if (pr) {
       state.prs[ex.name] = { weight: value.weight, reps: value.reps, date: day.id };
-      toast("PR: " + ex.name + " at " + formatWeight(value.weight) + " " + unitLabel() + ".");
+      toast((recordMod && recordMod.recordLabel ? recordMod.recordLabel(evaluation.type) : "PR") + ": " + ex.name + " at " + formatWeight(value.weight) + " " + unitLabel() + ".");
+    } else if (evaluation.type === "baseline") {
+      toast("Baseline saved for " + ex.name + ".");
     }
     haptic(pr ? "pr" : "completeSet");
     if (state.settings.autoStartRest !== false) {
@@ -1907,14 +2243,19 @@
     var prCount = 0;
     sets.forEach(function (set, setIndex) {
       var key = exIndex + "." + setIndex;
-      var prior = maxLoggedWeight(ex.name, day.id, key);
-      var pr = set.weight > prior && set.weight > 0;
+      var target = adaptiveSet(day, ex, exIndex, set, setIndex);
+      var draft = ds.drafts[key] || {};
+      var recordMod = feature("records");
+      var evaluation = recordMod && typeof recordMod.evaluateSet === "function"
+        ? recordMod.evaluateSet(makeCtx(), ex, target, day.id, key)
+        : { type: "baseline", types: ["baseline"], isPr: false };
+      var pr = !!evaluation.isPr;
       if (pr) prCount += 1;
-      ds.completed[key] = { reps: set.reps, weight: set.weight, ts: Date.now(), pr: pr };
+      ds.completed[key] = tagSetExercise({ reps: target.reps, weight: target.weight, rir: draft.rir == null ? null : clamp(Math.round(numberOr(draft.rir, 2)), 0, 4), ts: Date.now(), pr: pr, recordType: evaluation.type, recordTypes: evaluation.types }, ex);
       delete ds.drafts[key];
     });
     if (prCount) {
-      var top = Math.max.apply(null, sets.map(function (s) { return s.weight; }));
+      var top = Math.max.apply(null, sets.map(function (s, index) { return adaptiveSet(day, ex, exIndex, s, index).weight; }));
       state.prs[ex.name] = { weight: top, reps: sets[0] ? sets[0].reps : 0, date: day.id };
       toast("PR logged for " + ex.name + ".");
     } else {
@@ -1927,6 +2268,42 @@
     saveState();
     render();
     updateWorkoutNotification(true);
+  }
+
+  function setRir(exIndex, setIndex, rawValue) {
+    var day = getDay(state.activeDayId);
+    var ds = dayState(day.id);
+    var key = exIndex + "." + setIndex;
+    var bucket = ds.completed[key] || ds.drafts[key] || getCurrentSetValue(day, exIndex, setIndex);
+    tagSetExercise(bucket, (day.exercises || [])[exIndex]);
+    if (rawValue === "" || rawValue == null) delete bucket.rir;
+    else bucket.rir = clamp(Math.round(numberOr(rawValue, 2)), 0, 4);
+    if (ds.completed[key]) ds.completed[key] = bucket;
+    else ds.drafts[key] = bucket;
+    saveState("effort-log");
+  }
+
+  function toggleExerciseFlag(exIndex, flag) {
+    var ds = dayState(state.activeDayId);
+    var key = String(exIndex);
+    ds.exerciseFlags[key] = ds.exerciseFlags[key] || {};
+    ds.exerciseFlags[key][flag] = !ds.exerciseFlags[key][flag];
+    if (flag === "pain" && ds.exerciseFlags[key][flag]) toast("Pain flagged. Do not push through sharp or worsening pain.");
+    saveState("exercise-flag");
+    render();
+  }
+
+  function undoLastLog() {
+    var undo = runtime.lastLog;
+    if (!undo || !state.days[undo.dayId]) return;
+    var completed = state.days[undo.dayId].completed = state.days[undo.dayId].completed || {};
+    if (undo.action === "restore" && undo.previous) completed[undo.key] = undo.previous;
+    else if (undo.previous) completed[undo.key] = undo.previous;
+    else delete completed[undo.key];
+    runtime.lastLog = null;
+    saveState("undo-set");
+    toast("Last set change undone.");
+    render();
   }
 
   function addSet(exIndex) {
@@ -2143,8 +2520,14 @@
       var ds = state.days[day.id] || {};
       var total = totalSetCountForSource(day, state);
       var completed = completedSetCount(day, state);
+      var integrity = historyStatus(day, state);
       lines.push("Week " + entry.week.num + " - " + day.id + " - " + (day.title || "Day"));
-      if (!total) {
+      lines.push("  History: " + (feature("history") && feature("history").statusLabel ? feature("history").statusLabel(integrity) : integrity));
+      if (integrity === "reconstructed" && !completed) {
+        lines.push("  Trained session reconstructed by the user; weights, reps, volume, calories, and PRs are unavailable.");
+        if (ds.workoutType) lines.push("  Remembered workout: " + ds.workoutType);
+        if (ds.notes) lines.push("  Notes: " + ds.notes);
+      } else if (!total) {
         lines.push("  Rest: " + (day.footer || day.note || day.subtitle || ""));
       } else {
         lines.push("  Sets: " + completed + "/" + total + " | Volume: " + cleanNumber(kgToDisplay(completedVolume(day)), 0) + " " + unitLabel() + " | Time: " + formatDuration(workoutElapsed(day.id)));
@@ -2174,6 +2557,8 @@
   }
 
   function exportData() {
+    var cloud = feature("cloud");
+    if (cloud && typeof cloud.downloadBackup === "function") return cloud.downloadBackup(makeCtx());
     var payload = JSON.stringify(state, null, 2);
     var filename = "lift-backup-" + todayId() + ".json";
     if (nativeShareJson(filename, payload, "Lift backup")) {
@@ -2198,6 +2583,7 @@
   }
 
   function importData() {
+    if (runtime.importBusy) return;
     var input = document.createElement("input");
     input.type = "file";
     input.accept = "application/json,.json";
@@ -2205,36 +2591,74 @@
       var file = input.files && input.files[0];
       if (!file) return;
       var reader = new FileReader();
-      reader.onload = function () {
+      runtime.importBusy = true;
+      reader.onload = async function () {
         try {
-          var imported = JSON.parse(String(reader.result || "{}"));
-          if (!imported || typeof imported !== "object" || typeof imported.days !== "object") throw new Error("Invalid backup: missing workout data");
+          var stateMod = feature("state");
+          var result = stateMod && typeof stateMod.parseBackupText === "function"
+            ? stateMod.parseBackupText(String(reader.result || ""))
+            : { valid: false, errors: ["The state migration module is unavailable."] };
+          if (!result.valid) throw new Error((result.errors || ["Invalid Lift backup."]).join(" "));
+          annotateCustomExerciseIndexes(state);
+          annotateCustomExerciseIndexes(result.state);
           var merge = confirm("Merge imported data with current data? Press Cancel to replace current data.");
-          if (merge) {
-            state.days = Object.assign({}, state.days || {}, imported.days || {});
-            state.bodyweight = mergeBodyweight(state.bodyweight || [], imported.bodyweight || []);
-            state.measurements = mergeMeasurements(state.measurements || [], imported.measurements || []);
-            state.progressPhotos = mergeDateIds(state.progressPhotos || [], imported.progressPhotos || []);
-            state.prs = Object.assign({}, state.prs || {}, imported.prs || {});
-            state.settings = Object.assign({}, state.settings, imported.settings || {});
-          } else {
-            state = Object.assign({ v: imported.v || 2 }, imported);
-          }
+          var persistence = feature("persistence");
+          if (persistence && typeof persistence.forceSnapshot === "function") await persistence.forceSnapshot(state, "pre-restore");
+          state = merge && typeof stateMod.mergeStates === "function"
+            ? stateMod.mergeStates(state, result.state)
+            : stateMod.migrateState(result.state);
+          state.backup = Object.assign({}, state.backup || {}, {
+            lastRestoreAt: Date.now(),
+            lastRestoreMode: merge ? "merge" : "replace"
+          });
           state = normalizeState(state);
           var selection = chooseInitialSelection(state);
           state.activeWeekId = selection.weekId;
           state.activeDayId = selection.dayId;
-          saveState();
+          saveState("restore-" + (merge ? "merge" : "replace"));
           applyTheme(state.settings.theme);
-          toast("Import complete.");
+          applyVisualStyle(state.settings.visualStyle);
+          toast(merge ? "Backup merged safely." : "Backup restored.");
           render();
         } catch (err) {
           toast("Import failed: " + err.message);
+        } finally {
+          runtime.importBusy = false;
         }
+      };
+      reader.onerror = function () {
+        runtime.importBusy = false;
+        toast("Import failed: the file could not be read.");
       };
       reader.readAsText(file);
     });
     input.click();
+  }
+
+  async function rollbackSnapshot() {
+    var persistence = feature("persistence");
+    if (!persistence || typeof persistence.latestValidSnapshot !== "function") {
+      toast("No rollback storage is available in this browser.");
+      return;
+    }
+    if (!confirm("Roll back to the prior valid local snapshot? A safety snapshot of the current state will be made first.")) return;
+    try {
+      await persistence.forceSnapshot(state, "pre-restore");
+      var snapshot = await persistence.latestValidSnapshot(true);
+      if (!snapshot || !snapshot.state) throw new Error("No earlier valid snapshot was found.");
+      state = normalizeState(snapshot.state);
+      state.backup = Object.assign({}, state.backup || {}, { lastRestoreAt: Date.now(), lastRestoreMode: "rollback" });
+      var selection = chooseInitialSelection(state);
+      state.activeWeekId = selection.weekId;
+      state.activeDayId = selection.dayId;
+      saveState("rollback");
+      applyTheme(state.settings.theme);
+      applyVisualStyle(state.settings.visualStyle);
+      toast("Rolled back to " + new Date(snapshot.record.createdAt).toLocaleString() + ".");
+      render();
+    } catch (err) {
+      toast("Rollback failed: " + err.message);
+    }
   }
 
   function mergeBodyweight(a, b) {
@@ -2269,16 +2693,37 @@
     return Object.keys(seen).sort();
   }
 
-  function resetAll() {
-    if (!confirm("Reset all Lift data in this browser? Export first if you need a backup.")) return;
+  async function resetAll() {
+    if (!confirm("Reset all Lift data, rollback snapshots, and the Android recovery mirror? Export first if you need a backup.")) return;
+    var persistence = feature("persistence");
+    if (persistence && typeof persistence.clearAll === "function") {
+      try { await persistence.clearAll(); } catch (clearErr) { toast("A recovery copy is open in another Lift tab; close it to finish clearing snapshots."); }
+    }
     try {
       localStorage.removeItem(STORE_KEY);
+      localStorage.removeItem(V2_STORE_KEY);
+      localStorage.removeItem(V1_STORE_KEY);
       localStorage.removeItem(REST_KEY);
+      localStorage.removeItem(THEME_KEY);
+      localStorage.removeItem(V1_THEME_KEY);
     } catch (err) {}
-    state = loadState();
+    runtime.recoveredFrom = null;
+    runtime.recoveryCandidateAt = 0;
+    runtime.snapshotRecoveryNeeded = false;
+    runtime.primaryStateValid = false;
+    runtime.lastLog = null;
+    state = normalizeState({ v: 4, schemaVersion: 4, settings: {}, days: {}, bodyweight: [], measurements: [], prs: {} });
+    var selection = chooseInitialSelection(state);
+    state.activeWeekId = selection.weekId;
+    state.activeDayId = selection.dayId;
     rest = idleRest();
+    saveRest();
+    clearWorkoutNotification();
+    releaseWakeLock();
     applyTheme(state.settings.theme);
-    toast("All local data reset.");
+    applyVisualStyle(state.settings.visualStyle);
+    saveState("reset-all");
+    toast("All Lift data and recovery copies were reset.");
     render();
   }
 
@@ -2336,6 +2781,11 @@
   }
 
   function cycleAdherence() {
+    var history = feature("history");
+    if (history && typeof history.adherence === "function") {
+      var reliable = history.adherence(makeCtx(), todayId());
+      return reliable.adherencePct == null ? 0 : reliable.adherencePct;
+    }
     var total = 0;
     var done = 0;
     var today = todayId();
@@ -2353,6 +2803,10 @@
   }
 
   function trainingStreak() {
+    var history = feature("history");
+    if (history && typeof history.streakMetrics === "function") {
+      return history.streakMetrics(makeCtx(), todayId()).current;
+    }
     var today = todayId();
     var days = allDays().filter(function (entry) {
       return (entry.day.exercises || []).length && entry.day.id <= today;
@@ -2572,6 +3026,9 @@
     } else if (action === "setting-choice" || action === "setting-toggle") {
       haptic(3);
       applySettingValue(btn.dataset.setting, btn.dataset.value);
+    } else if (action === "open-history") {
+      haptic(3);
+      openSheet("history", { date: btn.dataset.date || state.activeDayId });
     } else if (action === "open-sheet") {
       haptic(3);
       openSheet(btn.dataset.sheet);
@@ -2599,6 +3056,18 @@
       }
     } else if (action === "toggle-set") {
       toggleSet(Number(btn.dataset.ex), Number(btn.dataset.set));
+    } else if (action === "undo-last") {
+      undoLastLog();
+    } else if (action === "exercise-flag") {
+      toggleExerciseFlag(Number(btn.dataset.ex), btn.dataset.flag);
+    } else if (action === "remove-custom-exercise") {
+      var quickRemove = feature("quickadd");
+      if (quickRemove && typeof quickRemove.remove === "function" && confirm("Remove this custom exercise and its logged sets from today?")) {
+        if (quickRemove.remove(makeCtx(), state.activeDayId, Number(btn.dataset.ex))) {
+          toast("Custom exercise removed.");
+          render();
+        }
+      }
     } else if (action === "set-step") {
       stepSetValue(Number(btn.dataset.ex), Number(btn.dataset.set), btn.dataset.field, Number(btn.dataset.delta));
     } else if (action === "did-planned") {
@@ -2702,6 +3171,8 @@
       }
     } else if (action === "backup-restore") {
       importData();
+    } else if (action === "backup-rollback") {
+      rollbackSnapshot();
     } else if (action === "check-updates") {
       checkForUpdates();
     } else if (action === "library-add") {
@@ -2769,8 +3240,14 @@
         state.activeDayId = iso;
         state.activeWeekId = (weekForDayId(iso) || getWeek(state.activeWeekId)).id;
         runtime.activeTab = "today";
-        closeSheet();
-        render();
+        saveState();
+        if (btn.dataset.status === "unknown" || btn.dataset.status === "missed") {
+          openSheet("history", { date: iso });
+          render();
+        } else {
+          closeSheet();
+          render();
+        }
       }
     } else if (action === "market-filter") {
       runtime.marketFilter = btn.dataset.vibe || "all";
@@ -2796,6 +3273,12 @@
       runtime.quickAddDraft.reps = btn.dataset.reps || 8;
       runtime.quickAddDraft.restSec = Number(btn.dataset.rest) || 60;
       runtime.quickAddDraft.weight = runtime.quickAddDraft.weight || 0;
+      var quickPresetMod = feature("quickadd");
+      var quickPreset = quickPresetMod && (quickPresetMod.PRESETS || []).find(function (item) { return item.name === btn.dataset.name; });
+      if (quickPreset) {
+        runtime.quickAddDraft.weightMode = quickPreset.weightMode;
+        runtime.quickAddDraft.muscleGroup = Object.keys(quickPreset.muscleGroups || {})[0] || "";
+      }
       renderSheet();
     } else if (action === "qa-commit") {
       var qa = feature("quickadd");
@@ -2831,6 +3314,113 @@
       var meas2 = feature("measurements");
       if (meas2 && typeof meas2.deleteEntry === "function") {
         meas2.deleteEntry(makeCtx(), btn.dataset.date, btn.dataset.field);
+        renderSheet();
+      }
+    } else if (action === "profile-save") {
+      var profileHeight = sheet.querySelector("[data-profile-height]");
+      var profileGoal = sheet.querySelector("[data-profile-goal]");
+      var profileStatement = sheet.querySelector("[data-profile-statement]");
+      state.profile = state.profile || {};
+      state.profile.heightCm = clamp(numberOr(profileHeight && profileHeight.value, 167), 80, 250);
+      state.profile.goalMode = profileGoal && profileGoal.value || "recomposition";
+      state.profile.goalStatement = String(profileStatement && profileStatement.value || "").trim() || "Smaller waist + visible abs while preserving muscle";
+      saveState("profile-goals");
+      toast("Goal settings saved.");
+      renderSheet();
+    } else if (action === "history-reconstruct") {
+      var historyMod = feature("history");
+      var historyType = sheet.querySelector("[data-history-type]");
+      var historyNotes = sheet.querySelector("[data-history-notes]");
+      if (historyMod && typeof historyMod.markReconstructed === "function") {
+        historyMod.markReconstructed(state, btn.dataset.date, historyType && historyType.value, historyNotes && historyNotes.value);
+        saveState("history-reconstructed");
+        toast("Session marked as trained without inventing set details.");
+        render();
+      }
+    } else if (action === "history-mark") {
+      var historyStatusMod = feature("history");
+      var statusNotes = sheet.querySelector("[data-history-notes]");
+      if (historyStatusMod && typeof historyStatusMod.markStatus === "function") {
+        historyStatusMod.markStatus(state, btn.dataset.date, btn.dataset.status, statusNotes && statusNotes.value);
+        saveState("history-status");
+        toast("History status updated.");
+        render();
+      }
+    } else if (action === "cardio-log-1k") {
+      var cardioMod = feature("cardio");
+      try {
+        var distanceNode = sheet.querySelector("[data-cardio-distance]");
+        var minutesNode = sheet.querySelector("[data-cardio-min]");
+        var secondsNode = sheet.querySelector("[data-cardio-sec]");
+        cardioMod.addEntry(state, state.activeDayId || todayId(), {
+          distanceKm: Number(distanceNode && distanceNode.value),
+          durationSec: Number(minutesNode && minutesNode.value) * 60 + Number(secondsNode && secondsNode.value),
+          environment: (sheet.querySelector("[data-cardio-environment]") || {}).value,
+          rpe: (sheet.querySelector("[data-cardio-rpe]") || {}).value,
+          heartRate: (sheet.querySelector("[data-cardio-hr]") || {}).value,
+          notes: (sheet.querySelector("[data-cardio-notes]") || {}).value
+        });
+        saveState("cardio-log");
+        toast("Cardio logged.");
+        renderSheet();
+      } catch (cardioErr) {
+        toast("Cardio not saved: " + cardioErr.message);
+      }
+    } else if (action === "cardio-skip") {
+      var cardioSkip = feature("cardio");
+      if (cardioSkip && typeof cardioSkip.addEntry === "function") {
+        var skipReasonNode = sheet.querySelector("[data-cardio-skip-reason]");
+        var skipNotesNode = sheet.querySelector("[data-cardio-notes]");
+        cardioSkip.addEntry(state, state.activeDayId || todayId(), { skipped: true, skipReason: skipReasonNode && skipReasonNode.value || "Recovery", notes: skipNotesNode && skipNotesNode.value });
+        saveState("cardio-skip");
+        toast("Recovery skip logged without penalty.");
+        renderSheet();
+      }
+    } else if (action === "protein-preset") {
+      var nutritionPreset = feature("nutrition");
+      var food = nutritionPreset && nutritionPreset.foodById(btn.dataset.food);
+      if (food) {
+        var quickMeal = sheet.querySelector("[data-protein-quick-meal]");
+        nutritionPreset.addFood(state, todayId(), food, { meal: quickMeal && quickMeal.value });
+        saveState("protein-log");
+        toast(food.name + " added.");
+        renderSheet();
+      }
+    } else if (action === "protein-custom") {
+      var nutritionCustom = feature("nutrition");
+      var proteinName = sheet.querySelector("[data-protein-name]");
+      var proteinGrams = sheet.querySelector("[data-protein-grams]");
+      var proteinMeal = sheet.querySelector("[data-protein-meal]");
+      try {
+        nutritionCustom.addFood(state, todayId(), { id: "custom", name: String(proteinName && proteinName.value || "").trim(), proteinG: Number(proteinGrams && proteinGrams.value), serving: "1 serving" }, { meal: proteinMeal && proteinMeal.value });
+        saveState("protein-log");
+        toast("Protein entry added.");
+        renderSheet();
+      } catch (proteinErr) {
+        toast("Protein not saved: " + proteinErr.message);
+      }
+    } else if (action === "protein-delete") {
+      var nutritionDelete = feature("nutrition");
+      var nutritionDay = nutritionDelete && nutritionDelete.dayBucket(state, todayId());
+      if (nutritionDay) {
+        nutritionDay.entries = nutritionDay.entries.filter(function (entry) { return entry.id !== btn.dataset.id; });
+        saveState("protein-delete");
+        renderSheet();
+      }
+    } else if (action === "supplement-toggle") {
+      var nutritionSupplement = feature("nutrition");
+      if (nutritionSupplement) {
+        nutritionSupplement.setSupplement(state, todayId(), btn.dataset.supplement, btn.dataset.value === "true");
+        saveState("supplement-log");
+        renderSheet();
+      }
+    } else if (action === "program-next-block") {
+      var programNext = feature("program");
+      if (programNext && typeof programNext.appendBlock === "function") {
+        programNext.appendBlock(state, PLAN);
+        saveState("program-extension");
+        toast("Another four-week block is ready.");
+        render();
         renderSheet();
       }
     } else if (action === "health-export") {
@@ -2888,6 +3478,53 @@
     } else if (action === "progress-exercise") {
       runtime.progressExercise = target.value;
       renderSheet();
+    } else if (action === "set-rir") {
+      setRir(Number(target.dataset.ex), Number(target.dataset.set), target.value);
+      render();
+    } else if (action === "supplement-whey") {
+      var nutrition = feature("nutrition");
+      if (nutrition && typeof nutrition.setSupplement === "function") {
+        nutrition.setSupplement(state, todayId(), "wheyServings", target.value);
+        saveState("supplement-log");
+        renderSheet();
+      }
+    } else if (action === "supplement-creatine-dose") {
+      var nutritionDose = feature("nutrition");
+      if (nutritionDose && typeof nutritionDose.setCreatineDose === "function") {
+        nutritionDose.setCreatineDose(state, target.value);
+        saveState("supplement-preference");
+        renderSheet();
+      }
+    } else if (action === "qa-input") {
+      runtime.quickAddDraft = runtime.quickAddDraft || {};
+      runtime.quickAddDraft[target.dataset.field] = target.value;
+    }
+  }
+
+  function handleKeydown(event) {
+    if (!runtime.sheet) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeSheet();
+      return;
+    }
+    if (event.key !== "Tab" || runtime.sheetMode === "page") return;
+    var focusable = Array.from(sheet.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter(function (node) {
+      return node.offsetParent !== null || node === document.activeElement;
+    });
+    if (!focusable.length) {
+      event.preventDefault();
+      sheet.focus();
+      return;
+    }
+    var first = focusable[0];
+    var last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
     }
   }
 
@@ -3065,11 +3702,17 @@
     } catch (err) {}
   }
 
-  function init() {
+  async function init() {
+    await recoverDurableSnapshot();
     applyTheme(state.settings.theme);
     applyVisualStyle(state.settings.visualStyle);
     saveState();
+    var persistence = feature("persistence");
+    if (persistence && typeof persistence.forceSnapshot === "function") {
+      await persistence.forceSnapshot(state, "startup").catch(function () {});
+    }
     render();
+    if (runtime.recoveredFrom) toast("Recovered Lift data from " + runtime.recoveredFrom + ".");
     registerServiceWorker();
     bindNotificationActionMessages();
     handleColdNotificationAction();
@@ -3081,6 +3724,7 @@
     document.addEventListener("click", handleClick);
     document.addEventListener("input", handleInput);
     document.addEventListener("change", handleChange);
+    document.addEventListener("keydown", handleKeydown);
     sheetBackdrop.addEventListener("click", closeSheet);
     var drawerBackdrop = document.getElementById("drawer-backdrop");
     if (drawerBackdrop) {
@@ -3172,10 +3816,15 @@
       mergeDateIds: mergeDateIds,
       mergeMeasurements: mergeMeasurements,
       normalizeState: normalizeState,
+      chooseRecoveryCandidate: chooseRecoveryCandidate,
+      stateUpdatedAt: stateUpdatedAt,
+      getDay: getDay,
       numberOr: numberOr,
       pad2: pad2
     };
   } else {
-    init();
+    init().catch(function () {
+      app.innerHTML = '<div class="app-empty">Lift could not finish starting. Reload the app or restore a backup.</div>';
+    });
   }
 })();

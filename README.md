@@ -1,6 +1,13 @@
-# Lift - Progressive Overload
+# Lift - Adaptive Recomposition Companion
 
-Lift is a small installable PWA that combines a data-driven May 12-September 27, 2026 progressive-overload plan with an interactive workout tracker. It now also includes platform-style fitness surfaces: activity rings, personal records, badges, post-workout summaries, a training heatmap, journal feed, goals, step logging, workout library templates, and backup/export tools.
+Lift is a local-first PWA and Android WebView app built around Lem's hypertrophy and body-recomposition goal. It preserves the original May 12-September 27, 2026 program, then adds adaptive next-session targets, honest history recovery, weekly muscle-volume review, 1 km cardio tracking, Filipino-friendly protein logging, body/waist trends, a rolling four-week continuation block, and layered backups.
+
+## Coaching Model
+
+- Adaptive targets use verified reps, load, RIR, form/pain flags, recent recovery spacing, phase, and deload context. Suggestions are deterministic, explain their reasoning, and can be changed by the athlete.
+- Exercise metadata makes load semantics explicit: machine/total, dumbbell total, per hand, per side, bodyweight, and assisted load where less assistance is progress.
+- Unknown historical dates stay unknown. A workout is only completed from verified set data; reconstructed dates record that training happened without fabricating sets, volume, calories, or PRs.
+- Weekly review combines honest adherence, direct/fractional hard-set volume, protein consistency, sustainable cardio, body-weight/waist direction, and verified key-lift retention. It is descriptive coaching, not a medical or body-fat diagnosis.
 
 ## Local Serve
 
@@ -50,14 +57,14 @@ Do not push from this workspace unless that is explicitly requested. Review the 
 
 ## Data And Backups
 
-Workout state is stored in browser `localStorage` under `lift.v3.state`. Older `lift.v2.state` data is migrated automatically and left in place for rollback. This keeps the app simple and offline-friendly, but it has limits:
+The v4 schema remains stored under the compatible `lift.v3.state` browser key. Older v2/v3 states are migrated in place; empty legacy day shells become `unknown`, never automatic misses. Each save is mirrored to IndexedDB with up to eight valid generations and to three localStorage rollback slots. The Android wrapper also keeps an atomically written app-private JSON mirror that is included in Android Auto Backup when the device, account, and OS permit it.
 
-- Data is local to the browser profile and device.
-- Clearing site data, private browsing cleanup, browser resets, or changing domains can remove the saved state.
-- `localStorage` is not a cloud backup or sync system.
-- Storage quotas vary by browser and can be reclaimed under pressure.
+- Lift has no server account and performs no silent cloud upload.
+- Browser data can still be lost by clearing site data, private browsing cleanup, profile resets, origin changes, quota reclamation, or device loss.
+- Android Auto Backup is platform-managed and is not guaranteed on every device.
+- A downloaded/shared JSON file is the portable recovery path and should be kept outside the device.
 
-Use the app's backup/export workflow before clearing browser data or switching devices. The Backup sheet supports JSON download and the system share sheet. Google Drive/Dropbox OAuth is intentionally not hardcoded; adding real cloud upload requires provider client IDs.
+The Backup sheet reports local/external backup health, app/schema version, rolling generations, and the last external backup time. Restore validates and migrates JSON before changing live state, creates a pre-restore snapshot, and supports replace or merge. Merge resolves logged sets by timestamp while retaining notes and deduplicating sessions/custom exercises.
 
 ## Step Counter Caveat
 
