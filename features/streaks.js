@@ -50,7 +50,11 @@
     var days = (ctx.allDays && ctx.allDays()) || [];
     days.forEach(function (entry) {
       var ds = (ctx.state.days && ctx.state.days[entry.day.id]) || {};
-      if (hasValidCompletedSet(ds)) set[entry.day.id] = true;
+      var history = root.history;
+      var status = history && history.resolveStatus
+        ? history.resolveStatus(entry.day, ds, currentDateId(ctx))
+        : (hasValidCompletedSet(ds) ? "completed" : "unknown");
+      if (status === "completed" || status === "reconstructed") set[entry.day.id] = true;
     });
     return set;
   }
@@ -60,12 +64,19 @@
     var days = (ctx.allDays && ctx.allDays()) || [];
     days.forEach(function (entry) {
       var ds = (ctx.state.days && ctx.state.days[entry.day.id]) || {};
-      if (ds.finishedAt && hasValidCompletedSet(ds)) set[entry.day.id] = true;
+      var history = root.history;
+      var status = history && history.resolveStatus
+        ? history.resolveStatus(entry.day, ds, currentDateId(ctx))
+        : (ds.finishedAt && hasValidCompletedSet(ds) ? "completed" : "unknown");
+      if (status === "completed" || status === "reconstructed") set[entry.day.id] = true;
     });
     return set;
   }
 
   function streakCount(ctx) {
+    if (root.history && typeof root.history.streakMetrics === "function") {
+      return root.history.streakMetrics(ctx, currentDateId(ctx)).current;
+    }
     var completed = activityDaysSet(ctx);
     var today = currentDateId(ctx);
     var planned = ((ctx.allDays && ctx.allDays()) || []).filter(function (entry) {
@@ -203,6 +214,10 @@
   function renderStreakCard(ctx) {
     var streak = streakCount(ctx);
     var wp = weekProgress(ctx);
+    var historyMetrics = root.history && root.history.streakMetrics
+      ? root.history.streakMetrics(ctx, currentDateId(ctx))
+      : { reconstructedInCurrent: 0, longestVerified: streak };
+    var activeWeeks = weeklyHistory(ctx, 52).filter(function (row) { return row.sessions > 0; }).length;
     var c = 2 * Math.PI * 50; // r=50
     var dashOffset = c * (1 - wp.ratio);
 
@@ -213,10 +228,10 @@
       '<div class="label-num">' + wp.count + '<span style="font-size:14px;font-variation-settings:\'wght\' 600;color:var(--md-on-surface-variant);margin-left:2px">/' + wp.goal + '</span></div>' +
       '</div>' +
       '<div class="streak-meta">' +
-      '<strong>' + streak + ' day streak</strong>' +
+      '<strong>' + streak + ' session streak</strong>' +
       '<p>' + wp.count + ' of ' + wp.goal + ' weekly sessions logged. ' +
-      (wp.ratio >= 1 ? "Goal hit — keep the engine warm." : "Need " + (wp.goal - wp.count) + " more this week.") +
-      '</p>' +
+      (wp.ratio >= 1 ? "Weekly target reached; recovery still counts." : (wp.goal - wp.count) + " planned session" + (wp.goal - wp.count === 1 ? "" : "s") + " remain if recovery is good.") +
+      '</p><p class="section-sub">Active training weeks: ' + activeWeeks + ' &middot; longest verified: ' + historyMetrics.longestVerified + ' &middot; reconstructed in current: ' + historyMetrics.reconstructedInCurrent + '</p>' +
       '<div class="streak-flames">' +
       Array.from({ length: 7 }, function (_, i) {
         return '<span data-on="' + (i < streak ? "true" : "false") + '">' + (i < streak ? "&#128293;" : "&#128293;") + '</span>';
@@ -230,6 +245,7 @@
     var html = '<div class="sheet-grid">';
     html += renderStreakCard(ctx);
     html += renderWeeklyFocus(ctx);
+    if (root.volume && typeof root.volume.renderVolume === "function") html += root.volume.renderVolume(ctx);
 
     // Last 12 weeks bar chart.
     var hist = weeklyHistory(ctx, 12);
@@ -248,7 +264,7 @@
     html += '</div></div>';
 
     html += '<div class="overview-card"><strong>Streak rules</strong>' +
-      '<p>Any valid completed set counts for a planned training day. Planned rest days and today\'s not-yet-started workout do not break continuity; an earlier missed training day resets the chain.</p></div>';
+      '<p>Verified workouts and explicitly reconstructed trained days count. Rest days are skipped, unknown data-loss gaps are not treated as failures, and only a day marked truly missed breaks the reliable chain.</p></div>';
     html += '</div>';
     return html;
   }

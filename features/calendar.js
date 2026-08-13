@@ -42,18 +42,26 @@
 
   function statusFor(ctx, iso) {
     var entry = planEntryFor(ctx, iso);
-    if (entry && !(entry.day.exercises || []).length) return "none";
     var ds = (ctx.state.days && ctx.state.days[iso]) || null;
-    if (!ds) return "none";
-    if (entry && typeof ctx.dayStatus === "function") {
-      var status = ctx.dayStatus(entry.day, ctx.state);
-      if (status === "done" || status === "partial") return status;
+    if (entry && root.history && typeof root.history.resolveStatus === "function") {
+      return root.history.resolveStatus(entry.day, ds, ctx.todayId ? ctx.todayId() : null);
     }
+    if (entry && !(entry.day.exercises || []).length) return "rest";
+    if (!ds) return entry ? "planned" : "none";
     var hasAny = ds.completed && Object.keys(ds.completed).some(function (key) {
       return Number((ds.completed[key] || {}).reps) > 0;
     });
-    if (hasAny || (ds.finishedAt && plannedFor(ctx, iso))) return "partial";
+    if (hasAny || (ds.finishedAt && plannedFor(ctx, iso))) return "completed";
     return plannedFor(ctx, iso) ? "planned" : "none";
+  }
+
+  function statusMark(status) {
+    return ({ completed: "\u2713", reconstructed: "R", missed: "!", unknown: "?", planned: "\u2022", rest: "\u2013" })[status] || "";
+  }
+
+  function statusLabel(status) {
+    if (root.history && typeof root.history.statusLabel === "function") return root.history.statusLabel(status);
+    return ({ completed: "Verified workout", reconstructed: "Trained - details unavailable", missed: "Missed", unknown: "Unknown", planned: "Planned", rest: "Rest", none: "No planned session" })[status] || status;
   }
 
   function renderCalendar(ctx) {
@@ -83,36 +91,41 @@
       var isToday = c.iso === today;
       html += '<button class="cal-cell" data-action="cal-day" data-iso="' + ctx.escapeHtml(c.iso) +
         '" data-status="' + status + '" data-other="' + (c.other ? "true" : "false") + '"' +
+        ' aria-label="' + ctx.escapeHtml(c.iso + ", " + statusLabel(status)) + '"' +
         (isToday ? ' data-today="true"' : "") +
-        '>' + c.date + '</button>';
+        '><span class="cal-date">' + c.date + '</span><span class="cal-status-mark" aria-hidden="true">' + statusMark(status) + '</span></button>';
     });
     html += '</div>' +
       '<div class="cal-legend">' +
-      '<span><span class="dot" style="background:linear-gradient(135deg,var(--md-primary),var(--md-secondary))"></span>Done</span>' +
-      '<span><span class="dot" style="background:var(--md-secondary-container)"></span>Partial</span>' +
-      '<span><span class="dot" style="background:color-mix(in oklab,var(--md-tertiary) 18%,transparent)"></span>Planned</span>' +
+      '<span><span class="legend-mark">\u2713</span>Verified</span>' +
+      '<span><span class="legend-mark">R</span>Reconstructed</span>' +
+      '<span><span class="legend-mark">\u2022</span>Planned</span>' +
+      '<span><span class="legend-mark">?</span>Unknown</span>' +
+      '<span><span class="legend-mark">!</span>Missed</span>' +
+      '<span><span class="legend-mark">\u2013</span>Rest</span>' +
       '<span><span class="dot" style="background:transparent;border:2px solid var(--md-primary)"></span>Today</span>' +
       '</div></div>';
 
     // Summary metrics for the visible month.
-    var counts = { done: 0, partial: 0, due: 0, plannedAhead: 0 };
+    var counts = { completed: 0, reconstructed: 0, missed: 0, unknown: 0, plannedAhead: 0 };
     cells.forEach(function (c) {
       if (c.other) return;
       var s = statusFor(ctx, c.iso);
-      if (s === "done") counts.done += 1;
-      else if (s === "partial") counts.partial += 1;
+      if (s === "completed") counts.completed += 1;
+      else if (s === "reconstructed") counts.reconstructed += 1;
+      else if (s === "missed") counts.missed += 1;
+      else if (s === "unknown") counts.unknown += 1;
       else if (plannedFor(ctx, c.iso)) {
         if (c.iso > today) counts.plannedAhead += 1;
-        else counts.due += 1;
       }
     });
     html += '<div class="metric-grid">' +
-      '<div class="metric-card"><div class="label">Completed</div><div class="value">' + counts.done + '</div></div>' +
-      '<div class="metric-card"><div class="label">Partial</div><div class="value">' + counts.partial + '</div></div>' +
-      '<div class="metric-card"><div class="label">Planned ahead</div><div class="value">' + counts.plannedAhead + '</div></div>' +
+      '<div class="metric-card"><div class="label">Verified</div><div class="value">' + counts.completed + '</div></div>' +
+      '<div class="metric-card"><div class="label">Reconstructed</div><div class="value">' + counts.reconstructed + '</div></div>' +
+      '<div class="metric-card"><div class="label">Unknown</div><div class="value">' + counts.unknown + '</div></div>' +
       '<div class="metric-card"><div class="label">Adherence</div><div class="value">' +
-      (counts.due + counts.done + counts.partial > 0
-        ? Math.round((counts.done) / Math.max(1, counts.done + counts.partial + counts.due) * 100) + "%"
+      (counts.completed + counts.reconstructed + counts.missed > 0
+        ? Math.round((counts.completed + counts.reconstructed) / Math.max(1, counts.completed + counts.reconstructed + counts.missed) * 100) + "%"
         : "-") +
       '</div></div></div>';
 

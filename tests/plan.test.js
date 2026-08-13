@@ -93,7 +93,7 @@ describe("July bridge and Weeks 12-20 training plan", () => {
       ),
       0
     ));
-    expect(totalSets).toEqual([63, 63, 63, 38]);
+    expect(totalSets).toEqual([67, 67, 67, 40]);
 
     const saturdayInclines = extension.slice(0, 3).map((week) => week.days[5].exercises[0].sets);
     expect(saturdayInclines.map((sets) => sets.map((set) => set.weight))).toEqual([

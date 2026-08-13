@@ -26,6 +26,11 @@
       note: cfg.note || "",
       defaultRest: cfg.defaultRest || DEFAULT_REST,
       toFailure: !!cfg.toFailure,
+      weightMode: cfg.weightMode || null,
+      loadDirection: cfg.loadDirection || null,
+      incrementKg: cfg.incrementKg || null,
+      repRange: cfg.repRange || null,
+      muscleGroups: cfg.muscleGroups || null,
       sets: cfg.sets || []
     };
   }
@@ -43,6 +48,70 @@
       footer: cfg.footer || "",
       exercises: cfg.exercises || []
     };
+  }
+
+  function enrichExerciseMetadata(item) {
+    var name = String(item.name || "").toLowerCase();
+    if (!item.weightMode) {
+      if (/cable lateral raise/.test(name)) item.weightMode = "per_side";
+      else if (/\bdb\b|dumbbell/.test(name)) item.weightMode = "total";
+      else item.weightMode = "machine_total";
+    }
+    if (/assisted/.test(name)) item.loadDirection = "lower";
+    if (!item.incrementKg) {
+      item.incrementKg = /lateral raise|rear delt|curl/.test(name) ? 1 : /\bdb\b|dumbbell/.test(name) ? 2 : 2.5;
+    }
+    if (!item.repRange) {
+      var reps = (item.sets || []).map(function (set) { return Number(set.reps || 0); }).filter(function (value) { return value > 0; });
+      var top = reps.length ? Math.max.apply(null, reps) : 12;
+      item.repRange = [Math.max(1, top - 2), top];
+    }
+    if (/incline.*press/.test(name)) item.muscleGroups = { upperChest: 1, chest: 0.5, triceps: 0.35 };
+    else if (/one-arm cable pulldown|lat pulldown/.test(name)) item.muscleGroups = { lats: 1, biceps: 0.5 };
+    else if (/cable lateral raise/.test(name)) item.muscleGroups = { sideDelts: 1 };
+    else if (/abdominal machine|hanging knee raise/.test(name)) item.muscleGroups = { abs: 1 };
+    else if (/romanian deadlift/.test(name)) item.muscleGroups = { hamstrings: 1, glutes: 0.75, spinalErectors: 0.5 };
+    else if (/back extension/.test(name)) item.muscleGroups = { spinalErectors: 1, glutes: 0.5, hamstrings: 0.5 };
+    return item;
+  }
+
+  function addSpecialization(plan) {
+    (plan.weeks || []).forEach(function (week) {
+      (week.days || []).forEach(function (trainingDay) {
+        (trainingDay.exercises || []).forEach(enrichExerciseMetadata);
+      });
+      if (Number(week.num) < 14) return;
+      var deload = String(week.phase || "").toLowerCase() === "deload";
+      var tuesday = (week.days || []).find(function (trainingDay) { return trainingDay.dow === "Tue"; });
+      if (tuesday && !tuesday.exercises.some(function (item) { return item.name === "45 Degree Back Extension"; })) {
+        tuesday.exercises.push(enrichExerciseMetadata(exercise({
+          name: "45 Degree Back Extension",
+          target: deload ? "Bodyweight - 1 x 12 easy" : "10 kg - 2 x 12",
+          tag: deload ? "deload" : "lower-back volume",
+          defaultRest: 90,
+          weightMode: "total",
+          incrementKg: 2.5,
+          repRange: [10, 15],
+          muscleGroups: { spinalErectors: 1, glutes: 0.5, hamstrings: 0.5 },
+          note: "Controlled spinal-erector work. Stop before fatigue changes position; this sits 48 hours before Thursday hinges.",
+          sets: repeatSet(deload ? 1 : 2, 12, deload ? 0 : 10)
+        })));
+      }
+      var saturday = (week.days || []).find(function (trainingDay) { return trainingDay.dow === "Sat"; });
+      if (saturday && !saturday.exercises.some(function (item) { return item.name === "Hanging Knee Raise"; })) {
+        saturday.exercises.push(enrichExerciseMetadata(exercise({
+          name: "Hanging Knee Raise",
+          target: deload ? "1 x 10 controlled" : "2 x 10-15",
+          tag: deload ? "deload" : "ab volume",
+          defaultRest: 60,
+          weightMode: "bodyweight",
+          repRange: [10, 15],
+          muscleGroups: { abs: 1 },
+          note: "Posterior pelvic tilt, controlled range. Add reps before load.",
+          sets: repeatSet(deload ? 1 : 2, 10, 0)
+        })));
+      }
+    });
   }
 
   window.LIFT_PLAN = {
@@ -2163,7 +2232,7 @@
         sub: "Keep frequency, shed fatigue",
         subtitle: "Keep frequency, shed fatigue",
         dateRange: "Sep 21-27",
-        notice: "Keep the six-day schedule but cut volume to 38 easy sets. Use RPE 5-6, finish every set with at least three reps in reserve, and make no PR attempts. Sunday is the only training-free day.",
+        notice: "Keep the six-day schedule but cut volume to 40 easy sets, including brief core and back-extension work. Use RPE 5-6, finish every set with at least three reps in reserve, and make no PR attempts. Sunday is the only training-free day.",
         days: [
           day({
             id: "2026-09-21", dow: "Mon", dom: 21, month: "Sep", type: "legs", title: "Legs & Core (Deload)",
@@ -2229,4 +2298,5 @@
       }
     ]
   };
+  addSpecialization(window.LIFT_PLAN);
 }());

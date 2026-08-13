@@ -36,7 +36,7 @@ describe("feature regression fixes", () => {
     expect(ctx.toast).toHaveBeenCalledWith("Enter at least 1 rep.");
   });
 
-  test("calendar excludes recovery days and preserves finished partial workouts", () => {
+  test("calendar distinguishes verified workouts and recovery days", () => {
     const workout = { id: "2026-07-27", exercises: [{ sets: [{ reps: 8, weight: 50 }, { reps: 8, weight: 50 }] }] };
     const recovery = { id: "2026-07-29", exercises: [] };
     const state = {
@@ -52,8 +52,8 @@ describe("feature regression fixes", () => {
     };
     const calendar = window.LIFT_FEATURES.calendar;
 
-    expect(calendar.statusFor(ctx, workout.id)).toBe("partial");
+    expect(calendar.statusFor(ctx, workout.id)).toBe("completed");
     expect(calendar.plannedFor(ctx, recovery.id)).toBe(false);
-    expect(calendar.statusFor(ctx, recovery.id)).toBe("none");
+    expect(calendar.statusFor(ctx, recovery.id)).toBe("rest");
   });
 });

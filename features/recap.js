@@ -23,16 +23,36 @@
     start.setDate(today.getDate() - day - 7);
     var end = new Date(start);
     end.setDate(start.getDate() + 6);
-    var sessions = 0, volume = 0, prs = 0;
+    var sessions = 0, reconstructed = 0, volume = 0, prs = 0;
     ctx.allDays().forEach(function (entry) {
       var d = new Date(entry.day.id + "T00:00:00");
       if (d < start || d > end) return;
       var ds = ctx.state.days[entry.day.id] || {};
-      if (ds.finishedAt && ctx.completedSetCount(entry.day, ctx.state) > 0) sessions += 1;
+      var status = root.history && root.history.resolveStatus
+        ? root.history.resolveStatus(entry.day, ds, ctx.todayId())
+        : (ds.finishedAt && ctx.completedSetCount(entry.day, ctx.state) > 0 ? "completed" : "unknown");
+      if (status === "completed" || status === "reconstructed") sessions += 1;
+      if (status === "reconstructed") reconstructed += 1;
       volume += ctx.completedVolume(entry.day);
       Object.keys(ds.completed || {}).forEach(function (key) { if ((ds.completed[key] || {}).pr) prs += 1; });
     });
-    return { sessions: sessions, volume: volume, prs: prs, streak: ctx.trainingStreak(), iso: currentIso(ctx) };
+    var startId = ctx.localDateId ? ctx.localDateId(start) : start.toISOString().slice(0, 10);
+    var endId = ctx.localDateId ? ctx.localDateId(end) : end.toISOString().slice(0, 10);
+    var muscle = root.volume && root.volume.rangeMetrics ? root.volume.rangeMetrics(ctx, startId, endId) : {};
+    var cardio = root.cardio && root.cardio.allEntries ? root.cardio.allEntries(ctx.state).filter(function (entry) {
+      return entry.date >= startId && entry.date <= endId && !entry.skipped;
+    }).reduce(function (sum, entry) { return sum + Number(entry.distanceKm || 0); }, 0) : 0;
+    var protein = 0;
+    if (root.nutrition && root.nutrition.totalProtein) {
+      for (var offset = 0; offset < 7; offset += 1) {
+        var date = new Date(start); date.setDate(start.getDate() + offset);
+        protein += root.nutrition.totalProtein(ctx.state, ctx.localDateId ? ctx.localDateId(date) : date.toISOString().slice(0, 10));
+      }
+      protein /= 7;
+    }
+    var body = root.body && root.body.snapshot ? root.body.snapshot(ctx.state, endId) : {};
+    var strength = root.body && root.body.strengthRetention ? root.body.strengthRetention(ctx, endId) : null;
+    return { sessions: sessions, reconstructed: reconstructed, volume: volume, prs: prs, streak: ctx.trainingStreak(), iso: currentIso(ctx), muscle: muscle, cardioKm: Math.round(cardio * 10) / 10, averageProteinG: Math.round(protein), body: body, strength: strength, startId: startId, endId: endId };
   }
 
   function shouldShowWeeklyRecap(ctx) {
@@ -45,7 +65,23 @@
 
   function renderWeeklyRecapCard(ctx) {
     var r = lastWeekRecap(ctx);
-    return '<section class="recap-card"><div class="recap-title">Last week recap</div><div class="recap-text">' + r.sessions + ' sessions - ' + ctx.cleanNumber(ctx.kgToDisplay(r.volume), 0) + ' ' + ctx.unitLabel() + ' moved - ' + r.prs + ' PRs - ' + r.streak + '-day streak</div><div class="recap-actions"><button class="action-btn secondary" data-action="open-sheet" data-sheet="journal">Journal</button><button class="action-btn secondary" data-action="dismiss-recap" data-iso="' + r.iso + '">Dismiss</button></div></section>';
+    var priorities = nextPriorities(r, ctx);
+    var bodyText = r.body.weeklyChangeKg == null ? 'weight trend unavailable' : 'weight ' + (r.body.weeklyChangeKg > 0 ? '+' : '') + r.body.weeklyChangeKg + ' kg/week';
+    if (r.body.waistChangeCm != null) bodyText += ', waist ' + (r.body.waistChangeCm > 0 ? '+' : '') + r.body.waistChangeCm + ' cm';
+    var strengthText = r.strength ? ' - key-lift strength ' + (r.strength.changePct > 0 ? '+' : '') + r.strength.changePct + '%' : '';
+    return '<section class="recap-card"><div class="recap-title">Last week recap</div><div class="recap-text">' + r.sessions + ' sessions' + (r.reconstructed ? ' (' + r.reconstructed + ' reconstructed)' : '') + ' - upper chest ' + Number(r.muscle.upperChest || 0) + ' sets - side delts ' + Number(r.muscle.sideDelts || 0) + ' - abs ' + Number(r.muscle.abs || 0) + ' - lower back ' + Number(r.muscle.spinalErectors || 0) + ' - ' + r.cardioKm + ' km cardio - ' + r.averageProteinG + ' g/day protein - ' + bodyText + strengthText + '</div><p>' + ctx.escapeHtml(priorities.join(' ')) + '</p><div class="recap-actions"><button class="action-btn secondary" data-action="open-sheet" data-sheet="streaks">Full recap</button><button class="action-btn secondary" data-action="dismiss-recap" data-iso="' + r.iso + '">Dismiss</button></div></section>';
+  }
+
+  function nextPriorities(recap, ctx) {
+    var out = [];
+    if (Number(recap.muscle.upperChest || 0) < 8) out.push("Keep both upper-chest exposures next week.");
+    if (Number(recap.muscle.sideDelts || 0) < 8) out.push("Keep side-delt work controlled across two or three sessions.");
+    if (Number(recap.muscle.lats || 0) < 8) out.push("Complete both planned lat exposures before adding arm work.");
+    if (Number(recap.muscle.abs || 0) < 6) out.push("Complete at least two direct ab sessions.");
+    if (Number(recap.muscle.spinalErectors || 0) < 4) out.push("Keep two well-spaced lower-back exposures.");
+    if (recap.averageProteinG < Number(ctx.state.profile && ctx.state.profile.proteinRangeMinG || 120)) out.push("Reach at least 120 g protein on five days.");
+    if (!out.length) out.push("Keep loads conservative and add reps only with clean form and 1-2 RIR.");
+    return out.slice(0, 3);
   }
 
   function renderCycleReview(ctx) {
@@ -68,6 +104,7 @@
     lastWeekRecap: lastWeekRecap,
     shouldShowWeeklyRecap: shouldShowWeeklyRecap,
     renderWeeklyRecapCard: renderWeeklyRecapCard,
+    nextPriorities: nextPriorities,
     renderCycleReview: renderCycleReview
   };
 })();

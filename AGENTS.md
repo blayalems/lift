@@ -92,12 +92,14 @@ Only create a new PR when the user explicitly says "push to PR N" or
 
 ## Version bump checklist
 
-When bumping the app version, update ALL THREE locations atomically in one commit:
+When bumping the app version, update every version surface atomically in one commit:
 
 | File | What to change |
 |---|---|
 | `app.js` | `var APP_VERSION = "x.y.z";` (line ~11) |
+| `sw.js` | `APP_VERSION` and the cache generation name |
 | `version.json` | `{"version":"x.y.z","build":"YYYY-MM-DD"}` |
+| `package.json`, `package-lock.json` | package `version` |
 | `android/app/build.gradle.kts` | `versionCode = N` (increment by 1) and `versionName = "x.y.z"` |
 
 The `build` date in `version.json` should be today's date in `YYYY-MM-DD` format.
@@ -246,9 +248,16 @@ Fields to keep in sync with the Gradle project:
 | `shareJsonFile(filename, json, title)` | `app.js` / `cloud.js` backup share | Shares a JSON backup through a FileProvider content URI |
 | `shareImageFile(filename, dataUrl, title)` | `app.js` workout image share | Shares a PNG through a FileProvider content URI |
 | `haptic(patternJson)` | `app.js` haptic helper | Routes tap and waveform haptics through Android |
+| `saveStateMirror(json)` | `features/persistence.js` save path | Validates JSON and atomically replaces the app-private canonical state mirror |
+| `loadStateMirror()` | `features/persistence.js` startup recovery | Returns the validated canonical state mirror, or an empty string when unavailable |
+| `clearStateMirror()` | explicit Reset all flow | Deletes the native mirror so an intentional reset cannot resurrect old data |
 
 `window.LIFT_IS_NATIVE` is set to `true` by the WebViewClient's `onPageFinished` injection.
 Check this flag before calling any `window.LiftAndroid.*` method from JS.
+
+The canonical mirror is covered by `res/xml/backup_rules.xml` and
+`res/xml/data_extraction_rules.xml`. Android Auto Backup is an additional recovery
+layer, not a guaranteed sync service; retain the user-visible JSON backup workflow.
 
 ---
 
