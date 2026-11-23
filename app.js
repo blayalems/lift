@@ -8,7 +8,7 @@
   var sheetBackdrop = document.getElementById("sheet-backdrop");
   var summaryOverlay = document.getElementById("summary-overlay");
 
-  var APP_VERSION = "1.8.0";
+  var APP_VERSION = "1.9.0";
   window.LIFT_APP_VERSION = APP_VERSION;
 
   var STORE_KEY = "lift.v3.state";
@@ -91,12 +91,14 @@
     recoveryCandidateAt: 0,
     snapshotRecoveryNeeded: false,
     primaryStateValid: false,
-    strengthCalc: { weight: null, reps: 5 }
+    strengthCalc: { weight: null, reps: 5 },
+    quickMeal: "breakfast"
   };
 
   var state = loadState();
   var rest = loadRest();
   var wakeLock = null;
+  var audioCtx = null;
 
   function escapeHtml(value) {
     return String(value == null ? "" : value).replace(/[&<>"']/g, function (ch) {
@@ -269,12 +271,14 @@
     loaded.calories = loaded.calories || {};
     loaded.restingHr = Array.isArray(loaded.restingHr) ? loaded.restingHr : [];
     loaded.customWorkouts = Array.isArray(loaded.customWorkouts) ? loaded.customWorkouts : [];
+    loaded.strengthEstimates = Array.isArray(loaded.strengthEstimates) ? loaded.strengthEstimates : [];
     loaded.cloudSync = Object.assign({ provider: null, lastBackupAt: null, autoWeekly: false }, loaded.cloudSync || {});
     loaded.weeklyRecapDismissedIso = loaded.weeklyRecapDismissedIso || null;
+    loaded.reentryDismissedWeekId = loaded.reentryDismissedWeekId || null;
     loaded.cycleReviewSeen = !!loaded.cycleReviewSeen;
     var program = feature("program");
     if (program && typeof program.ensureRollingPlan === "function" && PLAN) {
-      program.ensureRollingPlan(loaded, PLAN);
+      program.ensureRollingPlan(loaded, PLAN, todayId());
     }
     annotateCustomExerciseIndexes(loaded);
     return loaded;
@@ -541,6 +545,7 @@
       allDays: allDays,
       getDay: getDay,
       getWeek: getWeek,
+      weekForDayId: weekForDayId,
       dayState: dayState,
       totalSetCount: totalSetCount,
       totalSetCountForSource: totalSetCountForSource,
@@ -580,7 +585,6 @@
       isoWeekId: isoWeekId,
       defaultGoals: DEFAULT_GOALS,
       runtime: runtime,
-      allDays: allDays,
       PLAN: PLAN
     };
   }
@@ -813,7 +817,15 @@
 
   function phaseName(phase) {
     phase = normalizePhase(phase);
-    return ({ consolidate: "Consolidate", load: "Load", loadplus: "Load+", deload: "Deload", test: "Test" })[phase] || phase || "Plan";
+    return ({ consolidate: "Consolidate", load: "Load", loadplus: "Load+", deload: "Deload", test: "Test", reentry: "Reentry" })[phase] || phase || "Plan";
+  }
+
+  function weekNoticeHeading(phase) {
+    var normalized = normalizePhase(phase);
+    if (normalized === "reentry") return "Reentry note";
+    if (normalized === "deload") return "Deload notice";
+    if (normalized === "test") return "Test week note";
+    return "Week note";
   }
 
   function neuralPhase(phase, day) {
@@ -821,6 +833,7 @@
     var type = String(day && day.type || "").toLowerCase();
     if (normalized === "test") return "test";
     if (normalized === "deload" || type === "rest") return "deload";
+    if (normalized === "reentry") return "reentry";
     if (normalized === "load" || normalized === "loadplus") return "load";
     if (normalized === "consolidate") return "consolidate";
     return "train";
@@ -861,9 +874,10 @@
 
   function adaptiveSet(day, ex, exIndex, set, setIndex) {
     var suggestion = adaptiveTarget(day, ex, exIndex);
-    if (!suggestion || suggestion.action === "deload" || suggestion.action === "baseline") return plannedSet(set);
+    if (!suggestion || suggestion.action === "deload" || suggestion.action === "baseline" || suggestion.action === "reentry") return plannedSet(set);
     var first = plannedSet((ex.sets || [])[0] || set);
     var current = plannedSet(set);
+    if (current.reps <= 0 || ex.toFailure) return current;
     var assisted = feature("progression") && feature("progression").isAssisted(ex);
     var weightOffset = current.weight - first.weight;
     var repsOffset = current.reps - first.reps;
@@ -998,8 +1012,13 @@
 
     html += renderCompanionSnapshot(day, week);
 
+    var reentry = feature("reentry");
+    if (reentry && typeof reentry.shouldShowBanner === "function" && reentry.shouldShowBanner(makeCtx())) {
+      html += reentry.renderBanner(makeCtx());
+    }
+
     html += '<main class="content">';
-    if (week.notice) html += '<section class="notice"><strong>Deload notice</strong><p>' + richText(week.notice) + "</p></section>";
+    if (week.notice) html += '<section class="notice" data-phase="' + escapeHtml(normalizePhase(week.phase)) + '"><strong>' + escapeHtml(weekNoticeHeading(week.phase)) + '</strong><p>' + richText(week.notice) + "</p></section>";
     if (ds.readiness != null && total) {
       var low = Number(ds.readiness) < 7;
       html += '<section class="notice ' + (low ? "readiness-warn" : "") + '"><strong>Readiness ' + escapeHtml(ds.readiness) + '/10</strong><p>' + (low ? "Caveat notes are highlighted for this workout." : "Readiness logged for this workout.") + "</p></section>";
@@ -1198,6 +1217,22 @@
     summaryOverlay.dataset.open = "true";
   }
 
+  function shouldShowCopySet1(day, exIndex, sets) {
+    if (!sets || sets.length < 2) return false;
+    var ds = dayState(day.id);
+    var s1 = getCurrentSetValue(day, exIndex, 0);
+    for (var si = 1; si < sets.length; si += 1) {
+      var key = exIndex + "." + si;
+      if (isCompletedSet(ds.completed[key])) continue;
+      var cur = getCurrentSetValue(day, exIndex, si);
+      var differs = Math.abs(cur.weight - s1.weight) > 1e-6 || cur.reps !== s1.reps;
+      var draft = ds.drafts[key];
+      var hasMatchingDraft = !!(draft && Math.abs(numberOr(draft.weight, -1) - s1.weight) <= 1e-6 && numberOr(draft.reps, -1) === s1.reps);
+      if (differs || !hasMatchingDraft) return true;
+    }
+    return false;
+  }
+
   function renderExercise(day, ex, exIndex) {
     var ds = dayState(day.id);
     var sets = exerciseSets(day, exIndex);
@@ -1217,9 +1252,18 @@
     if (hint) html += '<div class="last-hint">' + escapeHtml(hint) + "</div>";
     if (suggestion) html += '<div class="adaptive-cue" data-action-kind="' + escapeHtml(suggestion.action) + '">' + escapeHtml(suggestion.reason) + '</div>';
     html += '<div class="weight-semantics">' + escapeHtml(weightModeLabel(ex)) + '</div>';
+    var reentryMod = feature("reentry");
+    if (reentryMod && typeof reentryMod.dumbbellPerHandText === "function") {
+      var currentDbWeight = sets.length ? getCurrentSetValue(day, exIndex, 0).weight : (suggestion ? suggestion.weight : 0);
+      var dbHint = reentryMod.dumbbellPerHandText(ex, currentDbWeight, makeCtx());
+      if (dbHint) html += '<div class="db-hint">' + escapeHtml(dbHint) + '</div>';
+    }
     html += "</div></div>";
     html += '<div class="ex-actions">';
     html += '<button class="tool-btn" data-action="did-planned" data-ex="' + exIndex + '">' + icon("check") + "Did as planned</button>";
+    if (shouldShowCopySet1(day, exIndex, sets)) {
+      html += '<button class="tool-btn set-carry-btn" data-action="copy-set1" data-ex="' + exIndex + '">Match S1</button>';
+    }
     html += '<button class="tool-btn" data-action="add-set" data-ex="' + exIndex + '">' + icon("plus") + "Set</button>";
     html += '<button class="tool-btn form-link" data-action="form-video" data-name="' + escapeHtml(ex.name) + '"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M10 16.5l6-4.5-6-4.5v9zm12-4.5c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"/></svg>Form</button>';
     html += '<button class="tool-btn" data-action="exercise-flag" data-ex="' + exIndex + '" data-flag="formIssue" data-active="' + String(!!flags.formIssue) + '">Form issue</button>';
@@ -1260,7 +1304,7 @@
     html += '<button class="set-btn" data-action="set-step" data-ex="' + exIndex + '" data-set="' + setIndex + '" data-field="reps" data-delta="1" aria-label="Increase reps">' + icon("plus") + "</button>";
     html += "</div>";
     html += '<button class="check-btn" data-action="toggle-set" data-ex="' + exIndex + '" data-set="' + setIndex + '" aria-label="Toggle set complete">' + icon("check") + "</button>";
-    html += '<label class="rir-control"><span>RIR</span><select data-action="set-rir" data-ex="' + exIndex + '" data-set="' + setIndex + '" aria-label="Reps in reserve for set ' + (setIndex + 1) + '"><option value=""' + (rir === "" ? ' selected' : '') + '>-</option>' + [0,1,2,3,4].map(function (value) { return '<option value="' + value + '"' + (Number(rir) === value ? ' selected' : '') + '>' + value + '</option>'; }).join('') + '</select></label>';
+    html += '<label class="rir-control"><span>RIR</span><select data-action="set-rir" data-ex="' + exIndex + '" data-set="' + setIndex + '" aria-label="Reps in reserve for set ' + (setIndex + 1) + '"><option value=""' + (rir === "" ? ' selected' : '') + '>-</option>' + [0,1,2,3,4].map(function (value) { return '<option value="' + value + '"' + (rir !== "" && rir != null && Number(rir) === value ? ' selected' : '') + '>' + value + '</option>'; }).join('') + '</select></label>';
     html += "</div>";
     return html;
   }
@@ -1299,6 +1343,7 @@
     html += '<button class="icon-btn" data-action="rest-adjust" data-delta="-15" aria-label="Subtract 15 seconds">' + icon("minus") + "</button>";
     html += '<button class="icon-btn primary" data-action="rest-toggle" aria-label="Play pause rest timer">' + icon(rest.running ? "pause" : "play") + "</button>";
     html += '<button class="icon-btn" data-action="rest-adjust" data-delta="15" aria-label="Add 15 seconds">' + icon("plus") + "</button>";
+    html += '<button class="icon-btn rest-dismiss-btn" data-action="rest-dismiss" aria-label="Dismiss rest timer">' + icon("close") + "</button>";
     html += "</div></div>";
     html += '<div class="rest-presets">';
     REST_PRESETS.concat([state.settings.defaultRest]).filter(function (value, index, arr) { return arr.indexOf(value) === index; }).forEach(function (seconds) {
@@ -1679,17 +1724,24 @@
     return html;
   }
 
+  function plateResultText() {
+    var p = runtime.plate || { exerciseName: "Lift", targetKg: 0, barKg: state.settings.barWeight };
+    var targetDisplay = kgToDisplay(p.targetKg);
+    var barDisplay = kgToDisplay(p.barKg == null ? state.settings.barWeight : p.barKg);
+    var db = isDbLift(p.exerciseName);
+    return db ? "Per hand: " + cleanNumber(targetDisplay / 2, 1) + " " + unitLabel() : plateBreakdown(displayToKg(targetDisplay), displayToKg(barDisplay));
+  }
+
   function plateSheet() {
     var p = runtime.plate || { exerciseName: "Lift", targetKg: 0, barKg: state.settings.barWeight };
     var targetDisplay = kgToDisplay(p.targetKg);
     var barDisplay = kgToDisplay(p.barKg == null ? state.settings.barWeight : p.barKg);
     var db = isDbLift(p.exerciseName);
-    var result = db ? "Per hand: " + cleanNumber(targetDisplay / 2, 1) + " " + unitLabel() : plateBreakdown(displayToKg(targetDisplay), displayToKg(barDisplay));
     return '<div class="sheet-grid">' +
       '<div class="field-block"><label>Exercise</label><input value="' + escapeHtml(p.exerciseName) + '" readonly></div>' +
       '<div class="field-block"><label for="plate-target">Target total (' + unitLabel() + ')</label><input id="plate-target" type="number" step="0.5" data-action="plate-input" data-field="target" value="' + escapeHtml(cleanNumber(targetDisplay, 1)) + '"></div>' +
       (db ? "" : '<div class="field-block"><label for="plate-bar">Bar / sled estimate (' + unitLabel() + ')</label><input id="plate-bar" type="number" step="0.5" data-action="plate-input" data-field="bar" value="' + escapeHtml(cleanNumber(barDisplay, 1)) + '"></div>') +
-      '<div class="overview-card"><strong>Breakdown</strong><p>' + escapeHtml(result) + "</p></div>" +
+      '<div class="overview-card" data-plate-result><strong>Breakdown</strong><p>' + escapeHtml(plateResultText()) + "</p></div>" +
       '<p class="section-sub">For dumbbell lifts, plan weights are treated as total weight unless the note says otherwise.</p>' +
       "</div>";
   }
@@ -1766,6 +1818,14 @@
     return /\b(if|drop|confirm|clean|irritation|shoulder|available|attempt|readiness|fatigue|ache|pain)\b/.test(n);
   }
 
+  var SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  function shortDateLabel(dayId) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dayId || ""));
+    if (!m) return String(dayId || "");
+    return (SHORT_MONTHS[Number(m[2]) - 1] || m[2]) + " " + Number(m[3]);
+  }
+
   function lastSessionHint(name, dayId) {
     var prior = allDays().filter(function (entry) { return entry.day.id < dayId; }).sort(function (a, b) { return b.day.id.localeCompare(a.day.id); });
     for (var i = 0; i < prior.length; i += 1) {
@@ -1777,13 +1837,22 @@
       var completed = ds.completed || {};
       var values = Object.keys(completed).filter(function (key) {
         return key.split(".")[0] === String(exIndex) && isCompletedSet(completed[key]);
+      }).sort(function (a, b) {
+        return Number(a.split(".")[1]) - Number(b.split(".")[1]);
       }).map(function (key) { return completed[key]; });
       if (!values.length) continue;
       var weights = values.map(function (v) { return formatWeight(v.weight); });
       var reps = values.map(function (v) { return v.reps; });
       var sameWeight = weights.every(function (w) { return w === weights[0]; });
       var sameReps = reps.every(function (r) { return r === reps[0]; });
-      return "Last: " + (sameWeight ? weights[0] + " " + unitLabel() : weights.join("/")) + " x " + (sameReps ? reps[0] : reps.join("/")) + " x" + values.length + " (Wk " + week.num + ")";
+      var phase = normalizePhase(week && week.phase);
+      var phaseTag = phase === "deload" ? " Deload" : phase === "reentry" ? " Reentry" : "";
+      var metaParts = [];
+      if (week && week.num != null) metaParts.push("Wk " + week.num + phaseTag);
+      else if (phaseTag) metaParts.push(phaseTag.trim());
+      var dateLabel = shortDateLabel(day.id);
+      if (dateLabel) metaParts.push(dateLabel);
+      return "Last: " + (sameWeight ? weights[0] + " " + unitLabel() : weights.join("/")) + " x " + (sameReps ? reps[0] : reps.join("/")) + " x" + values.length + (metaParts.length ? " (" + metaParts.join(" \u00b7 ") + ")" : "");
     }
     return "";
   }
@@ -1801,6 +1870,26 @@
     return true;
   }
 
+  function freezeAdaptiveTargets(day, ds) {
+    if (!day || !ds) return;
+    ds.adaptiveTargets = ds.adaptiveTargets || {};
+    (day.exercises || []).forEach(function (exercise, exIndex) {
+      var suggestion = adaptiveSuggestion(day, exercise, exIndex);
+      if (!suggestion) {
+        delete ds.adaptiveTargets[String(exIndex)];
+        return;
+      }
+      ds.adaptiveTargets[String(exIndex)] = {
+        action: suggestion.action,
+        weight: suggestion.weight,
+        reps: suggestion.reps,
+        sets: suggestion.sets,
+        reason: suggestion.reason,
+        frozenAt: Date.now()
+      };
+    });
+  }
+
   function startWorkout(showToast) {
     var ds = dayState(state.activeDayId);
     if (ds.startedAt && !ds.finishedAt) return;
@@ -1812,19 +1901,7 @@
     ds.status = "planned";
     ds.source = "active-workout";
     var activeDay = getDay(state.activeDayId);
-    ds.adaptiveTargets = ds.adaptiveTargets || {};
-    (activeDay && activeDay.exercises || []).forEach(function (exercise, exIndex) {
-      var suggestion = adaptiveSuggestion(activeDay, exercise, exIndex);
-      if (!suggestion) return;
-      ds.adaptiveTargets[String(exIndex)] = {
-        action: suggestion.action,
-        weight: suggestion.weight,
-        reps: suggestion.reps,
-        sets: suggestion.sets,
-        reason: suggestion.reason,
-        frozenAt: Date.now()
-      };
-    });
+    freezeAdaptiveTargets(activeDay, ds);
     if (!rest.running) {
       rest.completedAt = 0;
       saveRest();
@@ -1898,7 +1975,7 @@
     return {
       weight: entry.weight != null ? numberOr(entry.weight, plan.weight) : plan.weight,
       reps: entry.reps != null ? numberOr(entry.reps, plan.reps) : plan.reps,
-      rir: entry.rir != null ? numberOr(entry.rir, null) : null
+      rir: entry.rir != null && entry.rir !== "" ? numberOr(entry.rir, null) : null
     };
   }
 
@@ -2163,14 +2240,51 @@
 
   function stepSetValue(exIndex, setIndex, field, direction) {
     var day = getDay(state.activeDayId);
+    if (!day) return;
     var current = getCurrentSetValue(day, exIndex, setIndex);
     if (field === "reps") {
       updateSetValue(exIndex, setIndex, field, current.reps + direction, false);
     } else {
-      var display = kgToDisplay(current.weight) + direction * numberOr(state.settings.weightStep, 2.5);
+      var exercise = (day.exercises || [])[exIndex];
+      var progression = feature("progression");
+      var fallbackStep = numberOr(state.settings.weightStep, 2.5);
+      var step = state.settings.units === "kg" && progression && typeof progression.incrementFor === "function"
+        ? progression.incrementFor(exercise, fallbackStep)
+        : fallbackStep;
+      var display = kgToDisplay(current.weight) + direction * step;
+      if (state.settings.units === "kg") display = Math.round(display * 100) / 100;
       updateSetValue(exIndex, setIndex, field, display, true);
     }
     haptic("tap");
+    render();
+  }
+
+  function copySet1ToRemaining(exIndex) {
+    var day = getDay(state.activeDayId);
+    if (!day) return;
+    var ex = (day.exercises || [])[exIndex];
+    if (!ex) return;
+    var sets = exerciseSets(day, exIndex);
+    if (sets.length < 2) return;
+    var ds = dayState(day.id);
+    var s1 = getCurrentSetValue(day, exIndex, 0);
+    var copied = 0;
+    for (var si = 1; si < sets.length; si += 1) {
+      var key = exIndex + "." + si;
+      if (isCompletedSet(ds.completed[key])) continue;
+      if (ds.completed[key] && !isCompletedSet(ds.completed[key])) {
+        delete ds.completed[key];
+      }
+      var prevDraft = ds.drafts[key] && typeof ds.drafts[key] === "object" ? ds.drafts[key] : {};
+      var nextDraft = Object.assign({}, prevDraft, { weight: s1.weight, reps: s1.reps });
+      tagSetExercise(nextDraft, ex);
+      ds.drafts[key] = nextDraft;
+      copied += 1;
+    }
+    if (!copied) return;
+    saveState("copy-set1");
+    haptic("select");
+    toast("Copied Set 1 target to remaining sets.");
     render();
   }
 
@@ -2233,30 +2347,52 @@
   function didAsPlanned(exIndex) {
     if (!requireWorkoutReady({ type: "did-planned", exIndex: exIndex })) return;
     var day = getDay(state.activeDayId);
-    var ex = day.exercises[exIndex];
+    var ex = day && day.exercises && day.exercises[exIndex];
+    if (!day || !ex) return;
     var ds = dayState(day.id);
     var sets = exerciseSets(day, exIndex);
-    if (sets.some(function (set) { return numberOr(set.reps, 0) <= 0; })) {
+    var pending = [];
+    sets.forEach(function (set, setIndex) {
+      var key = exIndex + "." + setIndex;
+      if (isCompletedSet(ds.completed[key])) return;
+      pending.push({ set: set, setIndex: setIndex, key: key, target: adaptiveSet(day, ex, exIndex, set, setIndex) });
+    });
+    if (!pending.length) {
+      toast("All sets already logged.");
+      return;
+    }
+    if (pending.some(function (item) { return numberOr(item.target.reps, 0) <= 0; })) {
       toast("Enter reps for failure sets individually.");
       return;
     }
     var prCount = 0;
+    var prTargets = [];
     sets.forEach(function (set, setIndex) {
       var key = exIndex + "." + setIndex;
+      if (isCompletedSet(ds.completed[key])) return;
       var target = adaptiveSet(day, ex, exIndex, set, setIndex);
       var draft = ds.drafts[key] || {};
+      if (draft.rir === "") draft = Object.assign({}, draft, { rir: null });
       var recordMod = feature("records");
       var evaluation = recordMod && typeof recordMod.evaluateSet === "function"
         ? recordMod.evaluateSet(makeCtx(), ex, target, day.id, key)
         : { type: "baseline", types: ["baseline"], isPr: false };
       var pr = !!evaluation.isPr;
-      if (pr) prCount += 1;
+      if (pr) {
+        prCount += 1;
+        prTargets.push(target);
+      }
       ds.completed[key] = tagSetExercise({ reps: target.reps, weight: target.weight, rir: draft.rir == null ? null : clamp(Math.round(numberOr(draft.rir, 2)), 0, 4), ts: Date.now(), pr: pr, recordType: evaluation.type, recordTypes: evaluation.types }, ex);
       delete ds.drafts[key];
     });
     if (prCount) {
-      var top = Math.max.apply(null, sets.map(function (s, index) { return adaptiveSet(day, ex, exIndex, s, index).weight; }));
-      state.prs[ex.name] = { weight: top, reps: sets[0] ? sets[0].reps : 0, date: day.id };
+      var assisted = (feature("records") && typeof feature("records").isAssisted === "function" && feature("records").isAssisted(ex)) ||
+        (feature("progression") && typeof feature("progression").isAssisted === "function" && feature("progression").isAssisted(ex)) ||
+        !!(ex && ex.loadDirection === "lower") || /\bassisted\b/i.test(ex && ex.name || "");
+      var prWeights = prTargets.map(function (item) { return item.weight; });
+      var top = assisted ? Math.min.apply(null, prWeights) : Math.max.apply(null, prWeights);
+      var matching = prTargets.find(function (item) { return item.weight === top; }) || prTargets[0];
+      state.prs[ex.name] = { weight: top, reps: matching ? matching.reps : 0, date: day.id };
       toast("PR logged for " + ex.name + ".");
     } else {
       toast("Exercise completed as planned.");
@@ -2317,49 +2453,25 @@
 
   function removeSet(exIndex) {
     var day = getDay(state.activeDayId);
+    if (!day) return;
     var ds = dayState(day.id);
     var key = String(exIndex);
     var count = numberOr(ds.extraSets[key], 0);
     if (count <= 0) return;
-    var removeIndex = (day.exercises[exIndex].sets || []).length + count - 1;
-    delete ds.completed[exIndex + "." + removeIndex];
-    delete ds.drafts[exIndex + "." + removeIndex];
+    var removeIndex = exerciseSets(day, exIndex).length - 1;
+    if (removeIndex >= 0) {
+      var removedKey = exIndex + "." + removeIndex;
+      delete ds.completed[removedKey];
+      delete ds.drafts[removedKey];
+      if (runtime.lastLog && runtime.lastLog.dayId === day.id && runtime.lastLog.key === removedKey) {
+        runtime.lastLog = null;
+      }
+    }
     ds.extraSets[key] = count - 1;
     if (ds.extraSets[key] <= 0) delete ds.extraSets[key];
     saveState();
     render();
     updateWorkoutNotification(true);
-  }
-
-  function baselineForExercise(name) {
-    var baselines = ((PLAN.meta || {}).baselines || []);
-    var lower = String(name || "").toLowerCase();
-    var best = baselines.find(function (b) {
-      var label = String(b.label || "").toLowerCase();
-      if (lower.indexOf("incline db") >= 0 && label.indexOf("incline db") >= 0) return true;
-      if (lower.indexOf("leg press") >= 0 && label.indexOf("leg press") >= 0) return true;
-      if (lower.indexOf("chest press") >= 0 && label.indexOf("machine chest") >= 0) return true;
-      if (lower.indexOf("cable row") >= 0 && label.indexOf("cable row") >= 0) return true;
-      return false;
-    });
-    return best ? numberOr(best.value, 0) : 0;
-  }
-
-  function maxLoggedWeight(name, dayId, excludeKey) {
-    var max = baselineForExercise(name);
-    allDays().forEach(function (entry) {
-      if (entry.day.id > dayId) return;
-      (entry.day.exercises || []).forEach(function (ex, exIndex) {
-        if (ex.name !== name) return;
-        var completed = ((state.days[entry.day.id] || {}).completed || {});
-        Object.keys(completed).forEach(function (key) {
-          if (entry.day.id === dayId && key === excludeKey) return;
-          if (key.split(".")[0] !== String(exIndex)) return;
-          max = Math.max(max, numberOr(completed[key].weight, 0));
-        });
-      });
-    });
-    return max;
   }
 
   function startRest(seconds, label) {
@@ -2438,19 +2550,23 @@
 
   function beep() {
     try {
-      var AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
-      var ctx = new AudioContext();
-      var osc = ctx.createOscillator();
-      var gain = ctx.createGain();
+      var AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextCtor) return;
+      if (!audioCtx || audioCtx.state === "closed") audioCtx = new AudioContextCtor();
+      if (audioCtx.state === "suspended" && typeof audioCtx.resume === "function") {
+        var resumed = audioCtx.resume();
+        if (resumed && typeof resumed.catch === "function") resumed.catch(function () {});
+      }
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
       osc.type = "sine";
       osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
-      osc.connect(gain).connect(ctx.destination);
+      gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.18, audioCtx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.28);
+      osc.connect(gain).connect(audioCtx.destination);
       osc.start();
-      osc.stop(ctx.currentTime + 0.3);
+      osc.stop(audioCtx.currentTime + 0.3);
     } catch (err) {}
   }
 
@@ -2504,9 +2620,11 @@
     var entries = [];
     if (scope === "day") {
       var day = getDay(state.activeDayId);
-      entries = [{ week: getWeek(state.activeWeekId), day: day }];
+      if (!day) return "No active day selected.";
+      entries = [{ week: weekForDayId(day.id) || getWeek(state.activeWeekId), day: day }];
     } else if (scope === "week") {
       var week = getWeek(state.activeWeekId);
+      if (!week) return "No active week selected.";
       entries = (week.days || []).map(function (day) { return { week: week, day: day }; });
     } else {
       entries = allDays();
@@ -2516,12 +2634,14 @@
     lines.push("Scope: " + scope);
     lines.push("");
     entries.forEach(function (entry) {
-      var day = entry.day;
+      var day = entry && entry.day;
+      if (!day) return;
       var ds = state.days[day.id] || {};
       var total = totalSetCountForSource(day, state);
       var completed = completedSetCount(day, state);
       var integrity = historyStatus(day, state);
-      lines.push("Week " + entry.week.num + " - " + day.id + " - " + (day.title || "Day"));
+      var weekNum = entry.week ? entry.week.num : "";
+      lines.push("Week " + weekNum + " - " + day.id + " - " + (day.title || "Day"));
       lines.push("  History: " + (feature("history") && feature("history").statusLabel ? feature("history").statusLabel(integrity) : integrity));
       if (integrity === "reconstructed" && !completed) {
         lines.push("  Trained session reconstructed by the user; weights, reps, volume, calories, and PRs are unavailable.");
@@ -2659,14 +2779,6 @@
     } catch (err) {
       toast("Rollback failed: " + err.message);
     }
-  }
-
-  function mergeBodyweight(a, b) {
-    var map = {};
-    a.concat(b).forEach(function (row) {
-      if (row && row.date) map[row.date] = { date: row.date, kg: numberOr(row.kg, 0) };
-    });
-    return Object.keys(map).sort().map(function (date) { return map[date]; });
   }
 
   function mergeMeasurements(a, b) {
@@ -3036,6 +3148,20 @@
       state.weeklyRecapDismissedIso = btn.dataset.iso || isoWeekId(parseDateId(todayId()));
       saveState();
       render();
+    } else if (action === "reentry-start") {
+      haptic(3);
+      var reentryDay = getDay(state.activeDayId);
+      if (reentryDay && (reentryDay.exercises || []).length) {
+        runtime.pendingAction = null;
+        openSheet("readiness");
+      } else {
+        toast("Today is a planned rest day.");
+      }
+    } else if (action === "reentry-dismiss") {
+      var dismissWeekId = btn.dataset.week || state.activeWeekId || (weekForDayId(state.activeDayId) || {}).id || null;
+      state.reentryDismissedWeekId = dismissWeekId;
+      saveState("reentry-dismiss");
+      render();
     } else if (action === "dismiss-summary") {
       runtime.summaryDayId = null;
       runtime.cycleReview = false;
@@ -3051,6 +3177,7 @@
     } else if (action === "reset-day") {
       if (confirm("Reset this day's logged sets, timer, readiness, and notes?")) {
         delete state.days[state.activeDayId];
+        if (runtime.lastLog && runtime.lastLog.dayId === state.activeDayId) runtime.lastLog = null;
         saveState();
         render();
       }
@@ -3070,6 +3197,8 @@
       }
     } else if (action === "set-step") {
       stepSetValue(Number(btn.dataset.ex), Number(btn.dataset.set), btn.dataset.field, Number(btn.dataset.delta));
+    } else if (action === "copy-set1") {
+      copySet1ToRemaining(Number(btn.dataset.ex));
     } else if (action === "did-planned") {
       didAsPlanned(Number(btn.dataset.ex));
     } else if (action === "add-set") {
@@ -3091,6 +3220,12 @@
       toggleRest();
     } else if (action === "rest-preset") {
       presetRest(Number(btn.dataset.sec));
+    } else if (action === "rest-dismiss") {
+      rest = idleRest();
+      saveRest();
+      haptic(3);
+      updateWorkoutNotification(true);
+      render();
     } else if (action === "copy-scope") {
       runtime.copyScope = btn.dataset.scope;
       renderSheet();
@@ -3115,11 +3250,21 @@
       openSheet("journal");
       renderSummaryOverlay();
     } else if (action === "save-readiness") {
-      var input = sheet.querySelector("[data-action='readiness-input']");
-      dayState(state.activeDayId).readiness = Number(input ? input.value : runtime.readinessValue || 8);
-      startWorkout(false);
+      var readinessDay = getDay(state.activeDayId);
+      if (readinessDay) {
+        var input = sheet.querySelector("[data-action='readiness-input']");
+        var readinessDs = dayState(readinessDay.id);
+        readinessDs.readiness = Number(input ? input.value : runtime.readinessValue || 8);
+        var wasRunning = !!(readinessDs.startedAt && !readinessDs.finishedAt);
+        startWorkout(false);
+        if (wasRunning && completedSetCount(readinessDay, state) === 0) {
+          freezeAdaptiveTargets(readinessDay, readinessDs);
+        }
+      }
+      var pendingAction = runtime.pendingAction;
       saveState();
       closeSheet();
+      runtime.pendingAction = pendingAction;
       executePendingAction();
       render();
     } else if (action === "export-data") {
@@ -3185,7 +3330,20 @@
         renderSheet();
       }
     } else if (action === "library-start") {
-      toast("Library workouts are saved templates. Copy them into the plan manually for now.");
+      var lib = feature("library");
+      var tplId = btn.dataset.id;
+      var tpl = lib && typeof lib.instantiateWorkout === "function" ? lib.instantiateWorkout(makeCtx(), tplId) : null;
+      var tplLabel = tpl ? (tpl.name || tpl.title || "this template") : "this template";
+      if (lib && typeof lib.applyTemplateToDay === "function" && confirm("Add exercises from \"" + tplLabel + "\" to " + (state.activeDayId || "today") + "?")) {
+        var applied = lib.applyTemplateToDay(makeCtx(), tplId);
+        if (applied && applied.added && applied.added.length) {
+          toast("Added " + applied.added.length + " exercises from " + tplLabel + ".");
+          closeSheet();
+          render();
+        } else {
+          toast("Could not apply template to the active day.");
+        }
+      }
     } else if (action === "open-drawer") {
       haptic(3);
       runtime.drawerOpen = true;
@@ -3220,8 +3378,8 @@
       }
     } else if (action === "cal-prev" || action === "cal-next") {
       var year = runtime.calYear, month = runtime.calMonth;
-      if (year == null) {
-        var today = (localDateId(new Date()) || todayId()).split("-");
+      if (year == null || month == null) {
+        var today = (todayId() || localDateId(new Date())).split("-");
         year = +today[0]; month = +today[1] - 1;
       }
       month += action === "cal-next" ? 1 : -1;
@@ -3376,12 +3534,21 @@
         toast("Recovery skip logged without penalty.");
         renderSheet();
       }
+    } else if (action === "cardio-delete") {
+      var cardioDel = feature("cardio");
+      if (cardioDel && typeof cardioDel.deleteEntry === "function" && cardioDel.deleteEntry(state, btn.dataset.date, btn.dataset.id)) {
+        saveState("cardio-delete");
+        toast("Cardio entry deleted.");
+        render();
+      }
     } else if (action === "protein-preset") {
       var nutritionPreset = feature("nutrition");
       var food = nutritionPreset && nutritionPreset.foodById(btn.dataset.food);
       if (food) {
         var quickMeal = sheet.querySelector("[data-protein-quick-meal]");
-        nutritionPreset.addFood(state, todayId(), food, { meal: quickMeal && quickMeal.value });
+        var selectedMeal = (quickMeal && quickMeal.value) || runtime.quickMeal || "breakfast";
+        runtime.quickMeal = selectedMeal;
+        nutritionPreset.addFood(state, todayId(), food, { meal: selectedMeal });
         saveState("protein-log");
         toast(food.name + " added.");
         renderSheet();
@@ -3430,7 +3597,31 @@
       var forms = feature("forms");
       if (forms && typeof forms.openForFormVideo === "function") forms.openForFormVideo(makeCtx(), btn.dataset.name);
     } else if (action === "rm-save") {
-      toast("Estimate saved to this session.");
+      var strengthMod = feature("strength");
+      var calc = runtime.strengthCalc || {};
+      var wNode = sheet.querySelector("#rm-w");
+      var rNode = sheet.querySelector("#rm-r");
+      var weightDisplay = wNode ? wNode.value : (calc.weight != null ? calc.weight : kgToDisplay(80));
+      var repsVal = Math.max(0, Math.round(numberOr(rNode ? rNode.value : (calc.reps != null ? calc.reps : 5), 0)));
+      var weightKg = displayToKg(weightDisplay);
+      if (!(weightKg > 0) || !(repsVal > 0)) {
+        toast("Enter a valid weight and reps first.");
+      } else {
+        var estKg = strengthMod && typeof strengthMod.average === "function"
+          ? strengthMod.average(weightKg, repsVal)
+          : weightKg * (1 + repsVal / 30);
+        state.strengthEstimates = Array.isArray(state.strengthEstimates) ? state.strengthEstimates : [];
+        state.strengthEstimates.push({
+          weightKg: weightKg,
+          reps: repsVal,
+          estimated1rmKg: estKg,
+          date: todayId(),
+          ts: Date.now()
+        });
+        saveState("strength-estimate");
+        toast("1RM estimate saved.");
+        renderSheet();
+      }
     } else if (action === "voice-test") {
       var v = feature("voice");
       if (v && typeof v.testVoice === "function") v.testVoice(makeCtx());
@@ -3453,14 +3644,22 @@
       runtime.plate = runtime.plate || { exerciseName: "Lift", targetKg: 0, barKg: state.settings.barWeight };
       if (target.dataset.field === "target") runtime.plate.targetKg = displayToKg(target.value);
       if (target.dataset.field === "bar") runtime.plate.barKg = displayToKg(target.value);
-      renderSheet();
+      var plateCard = sheet.querySelector("[data-plate-result]");
+      if (plateCard) {
+        var platePara = plateCard.querySelector("p");
+        if (platePara) platePara.textContent = plateResultText();
+      }
     } else if (action === "qa-input") {
       runtime.quickAddDraft = runtime.quickAddDraft || {};
       runtime.quickAddDraft[target.dataset.field] = target.value;
     } else if (action === "rm-input") {
       runtime.strengthCalc = runtime.strengthCalc || { weight: null, reps: 5 };
       runtime.strengthCalc[target.dataset.field] = target.value;
-      renderSheet();
+      var rmOutput = sheet.querySelector("[data-rm-output]");
+      var strengthOut = feature("strength");
+      if (rmOutput && strengthOut && typeof strengthOut.renderOutput === "function") {
+        rmOutput.innerHTML = strengthOut.renderOutput(makeCtx());
+      }
     } else if (action === "steps-live") {
       var steps = feature("steps");
       if (steps && typeof steps.addManual === "function") {
@@ -3495,6 +3694,8 @@
         saveState("supplement-preference");
         renderSheet();
       }
+    } else if (action === "protein-quick-meal" || target.hasAttribute("data-protein-quick-meal")) {
+      runtime.quickMeal = target.value || "breakfast";
     } else if (action === "qa-input") {
       runtime.quickAddDraft = runtime.quickAddDraft || {};
       runtime.quickAddDraft[target.dataset.field] = target.value;
@@ -3616,7 +3817,7 @@
       runtime.pendingReload = true;
       toast("App update ready — will reload after your workout.");
     } else {
-      toast("App updated to v" + APP_VERSION + ".");
+      toast("App update ready — reloading…");
       setTimeout(function () { location.reload(); }, 1400);
     }
   }
@@ -3689,7 +3890,10 @@
 
       if (shortcut === "today" || shortcut === "start-workout") {
         goToday();
-        if (shortcut === "start-workout") startWorkout({ showToast: false });
+        if (shortcut === "start-workout") {
+          startWorkout(false);
+          render();
+        }
         return;
       }
 
@@ -3820,7 +4024,18 @@
       stateUpdatedAt: stateUpdatedAt,
       getDay: getDay,
       numberOr: numberOr,
-      pad2: pad2
+      pad2: pad2,
+      lastSessionHint: lastSessionHint,
+      stepSetValue: stepSetValue,
+      copySet1ToRemaining: copySet1ToRemaining,
+      render: render,
+      renderRestFab: renderRestFab,
+      handleClick: handleClick,
+      startRest: startRest,
+      openSheet: openSheet,
+      getState: function () { return state; },
+      getRest: function () { return rest; },
+      getRuntime: function () { return runtime; }
     };
   } else {
     init().catch(function () {

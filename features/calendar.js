@@ -31,6 +31,10 @@
   }
 
   function planEntryFor(ctx, iso) {
+    if (ctx && typeof ctx.getDay === "function") {
+      var direct = ctx.getDay(iso);
+      return direct ? { day: direct } : null;
+    }
     var days = (ctx.allDays && ctx.allDays()) || [];
     return days.find(function (entry) { return entry.day.id === iso; }) || null;
   }
@@ -66,7 +70,7 @@
 
   function renderCalendar(ctx) {
     var rt = ctx.runtime || {};
-    var today = (ctx.localDateId && ctx.localDateId(new Date())) || new Date().toISOString().slice(0, 10);
+    var today = (ctx.todayId && ctx.todayId()) || (ctx.localDateId && ctx.localDateId(new Date())) || new Date().toISOString().slice(0, 10);
     var parts = today.split("-");
     var year = rt.calYear != null ? rt.calYear : +parts[0];
     var month = rt.calMonth != null ? rt.calMonth : (+parts[1] - 1);

@@ -51,6 +51,20 @@
     return entry;
   }
 
+  function deleteEntry(state, date, entryId) {
+    if (!state || !state.cardio || !date || !entryId) return false;
+    var row = state.cardio[date];
+    if (!row) return false;
+    var entries = Array.isArray(row) ? row : (Array.isArray(row.entries) ? row.entries : null);
+    if (!entries) return false;
+    var remaining = entries.filter(function (entry) { return !entry || entry.id !== entryId; });
+    if (remaining.length === entries.length) return false;
+    if (!remaining.length) delete state.cardio[date];
+    else if (Array.isArray(row)) state.cardio[date] = remaining;
+    else row.entries = remaining;
+    return true;
+  }
+
   function allEntries(state) {
     var rows = [];
     Object.keys(state.cardio || {}).forEach(function (date) {
@@ -116,13 +130,13 @@
     var html = '<div class="sheet-grid"><div class="overview-card"><strong>Post-workout cardio</strong><p>' + ctx.escapeHtml(recommendation(day, ds.readiness)) + '</p></div>';
     html += '<div class="metric-grid"><div class="metric-card"><div class="label">Avg 1 km</div><div class="value">' + formatPace(summary.average1kPaceSec) + '</div></div><div class="metric-card"><div class="label">Sustainable best</div><div class="value">' + formatPace(summary.bestSustainablePaceSec) + '</div></div><div class="metric-card"><div class="label">Frequency</div><div class="value">' + summary.frequencyPerWeek.toFixed(1) + '/wk</div></div><div class="metric-card"><div class="label">Pace direction</div><div class="value">' + (summary.paceChangeSec == null ? '-' : (summary.paceChangeSec > 0 ? '+' : '') + summary.paceChangeSec + 's') + '</div></div></div>';
     html += '<div class="overview-card"><strong>Recomp signal</strong><p>' + ctx.escapeHtml(summary.recompSignal) + '</p></div>';
-    html += '<div class="overview-card"><strong>Log 1 km post-workout run</strong><div class="measure-input-row"><div class="field-block"><label>Distance (km)</label><input data-cardio-distance type="number" min="0.1" step="0.1" value="1"></div><div class="field-block"><label>Minutes</label><input data-cardio-min type="number" min="0" step="1" value="6"></div><div class="field-block"><label>Seconds</label><input data-cardio-sec type="number" min="0" max="59" step="1" value="0"></div></div>';
-    html += '<div class="measure-input-row"><div class="field-block"><label>Where</label><select data-cardio-environment><option value="treadmill">Treadmill</option><option value="outdoor">Outdoor</option></select></div><div class="field-block"><label>RPE</label><input data-cardio-rpe type="number" min="1" max="10" step="1" value="6"></div><div class="field-block"><label>Heart rate (optional)</label><input data-cardio-hr type="number" min="30" max="240"></div></div>';
-    html += '<div class="field-block"><label>Notes</label><input data-cardio-notes placeholder="Easy, conversational pace"></div><div class="field-block"><label>Skip reason</label><select data-cardio-skip-reason><option value="Recovery">Recovery</option><option value="Leg soreness">Leg soreness</option><option value="Time">Time</option><option value="Weather or equipment">Weather or equipment</option><option value="Other">Other</option></select></div><div class="sheet-actions"><button class="action-btn" data-action="cardio-log-1k">Log run</button><button class="action-btn secondary" data-action="cardio-skip">Log skip</button></div></div>';
+    html += '<div class="overview-card"><strong>Log 1 km post-workout run</strong><div class="measure-input-row"><div class="field-block"><label for="cardio-distance">Distance (km)</label><input id="cardio-distance" data-cardio-distance type="number" min="0.1" step="0.1" value="1"></div><div class="field-block"><label for="cardio-min">Minutes</label><input id="cardio-min" data-cardio-min type="number" min="0" step="1" value="6"></div><div class="field-block"><label for="cardio-sec">Seconds</label><input id="cardio-sec" data-cardio-sec type="number" min="0" max="59" step="1" value="0"></div></div>';
+    html += '<div class="measure-input-row"><div class="field-block"><label for="cardio-environment">Where</label><select id="cardio-environment" data-cardio-environment><option value="treadmill">Treadmill</option><option value="outdoor">Outdoor</option></select></div><div class="field-block"><label for="cardio-rpe">RPE</label><input id="cardio-rpe" data-cardio-rpe type="number" min="1" max="10" step="1" value="6"></div><div class="field-block"><label for="cardio-hr">Heart rate (optional)</label><input id="cardio-hr" data-cardio-hr type="number" min="30" max="240"></div></div>';
+    html += '<div class="field-block"><label for="cardio-notes">Notes</label><input id="cardio-notes" data-cardio-notes placeholder="Easy, conversational pace"></div><div class="field-block"><label for="cardio-skip-reason">Skip reason</label><select id="cardio-skip-reason" data-cardio-skip-reason><option value="Recovery">Recovery</option><option value="Leg soreness">Leg soreness</option><option value="Time">Time</option><option value="Weather or equipment">Weather or equipment</option><option value="Other">Other</option></select></div><div class="sheet-actions"><button class="action-btn" data-action="cardio-log-1k">Log run</button><button class="action-btn secondary" data-action="cardio-skip">Log skip</button></div></div>';
     if (recent.length) {
-      html += '<div class="overview-card"><strong>Recent</strong><table class="mini-table"><thead><tr><th>Date</th><th>Result</th><th>RPE</th></tr></thead><tbody>';
+      html += '<div class="overview-card"><strong>Recent</strong><table class="mini-table"><thead><tr><th>Date</th><th>Result</th><th>RPE</th><th></th></tr></thead><tbody>';
       recent.forEach(function (entry) {
-        html += '<tr><td>' + ctx.escapeHtml(entry.date) + '</td><td>' + (entry.skipped ? 'Skipped: ' + ctx.escapeHtml(entry.skipReason || "Recovery") : entry.distanceKm + ' km - ' + formatPace(entry.paceSecPerKm)) + '</td><td>' + (entry.rpe || '-') + '</td></tr>';
+        html += '<tr><td>' + ctx.escapeHtml(entry.date) + '</td><td>' + (entry.skipped ? 'Skipped: ' + ctx.escapeHtml(entry.skipReason || "Recovery") : entry.distanceKm + ' km - ' + formatPace(entry.paceSecPerKm)) + '</td><td>' + (entry.rpe || '-') + '</td><td><button class="link-btn cardio-delete-btn" data-action="cardio-delete" data-date="' + ctx.escapeHtml(entry.date) + '" data-id="' + ctx.escapeHtml(entry.id || "") + '">Delete</button></td></tr>';
       });
       html += '</tbody></table></div>';
     }
@@ -133,6 +147,7 @@
     paceSecPerKm: paceSecPerKm,
     formatPace: formatPace,
     addEntry: addEntry,
+    deleteEntry: deleteEntry,
     allEntries: allEntries,
     trends: trends,
     recommendation: recommendation,

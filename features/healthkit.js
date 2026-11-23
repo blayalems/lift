@@ -34,6 +34,18 @@
     return Math.round((end - ds.startedAt) / 1000);
   }
 
+  function resolveVersion(ctx) {
+    return (ctx && ctx.appVersion) || window.LIFT_APP_VERSION || "1.9.0";
+  }
+
+  function csvCell(value) {
+    var text = value == null ? "" : String(value);
+    if (/[",\r\n]/.test(text)) {
+      return '"' + text.replace(/"/g, '""') + '"';
+    }
+    return text;
+  }
+
   function appleHealthCsv(ctx) {
     // Health Auto Export compatible workout CSV.
     var lines = ["Start,End,Type,Duration(s),Volume(kg),Notes"];
@@ -44,8 +56,8 @@
       var end = toIsoDateTime(ds.finishedAt || ds.startedAt);
       var vol = workoutVolume(entry.day, ds);
       var dur = workoutDuration(ds);
-      var notes = (entry.day.title || "Workout").replace(/,/g, ";");
-      lines.push([start, end, "Strength Training", dur, vol, notes].join(","));
+      var notes = entry.day.title || "Workout";
+      lines.push([start, end, "Strength Training", dur, vol, notes].map(csvCell).join(","));
     });
     return lines.join("\n");
   }
@@ -61,7 +73,7 @@
         startTimeMillis: ds.startedAt,
         endTimeMillis: ds.finishedAt || ds.startedAt,
         activityType: 80, // STRENGTH_TRAINING
-        application: { name: "Lift", version: window.LIFT_APP_VERSION || "1.4.0" },
+        application: { name: "Lift", version: resolveVersion(ctx) },
         description: entry.day.subtitle || "",
         volumeKg: workoutVolume(entry.day, ds)
       });
@@ -87,7 +99,7 @@
     return JSON.stringify({
       sport: "WeightTraining",
       source: "Lift",
-      version: window.LIFT_APP_VERSION || "1.4.0",
+      version: resolveVersion(ctx),
       entries: entries
     }, null, 2);
   }
@@ -95,7 +107,7 @@
   function genericJson(ctx) {
     return JSON.stringify(Object.assign({}, ctx.state || {}, {
       app: "lift",
-      version: window.LIFT_APP_VERSION || "1.4.0",
+      version: resolveVersion(ctx),
       exportedAt: new Date().toISOString(),
       measurements: Array.isArray(ctx.state.measurements) ? ctx.state.measurements : [],
       progressPhotos: Array.isArray(ctx.state.progressPhotos) ? ctx.state.progressPhotos : []
@@ -107,10 +119,6 @@
     // If running inside the Android WebView, prefer the native bridge.
     if (window.LIFT_IS_NATIVE && window.LiftAndroid) {
       try {
-        if (mime === "text/csv" && typeof window.LiftAndroid.saveBackupFile === "function") {
-          window.LiftAndroid.saveBackupFile(filename, content);
-          return true;
-        }
         if (typeof window.LiftAndroid.saveBackupFile === "function") {
           window.LiftAndroid.saveBackupFile(filename, content);
           return true;

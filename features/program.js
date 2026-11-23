@@ -3,6 +3,7 @@
 
   var root = window.LIFT_FEATURES = window.LIFT_FEATURES || {};
   var BLOCK_WEEKS = 4;
+  var MAX_AUTO_BLOCKS = 12;
 
   function clone(value) { return JSON.parse(JSON.stringify(value)); }
 
@@ -28,18 +29,25 @@
     return day && day.id || null;
   }
 
+  function isLightPhase(week) {
+    var phase = String(week && week.phase || "").toLowerCase();
+    return phase.indexOf("deload") >= 0 || phase.indexOf("reentry") >= 0;
+  }
+
   function templateWeek(plan) {
     var weeks = (plan && plan.weeks || []).filter(function (week) {
-      return !week.generated && String(week.phase || "").toLowerCase().indexOf("deload") < 0 && (week.days || []).length === 7;
+      return !week.generated && !isLightPhase(week) && (week.days || []).length === 7;
     });
     return weeks[weeks.length - 1] || (plan.weeks || []).filter(function (week) { return !week.generated; }).slice(-1)[0];
   }
 
   function actualByExercise(state, plan) {
-    var map = {};
-    (plan.weeks || []).forEach(function (week) {
+    var normal = {};
+    var fallback = {};
+    (plan && plan.weeks || []).forEach(function (week) {
+      var light = isLightPhase(week);
       (week.days || []).forEach(function (day) {
-        var ds = (state.days || {})[day.id] || {};
+        var ds = (state && state.days || {})[day.id] || {};
         (day.exercises || []).forEach(function (exercise, exIndex) {
           var sets = Object.keys(ds.completed || {}).filter(function (key) {
             return key.split(".")[0] === String(exIndex) && Number((ds.completed[key] || {}).reps) > 0;
@@ -49,33 +57,57 @@
           var weight = assisted
             ? Math.min.apply(null, sets.map(function (set) { return Number(set.weight || 0); }))
             : Math.max.apply(null, sets.map(function (set) { return Number(set.weight || 0); }));
-          map[exercise.name] = { date: day.id, weight: weight, sets: sets };
+          var entry = { date: day.id, weight: weight, sets: sets };
+          if (!fallback[exercise.name] || day.id >= fallback[exercise.name].date) {
+            fallback[exercise.name] = entry;
+          }
+          if (!light && (!normal[exercise.name] || day.id >= normal[exercise.name].date)) {
+            normal[exercise.name] = entry;
+          }
         });
       });
+    });
+    var map = {};
+    Object.keys(fallback).forEach(function (name) {
+      map[name] = normal[name] || fallback[name];
     });
     return map;
   }
 
   function roundHalf(value) { return Math.round(Number(value || 0) * 2) / 2; }
 
+  function repBoundsFor(exercise, baseSets) {
+    if (exercise && Array.isArray(exercise.repRange) && exercise.repRange.length >= 2) {
+      var minVal = Number(exercise.repRange[0]);
+      var maxVal = Number(exercise.repRange[1]);
+      if (Number.isFinite(minVal) && Number.isFinite(maxVal) && minVal > 0 && maxVal >= minVal) {
+        return { min: minVal, max: maxVal };
+      }
+    }
+    var reps = (baseSets || []).map(function (set) { return Number(set && set.reps || 0); }).filter(function (v) { return v > 0; });
+    var top = reps.length ? Math.max.apply(null, reps) : 10;
+    return { min: Math.max(1, top - 2), max: Math.max(1, top) };
+  }
+
   function adaptExercise(exercise, phaseIndex, actual) {
     var next = clone(exercise);
     var baseSets = Array.isArray(next.sets) ? next.sets : [];
     var baseWeight = actual && actual.weight != null ? Number(actual.weight) : (baseSets[0] ? Number(baseSets[0].weight || 0) : 0);
     var assisted = /assisted/i.test(next.name) || next.loadDirection === "lower";
+    var bounds = repBoundsFor(next, baseSets);
     next.generated = true;
     next.source = "rolling-template";
     if (phaseIndex === 3) {
       var deloadSets = Math.max(1, Math.min(2, baseSets.length));
       var deloadWeight = assisted ? baseWeight + Number(next.incrementKg || 2.5) : roundHalf(baseWeight * 0.9);
-      next.sets = baseSets.slice(0, deloadSets).map(function (set) {
-        return { reps: Math.max(6, Math.min(12, Number(set.reps || 10))), weight: deloadWeight };
+      next.sets = baseSets.slice(0, deloadSets).map(function () {
+        return { reps: bounds.min, weight: deloadWeight };
       });
       next.tag = "deload";
     } else {
-      var repAdd = phaseIndex;
-      next.sets = baseSets.map(function (set) {
-        return { reps: Math.min(15, Math.max(1, Number(set.reps || 8) + repAdd)), weight: baseWeight };
+      var targetReps = Math.min(bounds.max, Math.max(bounds.min, bounds.min + phaseIndex));
+      next.sets = baseSets.map(function () {
+        return { reps: targetReps, weight: baseWeight };
       });
       next.tag = phaseIndex === 0 ? "consolidate" : "adaptive reps";
     }
@@ -126,7 +158,7 @@
     return weeks;
   }
 
-  function ensureRollingPlan(state, plan) {
+  function ensureRollingPlan(state, plan, referenceDate) {
     var end = planEnd(plan);
     if (!end) return [];
     state.rollingPlan = state.rollingPlan && typeof state.rollingPlan === "object" ? state.rollingPlan : {};
@@ -135,9 +167,23 @@
       state.rollingPlan = {
         sourcePlanEnd: end,
         generatedAt: Date.now(),
-        generatorVersion: 1,
+        generatorVersion: 2,
         weeks: generateBlock(state, plan, dateAdd(end, 1), 1)
       };
+    }
+    if (referenceDate && /^\d{4}-\d{2}-\d{2}$/.test(String(referenceDate))) {
+      var maxWeeks = BLOCK_WEEKS * MAX_AUTO_BLOCKS;
+      while (state.rollingPlan.weeks.length < maxWeeks) {
+        var weeks = state.rollingPlan.weeks;
+        var lastWeek = weeks[weeks.length - 1];
+        var lastDay = lastWeek && lastWeek.days && lastWeek.days[lastWeek.days.length - 1];
+        if (!lastDay || lastDay.id >= referenceDate) break;
+        var blockNumber = Math.floor(weeks.length / BLOCK_WEEKS) + 1;
+        var next = generateBlock(state, plan, dateAdd(lastDay.id, 1), blockNumber);
+        if (!next.length) break;
+        state.rollingPlan.weeks = weeks.concat(next);
+        state.rollingPlan.generatedAt = Date.now();
+      }
     }
     attachRollingPlan(state, plan);
     return state.rollingPlan.weeks;
@@ -167,8 +213,10 @@
     var weeks = rolling.weeks || [];
     var first = weeks[0];
     var last = weeks[weeks.length - 1];
-    return '<div class="sheet-grid"><div class="overview-card"><strong>Rolling post-September block</strong><p>Lift generated a repeatable four-week mesocycle from recent performance: consolidate, add reps, reach the range top, then deload. Historical prescriptions remain unchanged.</p></div>' +
-      '<div class="metric-grid"><div class="metric-card"><div class="label">Starts</div><div class="value">' + ctx.escapeHtml(first && first.days[0].id || '-') + '</div></div><div class="metric-card"><div class="label">Through</div><div class="value">' + ctx.escapeHtml(last && last.days[6].id || '-') + '</div></div><div class="metric-card"><div class="label">Source</div><div class="value">Actual + template</div></div></div>' +
+    var startId = first && first.days && first.days[0] && first.days[0].id || '-';
+    var endId = last && last.days && last.days.length && last.days[last.days.length - 1].id || '-';
+    return '<div class="sheet-grid"><div class="overview-card"><strong>Rolling continuation block</strong><p>Lift generated a repeatable four-week mesocycle from recent performance: consolidate, add reps, reach the range top, then deload. Historical prescriptions remain unchanged.</p></div>' +
+      '<div class="metric-grid"><div class="metric-card"><div class="label">Starts</div><div class="value">' + ctx.escapeHtml(startId) + '</div></div><div class="metric-card"><div class="label">Through</div><div class="value">' + ctx.escapeHtml(endId) + '</div></div><div class="metric-card"><div class="label">Source</div><div class="value">Actual + template</div></div></div>' +
       '<div class="overview-card"><strong>How it behaves</strong><p>Verified loads can override the template. Missed reps hold or reduce; clean top-range work with 1-2 RIR earns the next increment. Generated weeks are local-only until exported.</p><div class="sheet-actions"><button class="action-btn" data-action="program-next-block">Generate next 4 weeks</button></div></div></div>';
   }
 

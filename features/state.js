@@ -428,6 +428,25 @@
     return out;
   }
 
+  function mergeTemplatesById(a, b) {
+    var out = [];
+    var indexByKey = {};
+    (Array.isArray(a) ? a : []).concat(Array.isArray(b) ? b : []).forEach(function (item) {
+      if (!isObject(item)) return;
+      var key = item.id != null && String(item.id).trim()
+        ? "id:" + String(item.id).trim().toLowerCase()
+        : "name:" + String(item.name || item.title || "").trim().toLowerCase();
+      if (!key || key === "name:") return;
+      if (indexByKey[key] != null) {
+        out[indexByKey[key]] = Object.assign({}, out[indexByKey[key]], clone(item));
+      } else {
+        indexByKey[key] = out.length;
+        out.push(clone(item));
+      }
+    });
+    return out;
+  }
+
   function mergeStates(current, incoming) {
     var rawIncoming = isObject(incoming) ? incoming : {};
     var left = migrateState(current);
@@ -452,6 +471,12 @@
     out.cardio = mergeDateBuckets(left.cardio, right.cardio);
     out.supplements = mergeDateBuckets(left.supplements, right.supplements);
     out.supplementSettings = Object.assign({}, left.supplementSettings || {}, isObject(rawIncoming.supplementSettings) ? rawIncoming.supplementSettings : {});
+    if (Array.isArray(left.customWorkouts) || Array.isArray(right.customWorkouts)) {
+      out.customWorkouts = mergeTemplatesById(left.customWorkouts, right.customWorkouts);
+    }
+    if (Array.isArray(left.library) || Array.isArray(right.library)) {
+      out.library = mergeTemplatesById(left.library, right.library);
+    }
     out.prs = Object.assign({}, left.prs || {}, right.prs || {});
     out.achievements = Object.assign({}, left.achievements || {}, right.achievements || {});
     out.history = Object.assign({}, left.history || {}, isObject(rawIncoming.history) ? right.history || {} : {});
