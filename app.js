@@ -274,6 +274,7 @@
     loaded.strengthEstimates = Array.isArray(loaded.strengthEstimates) ? loaded.strengthEstimates : [];
     loaded.cloudSync = Object.assign({ provider: null, lastBackupAt: null, autoWeekly: false }, loaded.cloudSync || {});
     loaded.weeklyRecapDismissedIso = loaded.weeklyRecapDismissedIso || null;
+    loaded.reentryDismissedWeekId = loaded.reentryDismissedWeekId || null;
     loaded.cycleReviewSeen = !!loaded.cycleReviewSeen;
     var program = feature("program");
     if (program && typeof program.ensureRollingPlan === "function" && PLAN) {
@@ -1010,6 +1011,11 @@
 
     html += renderCompanionSnapshot(day, week);
 
+    var reentry = feature("reentry");
+    if (reentry && typeof reentry.shouldShowBanner === "function" && reentry.shouldShowBanner(makeCtx())) {
+      html += reentry.renderBanner(makeCtx());
+    }
+
     html += '<main class="content">';
     if (week.notice) html += '<section class="notice" data-phase="' + escapeHtml(normalizePhase(week.phase)) + '"><strong>' + escapeHtml(weekNoticeHeading(week.phase)) + '</strong><p>' + richText(week.notice) + "</p></section>";
     if (ds.readiness != null && total) {
@@ -1210,6 +1216,22 @@
     summaryOverlay.dataset.open = "true";
   }
 
+  function shouldShowCopySet1(day, exIndex, sets) {
+    if (!sets || sets.length < 2) return false;
+    var ds = dayState(day.id);
+    var s1 = getCurrentSetValue(day, exIndex, 0);
+    for (var si = 1; si < sets.length; si += 1) {
+      var key = exIndex + "." + si;
+      if (isCompletedSet(ds.completed[key])) continue;
+      var cur = getCurrentSetValue(day, exIndex, si);
+      var differs = Math.abs(cur.weight - s1.weight) > 1e-6 || cur.reps !== s1.reps;
+      var draft = ds.drafts[key];
+      var hasMatchingDraft = !!(draft && Math.abs(numberOr(draft.weight, -1) - s1.weight) <= 1e-6 && numberOr(draft.reps, -1) === s1.reps);
+      if (differs || !hasMatchingDraft) return true;
+    }
+    return false;
+  }
+
   function renderExercise(day, ex, exIndex) {
     var ds = dayState(day.id);
     var sets = exerciseSets(day, exIndex);
@@ -1229,9 +1251,18 @@
     if (hint) html += '<div class="last-hint">' + escapeHtml(hint) + "</div>";
     if (suggestion) html += '<div class="adaptive-cue" data-action-kind="' + escapeHtml(suggestion.action) + '">' + escapeHtml(suggestion.reason) + '</div>';
     html += '<div class="weight-semantics">' + escapeHtml(weightModeLabel(ex)) + '</div>';
+    var reentryMod = feature("reentry");
+    if (reentryMod && typeof reentryMod.dumbbellPerHandText === "function") {
+      var currentDbWeight = sets.length ? getCurrentSetValue(day, exIndex, 0).weight : (suggestion ? suggestion.weight : 0);
+      var dbHint = reentryMod.dumbbellPerHandText(ex, currentDbWeight, makeCtx());
+      if (dbHint) html += '<div class="db-hint">' + escapeHtml(dbHint) + '</div>';
+    }
     html += "</div></div>";
     html += '<div class="ex-actions">';
     html += '<button class="tool-btn" data-action="did-planned" data-ex="' + exIndex + '">' + icon("check") + "Did as planned</button>";
+    if (shouldShowCopySet1(day, exIndex, sets)) {
+      html += '<button class="tool-btn set-carry-btn" data-action="copy-set1" data-ex="' + exIndex + '">Match S1</button>';
+    }
     html += '<button class="tool-btn" data-action="add-set" data-ex="' + exIndex + '">' + icon("plus") + "Set</button>";
     html += '<button class="tool-btn form-link" data-action="form-video" data-name="' + escapeHtml(ex.name) + '"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M10 16.5l6-4.5-6-4.5v9zm12-4.5c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"/></svg>Form</button>';
     html += '<button class="tool-btn" data-action="exercise-flag" data-ex="' + exIndex + '" data-flag="formIssue" data-active="' + String(!!flags.formIssue) + '">Form issue</button>';
@@ -1311,6 +1342,7 @@
     html += '<button class="icon-btn" data-action="rest-adjust" data-delta="-15" aria-label="Subtract 15 seconds">' + icon("minus") + "</button>";
     html += '<button class="icon-btn primary" data-action="rest-toggle" aria-label="Play pause rest timer">' + icon(rest.running ? "pause" : "play") + "</button>";
     html += '<button class="icon-btn" data-action="rest-adjust" data-delta="15" aria-label="Add 15 seconds">' + icon("plus") + "</button>";
+    html += '<button class="icon-btn rest-dismiss-btn" data-action="rest-dismiss" aria-label="Dismiss rest timer">' + icon("close") + "</button>";
     html += "</div></div>";
     html += '<div class="rest-presets">';
     REST_PRESETS.concat([state.settings.defaultRest]).filter(function (value, index, arr) { return arr.indexOf(value) === index; }).forEach(function (seconds) {
@@ -1785,6 +1817,14 @@
     return /\b(if|drop|confirm|clean|irritation|shoulder|available|attempt|readiness|fatigue|ache|pain)\b/.test(n);
   }
 
+  var SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  function shortDateLabel(dayId) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dayId || ""));
+    if (!m) return String(dayId || "");
+    return (SHORT_MONTHS[Number(m[2]) - 1] || m[2]) + " " + Number(m[3]);
+  }
+
   function lastSessionHint(name, dayId) {
     var prior = allDays().filter(function (entry) { return entry.day.id < dayId; }).sort(function (a, b) { return b.day.id.localeCompare(a.day.id); });
     for (var i = 0; i < prior.length; i += 1) {
@@ -1796,13 +1836,22 @@
       var completed = ds.completed || {};
       var values = Object.keys(completed).filter(function (key) {
         return key.split(".")[0] === String(exIndex) && isCompletedSet(completed[key]);
+      }).sort(function (a, b) {
+        return Number(a.split(".")[1]) - Number(b.split(".")[1]);
       }).map(function (key) { return completed[key]; });
       if (!values.length) continue;
       var weights = values.map(function (v) { return formatWeight(v.weight); });
       var reps = values.map(function (v) { return v.reps; });
       var sameWeight = weights.every(function (w) { return w === weights[0]; });
       var sameReps = reps.every(function (r) { return r === reps[0]; });
-      return "Last: " + (sameWeight ? weights[0] + " " + unitLabel() : weights.join("/")) + " x " + (sameReps ? reps[0] : reps.join("/")) + " x" + values.length + " (Wk " + week.num + ")";
+      var phase = normalizePhase(week && week.phase);
+      var phaseTag = phase === "deload" ? " Deload" : phase === "reentry" ? " Reentry" : "";
+      var metaParts = [];
+      if (week && week.num != null) metaParts.push("Wk " + week.num + phaseTag);
+      else if (phaseTag) metaParts.push(phaseTag.trim());
+      var dateLabel = shortDateLabel(day.id);
+      if (dateLabel) metaParts.push(dateLabel);
+      return "Last: " + (sameWeight ? weights[0] + " " + unitLabel() : weights.join("/")) + " x " + (sameReps ? reps[0] : reps.join("/")) + " x" + values.length + (metaParts.length ? " (" + metaParts.join(" \u00b7 ") + ")" : "");
     }
     return "";
   }
@@ -2190,14 +2239,51 @@
 
   function stepSetValue(exIndex, setIndex, field, direction) {
     var day = getDay(state.activeDayId);
+    if (!day) return;
     var current = getCurrentSetValue(day, exIndex, setIndex);
     if (field === "reps") {
       updateSetValue(exIndex, setIndex, field, current.reps + direction, false);
     } else {
-      var display = kgToDisplay(current.weight) + direction * numberOr(state.settings.weightStep, 2.5);
+      var exercise = (day.exercises || [])[exIndex];
+      var progression = feature("progression");
+      var fallbackStep = numberOr(state.settings.weightStep, 2.5);
+      var step = state.settings.units === "kg" && progression && typeof progression.incrementFor === "function"
+        ? progression.incrementFor(exercise, fallbackStep)
+        : fallbackStep;
+      var display = kgToDisplay(current.weight) + direction * step;
+      if (state.settings.units === "kg") display = Math.round(display * 100) / 100;
       updateSetValue(exIndex, setIndex, field, display, true);
     }
     haptic("tap");
+    render();
+  }
+
+  function copySet1ToRemaining(exIndex) {
+    var day = getDay(state.activeDayId);
+    if (!day) return;
+    var ex = (day.exercises || [])[exIndex];
+    if (!ex) return;
+    var sets = exerciseSets(day, exIndex);
+    if (sets.length < 2) return;
+    var ds = dayState(day.id);
+    var s1 = getCurrentSetValue(day, exIndex, 0);
+    var copied = 0;
+    for (var si = 1; si < sets.length; si += 1) {
+      var key = exIndex + "." + si;
+      if (isCompletedSet(ds.completed[key])) continue;
+      if (ds.completed[key] && !isCompletedSet(ds.completed[key])) {
+        delete ds.completed[key];
+      }
+      var prevDraft = ds.drafts[key] && typeof ds.drafts[key] === "object" ? ds.drafts[key] : {};
+      var nextDraft = Object.assign({}, prevDraft, { weight: s1.weight, reps: s1.reps });
+      tagSetExercise(nextDraft, ex);
+      ds.drafts[key] = nextDraft;
+      copied += 1;
+    }
+    if (!copied) return;
+    saveState("copy-set1");
+    haptic("select");
+    toast("Copied Set 1 target to remaining sets.");
     render();
   }
 
@@ -3061,6 +3147,20 @@
       state.weeklyRecapDismissedIso = btn.dataset.iso || isoWeekId(parseDateId(todayId()));
       saveState();
       render();
+    } else if (action === "reentry-start") {
+      haptic(3);
+      var reentryDay = getDay(state.activeDayId);
+      if (reentryDay && (reentryDay.exercises || []).length) {
+        runtime.pendingAction = null;
+        openSheet("readiness");
+      } else {
+        toast("Today is a planned rest day.");
+      }
+    } else if (action === "reentry-dismiss") {
+      var dismissWeekId = btn.dataset.week || state.activeWeekId || (weekForDayId(state.activeDayId) || {}).id || null;
+      state.reentryDismissedWeekId = dismissWeekId;
+      saveState("reentry-dismiss");
+      render();
     } else if (action === "dismiss-summary") {
       runtime.summaryDayId = null;
       runtime.cycleReview = false;
@@ -3096,6 +3196,8 @@
       }
     } else if (action === "set-step") {
       stepSetValue(Number(btn.dataset.ex), Number(btn.dataset.set), btn.dataset.field, Number(btn.dataset.delta));
+    } else if (action === "copy-set1") {
+      copySet1ToRemaining(Number(btn.dataset.ex));
     } else if (action === "did-planned") {
       didAsPlanned(Number(btn.dataset.ex));
     } else if (action === "add-set") {
@@ -3117,6 +3219,12 @@
       toggleRest();
     } else if (action === "rest-preset") {
       presetRest(Number(btn.dataset.sec));
+    } else if (action === "rest-dismiss") {
+      rest = idleRest();
+      saveRest();
+      haptic(3);
+      updateWorkoutNotification(true);
+      render();
     } else if (action === "copy-scope") {
       runtime.copyScope = btn.dataset.scope;
       renderSheet();
@@ -3219,7 +3327,20 @@
         renderSheet();
       }
     } else if (action === "library-start") {
-      toast("Library workouts are saved templates. Copy them into the plan manually for now.");
+      var lib = feature("library");
+      var tplId = btn.dataset.id;
+      var tpl = lib && typeof lib.instantiateWorkout === "function" ? lib.instantiateWorkout(makeCtx(), tplId) : null;
+      var tplLabel = tpl ? (tpl.name || tpl.title || "this template") : "this template";
+      if (lib && typeof lib.applyTemplateToDay === "function" && confirm("Add exercises from \"" + tplLabel + "\" to " + (state.activeDayId || "today") + "?")) {
+        var applied = lib.applyTemplateToDay(makeCtx(), tplId);
+        if (applied && applied.added && applied.added.length) {
+          toast("Added " + applied.added.length + " exercises from " + tplLabel + ".");
+          closeSheet();
+          render();
+        } else {
+          toast("Could not apply template to the active day.");
+        }
+      }
     } else if (action === "open-drawer") {
       haptic(3);
       runtime.drawerOpen = true;
@@ -3409,6 +3530,13 @@
         saveState("cardio-skip");
         toast("Recovery skip logged without penalty.");
         renderSheet();
+      }
+    } else if (action === "cardio-delete") {
+      var cardioDel = feature("cardio");
+      if (cardioDel && typeof cardioDel.deleteEntry === "function" && cardioDel.deleteEntry(state, btn.dataset.date, btn.dataset.id)) {
+        saveState("cardio-delete");
+        toast("Cardio entry deleted.");
+        render();
       }
     } else if (action === "protein-preset") {
       var nutritionPreset = feature("nutrition");
@@ -3893,7 +4021,18 @@
       stateUpdatedAt: stateUpdatedAt,
       getDay: getDay,
       numberOr: numberOr,
-      pad2: pad2
+      pad2: pad2,
+      lastSessionHint: lastSessionHint,
+      stepSetValue: stepSetValue,
+      copySet1ToRemaining: copySet1ToRemaining,
+      render: render,
+      renderRestFab: renderRestFab,
+      handleClick: handleClick,
+      startRest: startRest,
+      openSheet: openSheet,
+      getState: function () { return state; },
+      getRest: function () { return rest; },
+      getRuntime: function () { return runtime; }
     };
   } else {
     init().catch(function () {
