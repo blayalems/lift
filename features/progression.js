@@ -78,6 +78,29 @@
       };
     }
 
+    if (input.reentry === true) {
+      return {
+        action: "reentry",
+        weight: planWeight,
+        reps: plannedSets[0] ? number(plannedSets[0].reps, range.min) : range.min,
+        sets: plannedSetCount,
+        reason: "Reentry ramp: rebuild movement grooves with 2-3 RIR before pushing load.",
+        basedOn: last
+      };
+    }
+
+    var gapDays = input.dayId && last && last.date ? dateDistanceDays(last.date, input.dayId) : null;
+    if (gapDays != null && Number.isFinite(gapDays) && gapDays >= 21) {
+      return {
+        action: "reentry",
+        weight: planWeight,
+        reps: plannedSets[0] ? number(plannedSets[0].reps, range.min) : range.min,
+        sets: plannedSetCount,
+        reason: "Returning after " + gapDays + " days off: start with the planned ramp load (" + planWeight + " kg) and keep 2-3 RIR.",
+        basedOn: last
+      };
+    }
+
     if (!last) {
       return {
         action: "baseline",
@@ -275,18 +298,34 @@
     };
   }
 
+  function resolveWeek(ctx, day) {
+    if (ctx.weekForDayId && day && day.id) {
+      var byId = ctx.weekForDayId(day.id);
+      if (byId) return byId;
+    }
+    if (ctx.allDays && day && day.id) {
+      var found = ctx.allDays().find(function (entry) {
+        return entry && entry.day && entry.day.id === day.id && entry.week;
+      });
+      if (found && found.week) return found.week;
+    }
+    return ctx.getWeek && ctx.state ? ctx.getWeek(ctx.state.activeWeekId) : null;
+  }
+
   function forExercise(ctx, day, exercise, exIndex) {
-    var week = ctx.getWeek && ctx.getWeek(ctx.state.activeWeekId);
+    var week = resolveWeek(ctx, day);
     var phase = String(week && week.phase || "").toLowerCase();
-    var ds = (ctx.state.days || {})[day.id] || {};
+    var ds = (ctx.state && ctx.state.days || {})[day.id] || {};
     var recovery = recoverySignals(ctx, exercise, day.id);
     return suggest({
+      dayId: day.id,
       exercise: exercise,
       plannedSets: exercise.sets || [],
       history: historyForExercise(ctx, exercise.name, day.id),
       readiness: ds.readiness,
       deload: phase.indexOf("deload") >= 0,
-      incrementKg: incrementFor(exercise, ctx.state.settings && ctx.state.settings.weightStep),
+      reentry: phase.indexOf("reentry") >= 0,
+      incrementKg: incrementFor(exercise, ctx.state && ctx.state.settings && ctx.state.settings.weightStep),
       recoveryHours: recovery.recoveryHours,
       recentVolumeHigh: recovery.recentVolumeHigh
     });

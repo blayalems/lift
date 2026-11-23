@@ -81,34 +81,38 @@
         (trainingDay.exercises || []).forEach(enrichExerciseMetadata);
       });
       if (Number(week.num) < 14) return;
-      var deload = String(week.phase || "").toLowerCase() === "deload";
+      var phase = String(week.phase || "").toLowerCase();
+      var deload = phase === "deload";
+      var reentry = phase === "reentry";
+      var light = deload || reentry;
+      var specTag = reentry ? "reentry" : deload ? "deload" : null;
       var tuesday = (week.days || []).find(function (trainingDay) { return trainingDay.dow === "Tue"; });
       if (tuesday && !tuesday.exercises.some(function (item) { return item.name === "45 Degree Back Extension"; })) {
         tuesday.exercises.push(enrichExerciseMetadata(exercise({
           name: "45 Degree Back Extension",
-          target: deload ? "Bodyweight - 1 x 12 easy" : "10 kg - 2 x 12",
-          tag: deload ? "deload" : "lower-back volume",
+          target: light ? "Bodyweight - 1 x 12 easy" : "10 kg - 2 x 12",
+          tag: specTag || "lower-back volume",
           defaultRest: 90,
           weightMode: "total",
           incrementKg: 2.5,
           repRange: [10, 15],
           muscleGroups: { spinalErectors: 1, glutes: 0.5, hamstrings: 0.5 },
           note: "Controlled spinal-erector work. Stop before fatigue changes position; this sits 48 hours before Thursday hinges.",
-          sets: repeatSet(deload ? 1 : 2, 12, deload ? 0 : 10)
+          sets: repeatSet(light ? 1 : 2, 12, light ? 0 : 10)
         })));
       }
       var saturday = (week.days || []).find(function (trainingDay) { return trainingDay.dow === "Sat"; });
       if (saturday && !saturday.exercises.some(function (item) { return item.name === "Hanging Knee Raise"; })) {
         saturday.exercises.push(enrichExerciseMetadata(exercise({
           name: "Hanging Knee Raise",
-          target: deload ? "1 x 10 controlled" : "2 x 10-15",
-          tag: deload ? "deload" : "ab volume",
+          target: light ? "1 x 10 controlled" : "2 x 10-15",
+          tag: specTag || "ab volume",
           defaultRest: 60,
           weightMode: "bodyweight",
           repRange: [10, 15],
           muscleGroups: { abs: 1 },
           note: "Posterior pelvic tilt, controlled range. Add reps before load.",
-          sets: repeatSet(deload ? 1 : 2, 10, 0)
+          sets: repeatSet(light ? 1 : 2, 10, 0)
         })));
       }
     });
@@ -118,7 +122,7 @@
     meta: {
       title: "Lem Progressive Overload Plan",
       athlete: "Lem",
-      dateRange: "May 12-September 27, 2026",
+      dateRange: "May 12, 2026-January 31, 2027",
       timeZone: "Asia/Manila",
       source: "reference/lem_progressive_overload_may_june_2026.html",
       enrichmentSource: "reference/Workout Tracker.html",
@@ -2293,6 +2297,701 @@
           day({
             id: "2026-09-27", dow: "Sun", dom: 27, month: "Sep", type: "rest", title: "Cycle Complete / Full Rest",
             footer: "Full rest. Export Weeks 14-20 results before programming the next block.", exercises: []
+          })
+        ]
+      },
+      {
+        id: "w21",
+        num: 21,
+        title: "Week 21 - Gym Reentry Ramp",
+        phase: "Reentry",
+        sub: "Rebuild grooves, leave 3+ RIR",
+        subtitle: "Rebuild grooves, leave 3+ RIR",
+        dateRange: "Nov 23-29",
+        notice: "Welcome back after the 13-week break. Loads start at roughly 70-75% of your August working peaks with two working sets on main lifts so joints and tendons re-adapt cleanly. Leave 3+ reps in reserve on every set; mild soreness is normal, grinding is not.",
+        days: [
+          day({
+            id: "2026-11-23", dow: "Mon", dom: 23, month: "Nov", type: "legs", title: "Quad-Dominant Legs & Core (Reentry)", warmup: "Bodyweight squats x 12 - Leg swings x 10/side - Leg press 40 kg x 1 x 10", footer: "Smooth 3-sec descent on leg press. Leave 3+ RIR across every set.",
+            exercises: [
+              exercise({ name: "Machine Leg Press", target: "75 kg - 2 x 10", primary: true, tag: "reentry", defaultRest: 150, repRange: [8,10], note: "75% of August working peak. Two crisp sets; stop well before grind.", sets: repeatSet(2, 10, 75) }),
+              exercise({ name: "Smith Machine Squats", target: "30 kg - 2 x 10", defaultRest: 150, repRange: [10,12], sets: repeatSet(2, 10, 30) }),
+              exercise({ name: "Seated Leg Curls", target: "35 kg - 2 x 12", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 12, 35) }),
+              exercise({ name: "Seated Calf Raises", target: "30 kg - 2 x 16", defaultRest: 90, repRange: [16,20], sets: repeatSet(2, 16, 30) }),
+              exercise({ name: "Abdominal Machine", target: "45 kg - 2 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 10, 45) })
+            ]
+          }),
+          day({
+            id: "2026-11-24", dow: "Tue", dom: 24, month: "Nov", type: "pull", title: "Back & Biceps (Reentry)", warmup: "Scapular pull-downs x 12 - Band pull-aparts x 15", footer: "Rebuild scapular rhythm and elbow comfort with 3+ RIR.",
+            exercises: [
+              exercise({ name: "Lat Pulldown", target: "37.5 kg - 2 x 10", primary: true, tag: "reentry", defaultRest: 150, repRange: [8,10], sets: repeatSet(2, 10, 37.5) }),
+              exercise({ name: "Seated Cable Row", target: "37.5 kg - 2 x 10", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 10, 37.5) }),
+              exercise({ name: "High Cable Row / Face Pull", target: "32.5 kg - 2 x 12", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 12, 32.5) }),
+              exercise({ name: "DB Bicep Curls", target: "14 kg total - 2 x 10", defaultRest: 90, repRange: [10,12], note: "7 kg per hand. Smooth curls, no swing.", sets: repeatSet(2, 10, 14) })
+            ]
+          }),
+          day({
+            id: "2026-11-25", dow: "Wed", dom: 25, month: "Nov", type: "primer", title: "Upper Chest & Side Delts (Reentry)", footer: "Reentry primer: easy groove sets at 3+ RIR to prep shoulders for Saturday.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "16 kg total - 2 x 10", primary: true, tag: "reentry", defaultRest: 120, repRange: [10,12], note: "8 kg per hand.", sets: repeatSet(2, 10, 16) }),
+              exercise({ name: "Cable Lateral Raises", target: "5 kg - 1 x 12", defaultRest: 75, repRange: [12,15], sets: repeatSet(1, 12, 5) })
+            ]
+          }),
+          day({
+            id: "2026-11-26", dow: "Thu", dom: 26, month: "Nov", type: "ham", title: "Hamstrings & Glutes (Reentry)", warmup: "Glute bridges x 12 - Bodyweight good mornings x 10", footer: "Prioritize clean hamstring tension on RDL; keep lower back fresh.",
+            exercises: [
+              exercise({ name: "DB Romanian Deadlift", target: "30 kg total - 2 x 10", primary: true, tag: "reentry", defaultRest: 150, repRange: [8,10], note: "15 kg per hand. Stop with 3+ RIR.", sets: repeatSet(2, 10, 30) }),
+              exercise({ name: "High/Wide Leg Press", target: "65 kg - 2 x 10", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 10, 65) }),
+              exercise({ name: "Lying Leg Curls", target: "35 kg - 2 x 8", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 8, 35) }),
+              exercise({ name: "Walking Lunges", target: "14 kg total - 2 x 10", defaultRest: 90, repRange: [8,10], sets: repeatSet(2, 10, 14) }),
+              exercise({ name: "Abdominal Machine", target: "45 kg - 2 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 10, 45) })
+            ]
+          }),
+          day({
+            id: "2026-11-27", dow: "Fri", dom: 27, month: "Nov", type: "primer", title: "Lats, Rear Delts & Arms (Reentry)", footer: "Single crisp set per movement so soreness stays mild.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "15 kg - 1 x 10 / side", primary: true, tag: "reentry", defaultRest: 120, repRange: [10,12], sets: repeatSet(1, 10, 15) }),
+              exercise({ name: "Rear Delt Fly", target: "15 kg - 1 x 12", defaultRest: 90, repRange: [12,15], sets: repeatSet(1, 12, 15) }),
+              exercise({ name: "Incline DB Curls", target: "12 kg total - 1 x 12", tag: "arms", defaultRest: 90, repRange: [12,15], sets: repeatSet(1, 12, 12) }),
+              exercise({ name: "Tricep Pushdowns", target: "25 kg - 1 x 12", tag: "arms", defaultRest: 90, repRange: [10,12], sets: repeatSet(1, 12, 25) })
+            ]
+          }),
+          day({
+            id: "2026-11-28", dow: "Sat", dom: 28, month: "Nov", type: "chest", title: "Chest - Reentry Ramp", warmup: "Band dislocates x 12 - Scap push-ups x 10 - Light DB press 12 kg x 1 x 10", footer: "No Assisted Dips this week so shoulders re-acclimate cleanly. Leave 3+ RIR on every set.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "20 kg total - 3 x 8", primary: true, tag: "reentry", defaultRest: 150, repRange: [8,10], note: "10 kg per hand for 3 smooth sets of 8.", sets: repeatSet(3, 8, 20) }),
+              exercise({ name: "Machine Chest Press", target: "25 kg - 2 x 10", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 10, 25) }),
+              exercise({ name: "Machine Pec Fly", target: "25 kg - 2 x 10", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 10, 25) }),
+              exercise({ name: "Cable Lateral Raises", target: "5 kg - 2 x 12", defaultRest: 75, repRange: [12,15], sets: repeatSet(2, 12, 5) })
+            ]
+          }),
+          day({
+            id: "2026-11-29", dow: "Sun", dom: 29, month: "Nov", type: "rest", title: "Full Rest", footer: "Full rest. Sleep and protein support Week 22 full-volume return.", exercises: []
+          })
+        ]
+      },
+      {
+        id: "w22",
+        num: 22,
+        title: "Week 22 - Full Volume Return",
+        phase: "Consolidate",
+        sub: "Restore working sets at ~85% peak",
+        subtitle: "Restore working sets at ~85% peak",
+        dateRange: "Nov 30-Dec 6",
+        notice: "Restore full working-set counts at ~85% of your August working peaks. Keep 2-3 reps in reserve while work capacity returns, and reintroduce gentle Assisted Dips on Saturday only if shoulders feel completely smooth.",
+        days: [
+          day({
+            id: "2026-11-30", dow: "Mon", dom: 30, month: "Nov", type: "legs", title: "Quad-Dominant Legs & Core",
+            exercises: [
+              exercise({ name: "Machine Leg Press", target: "85 kg - 3 x 10", primary: true, tag: "consolidate", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 10, 85) }),
+              exercise({ name: "Smith Machine Squats", target: "35 kg - 3 x 10", defaultRest: 150, repRange: [10,12], sets: repeatSet(3, 10, 35) }),
+              exercise({ name: "Seated Leg Curls", target: "42.5 kg - 3 x 12", defaultRest: 120, repRange: [10,12], sets: repeatSet(3, 12, 42.5) }),
+              exercise({ name: "Seated Calf Raises", target: "35 kg - 3 x 18", defaultRest: 90, repRange: [16,20], sets: repeatSet(3, 18, 35) }),
+              exercise({ name: "Abdominal Machine", target: "50 kg - 3 x 12", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 12, 50) })
+            ]
+          }),
+          day({
+            id: "2026-12-01", dow: "Tue", dom: 1, month: "Dec", type: "pull", title: "Back & Biceps (Pull)",
+            exercises: [
+              exercise({ name: "Lat Pulldown", target: "42.5 kg - 3 x 10", primary: true, tag: "consolidate", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 10, 42.5) }),
+              exercise({ name: "Seated Cable Row", target: "42.5 kg - 3 x 10", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 10, 42.5) }),
+              exercise({ name: "High Cable Row / Face Pull", target: "37.5 kg - 3 x 12", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 12, 37.5) }),
+              exercise({ name: "DB Bicep Curls", target: "16 kg total - 3 x 12", defaultRest: 90, repRange: [10,12], note: "8 kg per hand.", sets: repeatSet(3, 12, 16) })
+            ]
+          }),
+          day({
+            id: "2026-12-02", dow: "Wed", dom: 2, month: "Dec", type: "primer", title: "Upper Chest & Side Delts", footer: "Controlled primer volume with 2-3 RIR.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "18 kg total - 2 x 10", primary: true, tag: "volume", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 10, 18) }),
+              exercise({ name: "Cable Lateral Raises", target: "5 kg - 2 x 15", defaultRest: 75, repRange: [12,15], sets: repeatSet(2, 15, 5) })
+            ]
+          }),
+          day({
+            id: "2026-12-03", dow: "Thu", dom: 3, month: "Dec", type: "ham", title: "Hamstrings & Glutes",
+            exercises: [
+              exercise({ name: "DB Romanian Deadlift", target: "35 kg total - 3 x 10", primary: true, tag: "consolidate", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 10, 35) }),
+              exercise({ name: "High/Wide Leg Press", target: "75 kg - 3 x 10", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 10, 75) }),
+              exercise({ name: "Lying Leg Curls", target: "42.5 kg - 3 x 8", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 8, 42.5) }),
+              exercise({ name: "Walking Lunges", target: "16 kg total - 3 x 10", defaultRest: 90, repRange: [8,10], sets: repeatSet(3, 10, 16) }),
+              exercise({ name: "Abdominal Machine", target: "50 kg - 3 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 10, 50) })
+            ]
+          }),
+          day({
+            id: "2026-12-04", dow: "Fri", dom: 4, month: "Dec", type: "primer", title: "Lats, Rear Delts & Arms", footer: "Full primer volume restored; stay 2 reps short of failure.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "17.5 kg - 2 x 10 / side", primary: true, tag: "lat volume", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 10, 17.5) }),
+              exercise({ name: "Rear Delt Fly", target: "17.5 kg - 2 x 12", defaultRest: 90, repRange: [12,15], sets: repeatSet(2, 12, 17.5) }),
+              exercise({ name: "Incline DB Curls", target: "14 kg total - 1 x 12", tag: "arms", defaultRest: 90, repRange: [12,15], sets: repeatSet(1, 12, 14) }),
+              exercise({ name: "Tricep Pushdowns", target: "30 kg - 1 x 12", tag: "arms", defaultRest: 90, repRange: [10,12], sets: repeatSet(1, 12, 30) })
+            ]
+          }),
+          day({
+            id: "2026-12-05", dow: "Sat", dom: 5, month: "Dec", type: "chest", title: "Chest - Volume Return", footer: "Gentle return to Assisted Dips at 40 kg assist. Stop immediately if any shoulder pinch appears.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "25 kg total - 3 x 8", primary: true, tag: "consolidate", defaultRest: 150, repRange: [8,10], note: "12.5 kg per hand for 3 clean sets of 8.", sets: repeatSet(3, 8, 25) }),
+              exercise({ name: "Machine Chest Press", target: "30 kg - 3 x 8", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 8, 30) }),
+              exercise({ name: "Machine Pec Fly", target: "30 kg - 2 x 10", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 10, 30) }),
+              exercise({ name: "Assisted Dips", target: "40 kg assist - 2 x 8", defaultRest: 120, repRange: [8,10], note: "Controlled depth, 2-3 RIR.", sets: repeatSet(2, 8, 40) }),
+              exercise({ name: "Cable Lateral Raises", target: "5 kg - 2 x 15", defaultRest: 75, repRange: [12,15], sets: repeatSet(2, 15, 5) })
+            ]
+          }),
+          day({
+            id: "2026-12-06", dow: "Sun", dom: 6, month: "Dec", type: "rest", title: "Full Rest", footer: "Full rest before Week 23 strength recapture.", exercises: []
+          })
+        ]
+      },
+      {
+        id: "w23",
+        num: 23,
+        title: "Week 23 - Strength Recapture",
+        phase: "Load",
+        sub: "Approach pre-break working loads",
+        subtitle: "Approach pre-break working loads",
+        dateRange: "Dec 7-13",
+        notice: "Step into ~92-95% of your August working peaks with full four-set pressing on Saturday. Keep 2 reps in reserve; Week 24 matches your August PR bracket.",
+        days: [
+          day({
+            id: "2026-12-07", dow: "Mon", dom: 7, month: "Dec", type: "legs", title: "Quad-Dominant Legs & Core - Load",
+            exercises: [
+              exercise({ name: "Machine Leg Press", target: "92.5 kg - 3 x 9", primary: true, tag: "load", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 9, 92.5) }),
+              exercise({ name: "Smith Machine Squats", target: "37.5 kg - 3 x 10", defaultRest: 150, repRange: [10,12], sets: repeatSet(3, 10, 37.5) }),
+              exercise({ name: "Seated Leg Curls", target: "47.5 kg - 3 x 10", defaultRest: 120, repRange: [10,12], sets: repeatSet(3, 10, 47.5) }),
+              exercise({ name: "Seated Calf Raises", target: "40 kg - 3 x 18", defaultRest: 90, repRange: [16,20], sets: repeatSet(3, 18, 40) }),
+              exercise({ name: "Abdominal Machine", target: "55 kg - 3 x 12", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 12, 55) })
+            ]
+          }),
+          day({
+            id: "2026-12-08", dow: "Tue", dom: 8, month: "Dec", type: "pull", title: "Back & Biceps - Load",
+            exercises: [
+              exercise({ name: "Lat Pulldown", target: "47.5 kg - 3 x 9", primary: true, tag: "load", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 9, 47.5) }),
+              exercise({ name: "Seated Cable Row", target: "47.5 kg - 3 x 9", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 9, 47.5) }),
+              exercise({ name: "High Cable Row / Face Pull", target: "42.5 kg - 3 x 11", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 11, 42.5) }),
+              exercise({ name: "DB Bicep Curls", target: "18 kg total - 3 x 12", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 12, 18) })
+            ]
+          }),
+          day({
+            id: "2026-12-09", dow: "Wed", dom: 9, month: "Dec", type: "primer", title: "Upper Chest & Side Delts", footer: "Keep 2-3 RIR; step cable lateral raises to 7.5 kg.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "20 kg total - 2 x 10", primary: true, tag: "volume", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 10, 20) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 12", defaultRest: 75, repRange: [12,15], sets: repeatSet(2, 12, 7.5) })
+            ]
+          }),
+          day({
+            id: "2026-12-10", dow: "Thu", dom: 10, month: "Dec", type: "ham", title: "Hamstrings & Glutes - Load",
+            exercises: [
+              exercise({ name: "DB Romanian Deadlift", target: "37.5 kg total - 3 x 9", primary: true, tag: "load", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 9, 37.5) }),
+              exercise({ name: "High/Wide Leg Press", target: "85 kg - 3 x 9", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 9, 85) }),
+              exercise({ name: "Lying Leg Curls", target: "47.5 kg - 3 x 8", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 8, 47.5) }),
+              exercise({ name: "Walking Lunges", target: "18 kg total - 3 x 10", defaultRest: 90, repRange: [8,10], sets: repeatSet(3, 10, 18) }),
+              exercise({ name: "Abdominal Machine", target: "55 kg - 3 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 10, 55) })
+            ]
+          }),
+          day({
+            id: "2026-12-11", dow: "Fri", dom: 11, month: "Dec", type: "primer", title: "Lats, Rear Delts & Arms", footer: "Controlled reps, no failure work before Saturday chest.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "17.5 kg - 2 x 12 / side", primary: true, tag: "lat volume", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 12, 17.5) }),
+              exercise({ name: "Rear Delt Fly", target: "17.5 kg - 2 x 14", defaultRest: 90, repRange: [12,15], sets: repeatSet(2, 14, 17.5) }),
+              exercise({ name: "Incline DB Curls", target: "14 kg total - 1 x 14", tag: "arms", defaultRest: 90, repRange: [12,15], sets: repeatSet(1, 14, 14) }),
+              exercise({ name: "Tricep Pushdowns", target: "32.5 kg - 1 x 12", tag: "arms", defaultRest: 90, repRange: [10,12], sets: repeatSet(1, 12, 32.5) })
+            ]
+          }),
+          day({
+            id: "2026-12-12", dow: "Sat", dom: 12, month: "Dec", type: "chest", title: "Chest - Strength Recapture", footer: "Four clean working sets at 25 kg total (12.5 kg/hand) with full 3-minute rests.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "25 kg total - 4 x 8", primary: true, tag: "load", defaultRest: 180, repRange: [8,10], note: "12.5 kg per hand across all four sets.", sets: repeatSet(4, 8, 25) }),
+              exercise({ name: "Machine Chest Press", target: "32.5 kg - 3 x 8", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 8, 32.5) }),
+              exercise({ name: "Machine Pec Fly", target: "32.5 kg - 2 x 11", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 11, 32.5) }),
+              exercise({ name: "Assisted Dips", target: "40 kg assist - 2 x 9", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 9, 40) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 12", defaultRest: 75, repRange: [12,15], sets: repeatSet(2, 12, 7.5) })
+            ]
+          }),
+          day({
+            id: "2026-12-13", dow: "Sun", dom: 13, month: "Dec", type: "rest", title: "Full Rest", footer: "Full rest before matching August peaks in Week 24.", exercises: []
+          })
+        ]
+      },
+      {
+        id: "w24",
+        num: 24,
+        title: "Week 24 - Match Pre-Break Peaks",
+        phase: "Load +",
+        sub: "Own your August PR bracket cleanly",
+        subtitle: "Own your August PR bracket cleanly",
+        dateRange: "Dec 14-20",
+        notice: "Match your August working peaks cleanly with 1-2 reps in reserve. Own the groove across every lift and save 2027 load jumps for January after the holiday deload.",
+        days: [
+          day({
+            id: "2026-12-14", dow: "Mon", dom: 14, month: "Dec", type: "legs", title: "Quad-Dominant Legs & Core",
+            exercises: [
+              exercise({ name: "Machine Leg Press", target: "100 kg - 3 x 9", primary: true, tag: "reps", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 9, 100) }),
+              exercise({ name: "Smith Machine Squats", target: "40 kg - 3 x 11", defaultRest: 150, repRange: [10,12], sets: repeatSet(3, 11, 40) }),
+              exercise({ name: "Seated Leg Curls", target: "50 kg - 3 x 11", defaultRest: 120, repRange: [10,12], sets: repeatSet(3, 11, 50) }),
+              exercise({ name: "Seated Calf Raises", target: "42.5 kg - 3 x 19", defaultRest: 90, repRange: [16,20], sets: repeatSet(3, 19, 42.5) }),
+              exercise({ name: "Abdominal Machine", target: "60 kg - 3 x 11", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 11, 60) })
+            ]
+          }),
+          day({
+            id: "2026-12-15", dow: "Tue", dom: 15, month: "Dec", type: "pull", title: "Back & Biceps (Pull)",
+            exercises: [
+              exercise({ name: "Lat Pulldown", target: "50 kg - 3 x 9", primary: true, tag: "reps", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 9, 50) }),
+              exercise({ name: "Seated Cable Row", target: "50 kg - 3 x 9", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 9, 50) }),
+              exercise({ name: "High Cable Row / Face Pull", target: "45 kg - 3 x 11", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 11, 45) }),
+              exercise({ name: "DB Bicep Curls", target: "20 kg total - 3 x 11", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 11, 20) })
+            ]
+          }),
+          day({
+            id: "2026-12-16", dow: "Wed", dom: 16, month: "Dec", type: "primer", title: "Upper Chest & Side Delts", footer: "Keep 1-2 RIR so Thursday hinges stay crisp.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "20 kg total - 2 x 11", primary: true, tag: "volume", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 11, 20) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 12", defaultRest: 75, repRange: [12,15], sets: repeatSet(2, 12, 7.5) })
+            ]
+          }),
+          day({
+            id: "2026-12-17", dow: "Thu", dom: 17, month: "Dec", type: "ham", title: "Hamstrings & Glutes",
+            exercises: [
+              exercise({ name: "DB Romanian Deadlift", target: "40 kg total - 3 x 9", primary: true, tag: "reps", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 9, 40) }),
+              exercise({ name: "High/Wide Leg Press", target: "90 kg - 3 x 9", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 9, 90) }),
+              exercise({ name: "Lying Leg Curls", target: "50 kg - 3 x 8", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 8, 50) }),
+              exercise({ name: "Walking Lunges", target: "20 kg total - 3 x 10", defaultRest: 90, repRange: [8,10], sets: repeatSet(3, 10, 20) }),
+              exercise({ name: "Abdominal Machine", target: "60 kg - 3 x 11", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 11, 60) })
+            ]
+          }),
+          day({
+            id: "2026-12-18", dow: "Fri", dom: 18, month: "Dec", type: "primer", title: "Lats, Rear Delts & Arms", footer: "Controlled volume; stop arm sets with 1-2 RIR before Saturday.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "20 kg - 2 x 11 / side", primary: true, tag: "lat volume", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 11, 20) }),
+              exercise({ name: "Rear Delt Fly", target: "20 kg - 2 x 12", defaultRest: 90, repRange: [12,15], sets: repeatSet(2, 12, 20) }),
+              exercise({ name: "Incline DB Curls", target: "16 kg total - 1 x 14", tag: "arms", defaultRest: 90, repRange: [12,15], sets: repeatSet(1, 14, 16) }),
+              exercise({ name: "Tricep Pushdowns", target: "35 kg - 1 x 12", tag: "arms", defaultRest: 90, repRange: [10,12], sets: repeatSet(1, 12, 35) })
+            ]
+          }),
+          day({
+            id: "2026-12-19", dow: "Sat", dom: 19, month: "Dec", type: "chest", title: "Chest - Pre-Break Peak Match", footer: "Own 4 x 9 at 25 kg total (12.5 kg/hand) with 1-2 RIR.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "25 kg total - 4 x 9", primary: true, tag: "reps", defaultRest: 180, repRange: [8,10], sets: repeatSet(4, 9, 25) }),
+              exercise({ name: "Machine Chest Press", target: "35 kg - 3 x 8", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 8, 35) }),
+              exercise({ name: "Machine Pec Fly", target: "35 kg - 2 x 11", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 11, 35) }),
+              exercise({ name: "Assisted Dips", target: "40 kg assist - 2 x 10", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 10, 40) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 12", defaultRest: 75, repRange: [12,15], sets: repeatSet(2, 12, 7.5) })
+            ]
+          }),
+          day({
+            id: "2026-12-20", dow: "Sun", dom: 20, month: "Dec", type: "rest", title: "Full Rest", footer: "Full rest before Christmas-week deload.", exercises: []
+          })
+        ]
+      },
+      {
+        id: "w25",
+        num: 25,
+        title: "Week 25 - Holiday Deload",
+        phase: "Deload",
+        sub: "Shed fatigue across Christmas week",
+        subtitle: "Shed fatigue across Christmas week",
+        dateRange: "Dec 21-27",
+        notice: "Planned Christmas-week deload: train at ~80% of Week 24 loads with 2 easy sets on main lifts and 1 easy set on primers (RPE 5-6, 3+ RIR). No dips, no failure work, and keep Friday Dec 25 ultra-brief and flexible.",
+        days: [
+          day({
+            id: "2026-12-21", dow: "Mon", dom: 21, month: "Dec", type: "legs", title: "Legs & Core (Deload)",
+            exercises: [
+              exercise({ name: "Machine Leg Press", target: "80 kg - 2 x 8", primary: true, defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 8, 80) }),
+              exercise({ name: "Smith Machine Squats", target: "32.5 kg - 2 x 10", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 10, 32.5) }),
+              exercise({ name: "Seated Leg Curls", target: "40 kg - 2 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 10, 40) }),
+              exercise({ name: "Seated Calf Raises", target: "35 kg - 2 x 15", defaultRest: 90, repRange: [15,18], sets: repeatSet(2, 15, 35) }),
+              exercise({ name: "Abdominal Machine", target: "47.5 kg - 2 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 10, 47.5) })
+            ]
+          }),
+          day({
+            id: "2026-12-22", dow: "Tue", dom: 22, month: "Dec", type: "pull", title: "Back & Biceps (Deload)",
+            exercises: [
+              exercise({ name: "Lat Pulldown", target: "40 kg - 2 x 8", primary: true, defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 8, 40) }),
+              exercise({ name: "Seated Cable Row", target: "40 kg - 2 x 8", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 8, 40) }),
+              exercise({ name: "High Cable Row / Face Pull", target: "35 kg - 2 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 10, 35) }),
+              exercise({ name: "DB Bicep Curls", target: "16 kg total - 2 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 10, 16) })
+            ]
+          }),
+          day({
+            id: "2026-12-23", dow: "Wed", dom: 23, month: "Dec", type: "primer", title: "Upper Chest & Side Delts (Deload)", footer: "One easy pass at RPE 5-6 with 3+ RIR.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "16 kg total - 1 x 10", primary: true, defaultRest: 120, repRange: [10,12], sets: repeatSet(1, 10, 16) }),
+              exercise({ name: "Cable Lateral Raises", target: "5 kg - 1 x 12", defaultRest: 75, repRange: [12,15], sets: repeatSet(1, 12, 5) })
+            ]
+          }),
+          day({
+            id: "2026-12-24", dow: "Thu", dom: 24, month: "Dec", type: "ham", title: "Hamstrings & Glutes (Deload)",
+            exercises: [
+              exercise({ name: "DB Romanian Deadlift", target: "32 kg total - 2 x 8", primary: true, defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 8, 32) }),
+              exercise({ name: "High/Wide Leg Press", target: "72.5 kg - 2 x 8", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 8, 72.5) }),
+              exercise({ name: "Lying Leg Curls", target: "40 kg - 2 x 8", defaultRest: 90, repRange: [8,10], sets: repeatSet(2, 8, 40) }),
+              exercise({ name: "Walking Lunges", target: "16 kg total - 1 x 10", defaultRest: 90, repRange: [8,10], sets: repeatSet(1, 10, 16) })
+            ]
+          }),
+          day({
+            id: "2026-12-25", dow: "Fri", dom: 25, month: "Dec", type: "primer", title: "Christmas Day Quick Primer (Deload)", subtitle: "Ultra-brief 1-set pass — flexible for Christmas Day.", footer: "Holiday flexibility: 1 easy set per exercise (RPE 5-6, 3+ RIR). Shift or skip guilt-free for family plans.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "15 kg - 1 x 10 / side", primary: true, defaultRest: 120, repRange: [10,12], sets: repeatSet(1, 10, 15) }),
+              exercise({ name: "Rear Delt Fly", target: "15 kg - 1 x 12", defaultRest: 90, repRange: [12,15], sets: repeatSet(1, 12, 15) }),
+              exercise({ name: "Incline DB Curls", target: "12 kg total - 1 x 12", tag: "arms", defaultRest: 90, repRange: [12,15], sets: repeatSet(1, 12, 12) }),
+              exercise({ name: "Tricep Pushdowns", target: "27.5 kg - 1 x 10", tag: "arms", defaultRest: 90, repRange: [10,12], sets: repeatSet(1, 10, 27.5) })
+            ]
+          }),
+          day({
+            id: "2026-12-26", dow: "Sat", dom: 26, month: "Dec", type: "chest", title: "Chest (Deload)", footer: "RPE 5-6, 3+ RIR. No dips and no failure sets.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "20 kg total - 2 x 8", primary: true, defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 8, 20) }),
+              exercise({ name: "Machine Chest Press", target: "27.5 kg - 2 x 8", defaultRest: 90, repRange: [8,10], sets: repeatSet(2, 8, 27.5) }),
+              exercise({ name: "Machine Pec Fly", target: "27.5 kg - 2 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 10, 27.5) }),
+              exercise({ name: "Cable Lateral Raises", target: "5 kg - 1 x 12", defaultRest: 75, repRange: [12,15], sets: repeatSet(1, 12, 5) })
+            ]
+          }),
+          day({
+            id: "2026-12-27", dow: "Sun", dom: 27, month: "Dec", type: "rest", title: "Full Rest", footer: "Full rest before New Year consolidation.", exercises: []
+          })
+        ]
+      },
+      {
+        id: "w26",
+        num: 26,
+        title: "Week 26 - New Year Consolidation",
+        phase: "Consolidate",
+        sub: "Lock in pre-break loads cleanly",
+        subtitle: "Lock in pre-break loads cleanly",
+        dateRange: "Dec 28-Jan 3",
+        notice: "Lock in your pre-break working weights at the top of the rep range. Completing 4 x 10 cleanly at 25 kg on Saturday earns the 30 kg Incline DB test in Week 27.",
+        days: [
+          day({
+            id: "2026-12-28", dow: "Mon", dom: 28, month: "Dec", type: "legs", title: "Quad-Dominant Legs & Core",
+            exercises: [
+              exercise({ name: "Machine Leg Press", target: "100 kg - 3 x 10", primary: true, tag: "consolidate", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 10, 100) }),
+              exercise({ name: "Smith Machine Squats", target: "40 kg - 3 x 12", defaultRest: 150, repRange: [10,12], sets: repeatSet(3, 12, 40) }),
+              exercise({ name: "Seated Leg Curls", target: "50 kg - 3 x 12", defaultRest: 120, repRange: [10,12], sets: repeatSet(3, 12, 50) }),
+              exercise({ name: "Seated Calf Raises", target: "42.5 kg - 3 x 20", defaultRest: 90, repRange: [16,20], sets: repeatSet(3, 20, 42.5) }),
+              exercise({ name: "Abdominal Machine", target: "60 kg - 3 x 12", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 12, 60) })
+            ]
+          }),
+          day({
+            id: "2026-12-29", dow: "Tue", dom: 29, month: "Dec", type: "pull", title: "Back & Biceps (Pull)",
+            exercises: [
+              exercise({ name: "Lat Pulldown", target: "50 kg - 3 x 10", primary: true, tag: "consolidate", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 10, 50) }),
+              exercise({ name: "Seated Cable Row", target: "50 kg - 3 x 10", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 10, 50) }),
+              exercise({ name: "High Cable Row / Face Pull", target: "45 kg - 3 x 12", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 12, 45) }),
+              exercise({ name: "DB Bicep Curls", target: "20 kg total - 3 x 12", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 12, 20) })
+            ]
+          }),
+          day({
+            id: "2026-12-30", dow: "Wed", dom: 30, month: "Dec", type: "primer", title: "Upper Chest & Side Delts", footer: "Controlled reps; keep 2 RIR before Saturday chest.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "20 kg total - 2 x 12", primary: true, tag: "volume", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 12, 20) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 14", defaultRest: 75, repRange: [12,15], sets: repeatSet(2, 14, 7.5) })
+            ]
+          }),
+          day({
+            id: "2026-12-31", dow: "Thu", dom: 31, month: "Dec", type: "ham", title: "Hamstrings & Glutes",
+            exercises: [
+              exercise({ name: "DB Romanian Deadlift", target: "40 kg total - 3 x 10", primary: true, tag: "consolidate", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 10, 40) }),
+              exercise({ name: "High/Wide Leg Press", target: "90 kg - 3 x 10", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 10, 90) }),
+              exercise({ name: "Lying Leg Curls", target: "50 kg - 3 x 9", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 9, 50) }),
+              exercise({ name: "Walking Lunges", target: "20 kg total - 3 x 10", defaultRest: 90, repRange: [8,10], sets: repeatSet(3, 10, 20) }),
+              exercise({ name: "Abdominal Machine", target: "60 kg - 3 x 12", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 12, 60) })
+            ]
+          }),
+          day({
+            id: "2027-01-01", dow: "Fri", dom: 1, month: "Jan", type: "primer", title: "Lats, Rear Delts & Arms", footer: "First session of 2027 — stay submaximal so Saturday stays fresh.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "20 kg - 2 x 12 / side", primary: true, tag: "lat volume", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 12, 20) }),
+              exercise({ name: "Rear Delt Fly", target: "20 kg - 2 x 12", defaultRest: 90, repRange: [12,15], sets: repeatSet(2, 12, 20) }),
+              exercise({ name: "Incline DB Curls", target: "16 kg total - 1 x 15", tag: "arms", defaultRest: 90, repRange: [12,15], sets: repeatSet(1, 15, 16) }),
+              exercise({ name: "Tricep Pushdowns", target: "35 kg - 1 x 12", tag: "arms", defaultRest: 90, repRange: [10,12], sets: repeatSet(1, 12, 35) })
+            ]
+          }),
+          day({
+            id: "2027-01-02", dow: "Sat", dom: 2, month: "Jan", type: "chest", title: "Chest - Earn the 30 kg Test", footer: "Four clean sets of 10 at 25 kg total (12.5 kg/hand) earn the 30 kg Incline DB test next week.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "25 kg total - 4 x 10", primary: true, tag: "consolidate", defaultRest: 180, repRange: [8,10], sets: repeatSet(4, 10, 25) }),
+              exercise({ name: "Machine Chest Press", target: "35 kg - 3 x 10", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 10, 35) }),
+              exercise({ name: "Machine Pec Fly", target: "35 kg - 2 x 12", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 12, 35) }),
+              exercise({ name: "Assisted Dips", target: "37.5 kg assist - 2 x 10", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 10, 37.5) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 14", defaultRest: 75, repRange: [12,15], sets: repeatSet(2, 14, 7.5) })
+            ]
+          }),
+          day({
+            id: "2027-01-03", dow: "Sun", dom: 3, month: "Jan", type: "rest", title: "Full Rest", footer: "Full rest before Week 27 January load progression.", exercises: []
+          })
+        ]
+      },
+      {
+        id: "w27",
+        num: 27,
+        title: "Week 27 - January Load",
+        phase: "Load",
+        sub: "First new-load push of 2027",
+        subtitle: "First new-load push of 2027",
+        dateRange: "Jan 4-10",
+        notice: "First new-load push of 2027. Step past your August working peaks only where Week 26 completed all sets cleanly with 1-2 RIR; otherwise hold Week 26 weights.",
+        days: [
+          day({
+            id: "2027-01-04", dow: "Mon", dom: 4, month: "Jan", type: "legs", title: "Quad-Dominant Legs & Core - Load",
+            exercises: [
+              exercise({ name: "Machine Leg Press", target: "102.5 kg - 3 x 8", primary: true, tag: "load", defaultRest: 180, repRange: [8,10], sets: repeatSet(3, 8, 102.5) }),
+              exercise({ name: "Smith Machine Squats", target: "42.5 kg - 3 x 8", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 8, 42.5) }),
+              exercise({ name: "Seated Leg Curls", target: "52.5 kg - 3 x 10", defaultRest: 120, repRange: [10,12], sets: repeatSet(3, 10, 52.5) }),
+              exercise({ name: "Seated Calf Raises", target: "45 kg - 3 x 16", defaultRest: 90, repRange: [16,20], sets: repeatSet(3, 16, 45) }),
+              exercise({ name: "Abdominal Machine", target: "62.5 kg - 3 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 10, 62.5) })
+            ]
+          }),
+          day({
+            id: "2027-01-05", dow: "Tue", dom: 5, month: "Jan", type: "pull", title: "Back & Biceps - Load",
+            exercises: [
+              exercise({ name: "Lat Pulldown", target: "52.5 kg - 3 x 8", primary: true, tag: "load", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 8, 52.5) }),
+              exercise({ name: "Seated Cable Row", target: "52.5 kg - 3 x 8", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 8, 52.5) }),
+              exercise({ name: "High Cable Row / Face Pull", target: "47.5 kg - 3 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 10, 47.5) }),
+              exercise({ name: "DB Bicep Curls", target: "20 kg total - 3 x 11", defaultRest: 90, repRange: [11,13], sets: repeatSet(3, 11, 20) })
+            ]
+          }),
+          day({
+            id: "2027-01-06", dow: "Wed", dom: 6, month: "Jan", type: "primer", title: "Upper Chest & Side Delts - Load", footer: "Crisp technique; protect shoulders ahead of Saturday's 30 kg test.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "22 kg total - 2 x 10", primary: true, tag: "volume", defaultRest: 120, repRange: [10,12], note: "11 kg per hand (or 10 kg/hand x 12 if 11s are unavailable).", sets: repeatSet(2, 10, 22) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 13", defaultRest: 75, repRange: [13,15], sets: repeatSet(2, 13, 7.5) })
+            ]
+          }),
+          day({
+            id: "2027-01-07", dow: "Thu", dom: 7, month: "Jan", type: "ham", title: "Hamstrings & Glutes - Load",
+            exercises: [
+              exercise({ name: "DB Romanian Deadlift", target: "42.5 kg total - 3 x 8", primary: true, tag: "load", defaultRest: 180, repRange: [8,10], sets: repeatSet(3, 8, 42.5) }),
+              exercise({ name: "High/Wide Leg Press", target: "92.5 kg - 3 x 8", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 8, 92.5) }),
+              exercise({ name: "Lying Leg Curls", target: "50 kg - 3 x 10", defaultRest: 120, repRange: [10,12], sets: repeatSet(3, 10, 50) }),
+              exercise({ name: "Walking Lunges", target: "20 kg total - 3 x 10", defaultRest: 120, repRange: [10,12], sets: repeatSet(3, 10, 20) }),
+              exercise({ name: "Abdominal Machine", target: "62.5 kg - 2 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 10, 62.5) })
+            ]
+          }),
+          day({
+            id: "2027-01-08", dow: "Fri", dom: 8, month: "Jan", type: "primer", title: "Lats, Rear Delts & Arms - Load", footer: "Controlled reps; leave 2 RIR before Saturday chest.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "22.5 kg - 2 x 10 / side", primary: true, tag: "lat volume", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 10, 22.5) }),
+              exercise({ name: "Rear Delt Fly", target: "20 kg - 2 x 13", defaultRest: 90, repRange: [13,15], sets: repeatSet(2, 13, 20) }),
+              exercise({ name: "Incline DB Curls", target: "16 kg total - 1 x 13", tag: "arms", defaultRest: 90, repRange: [13,15], sets: repeatSet(1, 13, 16) }),
+              exercise({ name: "Tricep Pushdowns", target: "37.5 kg - 1 x 10", tag: "arms", defaultRest: 90, repRange: [10,12], sets: repeatSet(1, 10, 37.5) })
+            ]
+          }),
+          day({
+            id: "2027-01-09", dow: "Sat", dom: 9, month: "Jan", type: "chest", title: "Chest - 30 kg Return Test", footer: "Full 3-minute rests on 30 kg Incline DB Press (15 kg/hand). Earn 4 x 8 cleanly before building reps.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "30 kg total - 4 x 8", primary: true, tag: "PR attempt", defaultRest: 180, repRange: [8,10], note: "15 kg per hand. Attempt only if Week 26 hit 4 x 10 at 25 kg.", sets: repeatSet(4, 8, 30) }),
+              exercise({ name: "Machine Chest Press", target: "37.5 kg - 3 x 8", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 8, 37.5) }),
+              exercise({ name: "Machine Pec Fly", target: "37.5 kg - 2 x 10", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 10, 37.5) }),
+              exercise({ name: "Assisted Dips", target: "35 kg assist - 2 x 10", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 10, 35) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 13", defaultRest: 75, repRange: [13,15], sets: repeatSet(2, 13, 7.5) })
+            ]
+          }),
+          day({
+            id: "2027-01-10", dow: "Sun", dom: 10, month: "Jan", type: "rest", title: "Full Rest", footer: "Full rest before Week 28 rep build.", exercises: []
+          })
+        ]
+      },
+      {
+        id: "w28",
+        num: 28,
+        title: "Week 28 - January Rep Build",
+        phase: "Load +",
+        sub: "Add one clean rep at 2027 loads",
+        subtitle: "Add one clean rep at 2027 loads",
+        dateRange: "Jan 11-17",
+        notice: "Fixed-load rep build: keep every Week 27 load steady and add one clean rep per set with 1-2 RIR. Save top-of-range milestone reps for Week 29.",
+        days: [
+          day({
+            id: "2027-01-11", dow: "Mon", dom: 11, month: "Jan", type: "legs", title: "Quad-Dominant Legs & Core - Rep Build",
+            exercises: [
+              exercise({ name: "Machine Leg Press", target: "102.5 kg - 3 x 9", primary: true, tag: "reps", defaultRest: 180, repRange: [8,10], sets: repeatSet(3, 9, 102.5) }),
+              exercise({ name: "Smith Machine Squats", target: "42.5 kg - 3 x 9", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 9, 42.5) }),
+              exercise({ name: "Seated Leg Curls", target: "52.5 kg - 3 x 11", defaultRest: 120, repRange: [10,12], sets: repeatSet(3, 11, 52.5) }),
+              exercise({ name: "Seated Calf Raises", target: "45 kg - 3 x 18", defaultRest: 90, repRange: [16,20], sets: repeatSet(3, 18, 45) }),
+              exercise({ name: "Abdominal Machine", target: "62.5 kg - 3 x 11", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 11, 62.5) })
+            ]
+          }),
+          day({
+            id: "2027-01-12", dow: "Tue", dom: 12, month: "Jan", type: "pull", title: "Back & Biceps - Rep Build",
+            exercises: [
+              exercise({ name: "Lat Pulldown", target: "52.5 kg - 3 x 9", primary: true, tag: "reps", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 9, 52.5) }),
+              exercise({ name: "Seated Cable Row", target: "52.5 kg - 3 x 9", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 9, 52.5) }),
+              exercise({ name: "High Cable Row / Face Pull", target: "47.5 kg - 3 x 11", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 11, 47.5) }),
+              exercise({ name: "DB Bicep Curls", target: "20 kg total - 3 x 12", defaultRest: 90, repRange: [11,13], sets: repeatSet(3, 12, 20) })
+            ]
+          }),
+          day({
+            id: "2027-01-13", dow: "Wed", dom: 13, month: "Jan", type: "primer", title: "Upper Chest & Side Delts - Rep Build", footer: "Add reps, not strain; keep 2 RIR.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "22 kg total - 2 x 11", primary: true, tag: "volume", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 11, 22) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 14", defaultRest: 75, repRange: [13,15], sets: repeatSet(2, 14, 7.5) })
+            ]
+          }),
+          day({
+            id: "2027-01-14", dow: "Thu", dom: 14, month: "Jan", type: "ham", title: "Hamstrings & Glutes - Rep Build",
+            exercises: [
+              exercise({ name: "DB Romanian Deadlift", target: "42.5 kg total - 3 x 9", primary: true, tag: "reps", defaultRest: 180, repRange: [8,10], sets: repeatSet(3, 9, 42.5) }),
+              exercise({ name: "High/Wide Leg Press", target: "92.5 kg - 3 x 9", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 9, 92.5) }),
+              exercise({ name: "Lying Leg Curls", target: "50 kg - 3 x 11", defaultRest: 120, repRange: [10,12], sets: repeatSet(3, 11, 50) }),
+              exercise({ name: "Walking Lunges", target: "20 kg total - 3 x 11", defaultRest: 120, repRange: [10,12], sets: repeatSet(3, 11, 20) }),
+              exercise({ name: "Abdominal Machine", target: "62.5 kg - 2 x 11", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 11, 62.5) })
+            ]
+          }),
+          day({
+            id: "2027-01-15", dow: "Fri", dom: 15, month: "Jan", type: "primer", title: "Lats, Rear Delts & Arms - Rep Build", footer: "No failure work ahead of Saturday pressing.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "22.5 kg - 2 x 11 / side", primary: true, tag: "lat volume", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 11, 22.5) }),
+              exercise({ name: "Rear Delt Fly", target: "20 kg - 2 x 14", defaultRest: 90, repRange: [13,15], sets: repeatSet(2, 14, 20) }),
+              exercise({ name: "Incline DB Curls", target: "16 kg total - 1 x 14", tag: "arms", defaultRest: 90, repRange: [13,15], sets: repeatSet(1, 14, 16) }),
+              exercise({ name: "Tricep Pushdowns", target: "37.5 kg - 1 x 11", tag: "arms", defaultRest: 90, repRange: [10,12], sets: repeatSet(1, 11, 37.5) })
+            ]
+          }),
+          day({
+            id: "2027-01-16", dow: "Sat", dom: 16, month: "Jan", type: "chest", title: "Chest - Rep Build", footer: "Add one clean rep per set at 30 kg with full 3-minute rests.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "30 kg total - 4 x 9", primary: true, tag: "reps", defaultRest: 180, repRange: [8,10], sets: repeatSet(4, 9, 30) }),
+              exercise({ name: "Machine Chest Press", target: "37.5 kg - 3 x 9", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 9, 37.5) }),
+              exercise({ name: "Machine Pec Fly", target: "37.5 kg - 2 x 11", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 11, 37.5) }),
+              exercise({ name: "Assisted Dips", target: "32.5 kg assist - 2 x 9", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 9, 32.5) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 14", defaultRest: 75, repRange: [13,15], sets: repeatSet(2, 14, 7.5) })
+            ]
+          }),
+          day({
+            id: "2027-01-17", dow: "Sun", dom: 17, month: "Jan", type: "rest", title: "Full Rest", footer: "Full rest before Week 29 January peak and test.", exercises: []
+          })
+        ]
+      },
+      {
+        id: "w29",
+        num: 29,
+        title: "Week 29 - January Peak & Test",
+        phase: "Test",
+        sub: "Top of rep range — earn clean PRs",
+        subtitle: "Top of rep range — earn clean PRs",
+        dateRange: "Jan 18-24",
+        notice: "Top-of-range test week: hit the upper end of each rep range cleanly with 1-2 reps in reserve to lock in your January PRs before next week's deload. Clean 4 x 10 at 30 kg on Saturday completes the 30 kg bracket.",
+        days: [
+          day({
+            id: "2027-01-18", dow: "Mon", dom: 18, month: "Jan", type: "legs", title: "Quad-Dominant Legs & Core - Test",
+            exercises: [
+              exercise({ name: "Machine Leg Press", target: "102.5 kg - 3 x 10", primary: true, tag: "rep PR", defaultRest: 180, repRange: [8,10], sets: repeatSet(3, 10, 102.5) }),
+              exercise({ name: "Smith Machine Squats", target: "42.5 kg - 3 x 10", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 10, 42.5) }),
+              exercise({ name: "Seated Leg Curls", target: "52.5 kg - 3 x 12", defaultRest: 120, repRange: [10,12], sets: repeatSet(3, 12, 52.5) }),
+              exercise({ name: "Seated Calf Raises", target: "45 kg - 3 x 20", defaultRest: 90, repRange: [18,20], sets: repeatSet(3, 20, 45) }),
+              exercise({ name: "Abdominal Machine", target: "62.5 kg - 3 x 12", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 12, 62.5) })
+            ]
+          }),
+          day({
+            id: "2027-01-19", dow: "Tue", dom: 19, month: "Jan", type: "pull", title: "Back & Biceps - Test",
+            exercises: [
+              exercise({ name: "Lat Pulldown", target: "52.5 kg - 3 x 10", primary: true, tag: "rep PR", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 10, 52.5) }),
+              exercise({ name: "Seated Cable Row", target: "52.5 kg - 3 x 10", defaultRest: 120, repRange: [8,10], sets: repeatSet(3, 10, 52.5) }),
+              exercise({ name: "High Cable Row / Face Pull", target: "47.5 kg - 3 x 12", defaultRest: 90, repRange: [10,12], sets: repeatSet(3, 12, 47.5) }),
+              exercise({ name: "DB Bicep Curls", target: "20 kg total - 3 x 13", defaultRest: 90, repRange: [11,13], sets: repeatSet(3, 13, 20) })
+            ]
+          }),
+          day({
+            id: "2027-01-20", dow: "Wed", dom: 20, month: "Jan", type: "primer", title: "Upper Chest & Side Delts - Test Primer", footer: "Keep RPE 6-7 so Saturday owns the 30 kg milestone.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "22 kg total - 2 x 12", primary: true, tag: "volume", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 12, 22) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 15", defaultRest: 75, repRange: [13,15], sets: repeatSet(2, 15, 7.5) })
+            ]
+          }),
+          day({
+            id: "2027-01-21", dow: "Thu", dom: 21, month: "Jan", type: "ham", title: "Hamstrings & Glutes - Test",
+            exercises: [
+              exercise({ name: "DB Romanian Deadlift", target: "42.5 kg total - 3 x 10", primary: true, tag: "rep PR", defaultRest: 180, repRange: [8,10], sets: repeatSet(3, 10, 42.5) }),
+              exercise({ name: "High/Wide Leg Press", target: "92.5 kg - 3 x 10", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 10, 92.5) }),
+              exercise({ name: "Lying Leg Curls", target: "50 kg - 3 x 12", defaultRest: 120, repRange: [10,12], sets: repeatSet(3, 12, 50) }),
+              exercise({ name: "Walking Lunges", target: "20 kg total - 3 x 12", defaultRest: 120, repRange: [10,12], sets: repeatSet(3, 12, 20) }),
+              exercise({ name: "Abdominal Machine", target: "62.5 kg - 2 x 12", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 12, 62.5) })
+            ]
+          }),
+          day({
+            id: "2027-01-22", dow: "Fri", dom: 22, month: "Jan", type: "primer", title: "Lats, Rear Delts & Arms - Test Primer", footer: "Finish top reps cleanly before failure so Saturday pressing stays crisp.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "22.5 kg - 2 x 12 / side", primary: true, tag: "lat volume", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 12, 22.5) }),
+              exercise({ name: "Rear Delt Fly", target: "20 kg - 2 x 15", defaultRest: 90, repRange: [13,15], sets: repeatSet(2, 15, 20) }),
+              exercise({ name: "Incline DB Curls", target: "16 kg total - 1 x 15", tag: "arms", defaultRest: 90, repRange: [13,15], sets: repeatSet(1, 15, 16) }),
+              exercise({ name: "Tricep Pushdowns", target: "37.5 kg - 1 x 12", tag: "arms", defaultRest: 90, repRange: [10,12], sets: repeatSet(1, 12, 37.5) })
+            ]
+          }),
+          day({
+            id: "2027-01-23", dow: "Sat", dom: 23, month: "Jan", type: "chest", title: "Chest - 30 kg Milestone", footer: "Four clean sets of 10 at 30 kg total (15 kg/hand) earn the 35 kg bracket in February. Leave 1-2 RIR.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "30 kg total - 4 x 10", primary: true, tag: "PR target", defaultRest: 180, repRange: [8,10], note: "Attempt only if Week 28 hit 4 x 9 cleanly. No forced reps.", sets: repeatSet(4, 10, 30) }),
+              exercise({ name: "Machine Chest Press", target: "37.5 kg - 3 x 10", defaultRest: 150, repRange: [8,10], sets: repeatSet(3, 10, 37.5) }),
+              exercise({ name: "Machine Pec Fly", target: "37.5 kg - 2 x 12", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 12, 37.5) }),
+              exercise({ name: "Assisted Dips", target: "32.5 kg assist - 2 x 10", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 10, 32.5) }),
+              exercise({ name: "Cable Lateral Raises", target: "7.5 kg - 2 x 15", defaultRest: 75, repRange: [13,15], sets: repeatSet(2, 15, 7.5) })
+            ]
+          }),
+          day({
+            id: "2027-01-24", dow: "Sun", dom: 24, month: "Jan", type: "rest", title: "Full Rest", footer: "Full rest before the January cycle reset deload.", exercises: []
+          })
+        ]
+      },
+      {
+        id: "w30",
+        num: 30,
+        title: "Week 30 - January Cycle Reset",
+        phase: "Deload",
+        sub: "Shed fatigue & export results",
+        subtitle: "Shed fatigue & export results",
+        dateRange: "Jan 25-31",
+        notice: "End-of-cycle deload: keep all six sessions brief with 2 easy sets on main lifts and 1 easy set on primers at ~80% of Week 29 loads (RPE 5-6, 3+ RIR). No dips and no PR attempts; export your results on Sunday before the rolling February 2027 block starts.",
+        days: [
+          day({
+            id: "2027-01-25", dow: "Mon", dom: 25, month: "Jan", type: "legs", title: "Legs & Core (Deload)",
+            exercises: [
+              exercise({ name: "Machine Leg Press", target: "82.5 kg - 2 x 8", primary: true, defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 8, 82.5) }),
+              exercise({ name: "Smith Machine Squats", target: "35 kg - 2 x 8", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 8, 35) }),
+              exercise({ name: "Seated Leg Curls", target: "42.5 kg - 2 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 10, 42.5) }),
+              exercise({ name: "Seated Calf Raises", target: "35 kg - 2 x 15", defaultRest: 90, repRange: [15,18], sets: repeatSet(2, 15, 35) }),
+              exercise({ name: "Abdominal Machine", target: "50 kg - 2 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 10, 50) })
+            ]
+          }),
+          day({
+            id: "2027-01-26", dow: "Tue", dom: 26, month: "Jan", type: "pull", title: "Back & Biceps (Deload)",
+            exercises: [
+              exercise({ name: "Lat Pulldown", target: "42.5 kg - 2 x 8", primary: true, defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 8, 42.5) }),
+              exercise({ name: "Seated Cable Row", target: "42.5 kg - 2 x 8", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 8, 42.5) }),
+              exercise({ name: "High Cable Row / Face Pull", target: "37.5 kg - 2 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 10, 37.5) }),
+              exercise({ name: "DB Bicep Curls", target: "16 kg total - 2 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 10, 16) })
+            ]
+          }),
+          day({
+            id: "2027-01-27", dow: "Wed", dom: 27, month: "Jan", type: "primer", title: "Upper Chest & Side Delts (Deload)", footer: "One easy technique pass each. Leave fresher than you arrived.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "18 kg total - 1 x 10", primary: true, defaultRest: 120, repRange: [10,12], sets: repeatSet(1, 10, 18) }),
+              exercise({ name: "Cable Lateral Raises", target: "5 kg - 1 x 13", defaultRest: 75, repRange: [13,15], sets: repeatSet(1, 13, 5) })
+            ]
+          }),
+          day({
+            id: "2027-01-28", dow: "Thu", dom: 28, month: "Jan", type: "ham", title: "Hamstrings & Glutes (Deload)",
+            exercises: [
+              exercise({ name: "DB Romanian Deadlift", target: "35 kg total - 2 x 8", primary: true, defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 8, 35) }),
+              exercise({ name: "High/Wide Leg Press", target: "75 kg - 2 x 8", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 8, 75) }),
+              exercise({ name: "Lying Leg Curls", target: "40 kg - 2 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 10, 40) }),
+              exercise({ name: "Walking Lunges", target: "16 kg total - 1 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(1, 10, 16) })
+            ]
+          }),
+          day({
+            id: "2027-01-29", dow: "Fri", dom: 29, month: "Jan", type: "primer", title: "Lats, Rear Delts & Arms (Deload)", footer: "One easy pass only. No pump chasing.",
+            exercises: [
+              exercise({ name: "One-Arm Cable Pulldown", target: "17.5 kg - 1 x 10 / side", primary: true, defaultRest: 120, repRange: [10,12], sets: repeatSet(1, 10, 17.5) }),
+              exercise({ name: "Rear Delt Fly", target: "15 kg - 1 x 13", defaultRest: 90, repRange: [13,15], sets: repeatSet(1, 13, 15) }),
+              exercise({ name: "Incline DB Curls", target: "12 kg total - 1 x 12", tag: "arms", defaultRest: 90, repRange: [12,15], sets: repeatSet(1, 12, 12) }),
+              exercise({ name: "Tricep Pushdowns", target: "30 kg - 1 x 10", tag: "arms", defaultRest: 90, repRange: [10,12], sets: repeatSet(1, 10, 30) })
+            ]
+          }),
+          day({
+            id: "2027-01-30", dow: "Sat", dom: 30, month: "Jan", type: "chest", title: "Chest (Deload)", footer: "RPE 5-6, 3+ RIR. No dips and no failure work.",
+            exercises: [
+              exercise({ name: "Incline DB Press", target: "25 kg total - 2 x 8", primary: true, defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 8, 25) }),
+              exercise({ name: "Machine Chest Press", target: "30 kg - 2 x 8", defaultRest: 90, repRange: [8,10], sets: repeatSet(2, 8, 30) }),
+              exercise({ name: "Machine Pec Fly", target: "30 kg - 2 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 10, 30) }),
+              exercise({ name: "Cable Lateral Raises", target: "5 kg - 1 x 13", defaultRest: 75, repRange: [13,15], sets: repeatSet(1, 13, 5) })
+            ]
+          }),
+          day({
+            id: "2027-01-31", dow: "Sun", dom: 31, month: "Jan", type: "rest", title: "Cycle Complete / Full Rest", footer: "Full rest. Export your November 2026-January 2027 results backup before the rolling February 2027 block starts.", exercises: []
           })
         ]
       }

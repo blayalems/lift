@@ -1,4 +1,4 @@
-describe("July bridge and Weeks 12-20 training plan", () => {
+describe("May 2026-January 2027 training plan", () => {
   let plan;
 
   beforeAll(() => {
@@ -8,16 +8,23 @@ describe("July bridge and Weeks 12-20 training plan", () => {
     plan = window.LIFT_PLAN;
   });
 
-  test("fills July 20-26 and extends the plan through September 27", () => {
-    expect(plan.weeks).toHaveLength(20);
-    expect(plan.meta.dateRange).toBe("May 12-September 27, 2026");
-    expect(plan.weeks.slice(-10).map((week) => week.id)).toEqual([
+  test("preserves Weeks 1-20 and extends the plan with Weeks 21-30 through January 31, 2027", () => {
+    expect(plan.weeks).toHaveLength(30);
+    expect(plan.meta.dateRange).toBe("May 12, 2026-January 31, 2027");
+    expect(plan.weeks.slice(10, 20).map((week) => week.id)).toEqual([
       "w11", "w12", "w13", "w14", "w15", "w16", "w17", "w18", "w19", "w20"
+    ]);
+    expect(plan.weeks.slice(20).map((week) => week.id)).toEqual([
+      "w21", "w22", "w23", "w24", "w25", "w26", "w27", "w28", "w29", "w30"
     ]);
     expect(plan.weeks[10].days[0].id).toBe("2026-07-20");
     expect(plan.weeks[10].days.at(-1).id).toBe("2026-07-26");
     expect(plan.weeks[13].days[0].id).toBe("2026-08-10");
     expect(plan.weeks[19].days.at(-1).id).toBe("2026-09-27");
+    expect(plan.weeks[20].days[0].id).toBe("2026-11-23");
+    expect(plan.weeks[25].days[3].id).toBe("2026-12-31");
+    expect(plan.weeks[25].days[4].id).toBe("2027-01-01");
+    expect(plan.weeks[29].days.at(-1).id).toBe("2027-01-31");
   });
 
   test("uses the missing week as a low-fatigue six-session bridge", () => {
@@ -29,8 +36,8 @@ describe("July bridge and Weeks 12-20 training plan", () => {
     expect(bridge.days[5].exercises[0].sets).toEqual([{ reps: 8, weight: 25 }, { reps: 8, weight: 25 }]);
   });
 
-  test("uses six training days, fixed main days, and Sunday rest in every added week", () => {
-    plan.weeks.slice(-10).forEach((week) => {
+  test("uses six training days, fixed main days, and Sunday rest in Weeks 11-30", () => {
+    plan.weeks.slice(10).forEach((week) => {
       expect(week.days).toHaveLength(7);
       expect(week.days.map((day) => day.dow)).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
       expect(week.days.map((day) => day.type)).toEqual(["legs", "pull", "primer", "ham", "primer", "chest", "rest"]);
@@ -39,8 +46,8 @@ describe("July bridge and Weeks 12-20 training plan", () => {
     });
   });
 
-  test("trains each priority area and arms at least twice weekly in Weeks 14-20", () => {
-    plan.weeks.slice(-7).forEach((week) => {
+  test("trains each priority area and arms at least twice weekly in Weeks 14-30", () => {
+    plan.weeks.slice(13).forEach((week) => {
       const exposureDays = (pattern) => week.days
         .filter((day) => day.exercises.some((exercise) => pattern.test(exercise.name)))
         .map((day) => day.dow);
@@ -78,14 +85,14 @@ describe("July bridge and Weeks 12-20 training plan", () => {
     expect(bridgeFriday.exercises.find((exercise) => exercise.name === "Tricep Pushdowns").sets).toHaveLength(1);
   });
 
-  test("uses a controlled baseline, three fixed-load progression weeks, and a deload", () => {
-    expect(plan.weeks.slice(-7).map((week) => week.phase)).toEqual([
+  test("preserves Weeks 14-20 baseline, progression, and deload structure", () => {
+    expect(plan.weeks.slice(13, 20).map((week) => week.phase)).toEqual([
       "Load +", "Deload", "Test", "Consolidate", "Load", "Load +", "Deload"
     ]);
     expect(plan.weeks[15].title).toBe("Week 16 - Controlled Baseline");
     expect(plan.weeks[15].days.at(-1).title).toBe("Block Transition / Full Rest");
 
-    const extension = plan.weeks.slice(-4);
+    const extension = plan.weeks.slice(16, 20);
     const totalSets = extension.map((week) => week.days.reduce(
       (weekTotal, day) => weekTotal + day.exercises.reduce(
         (dayTotal, exercise) => dayTotal + exercise.sets.length,
@@ -107,6 +114,42 @@ describe("July bridge and Weeks 12-20 training plan", () => {
     expect(extension[2].notice).toContain("Week 18");
   });
 
+  test("structures Weeks 21-30 gym reentry, peak matching, holiday deload, and 2027 progression", () => {
+    const reentryBlock = plan.weeks.slice(20);
+    expect(reentryBlock.map((week) => week.phase)).toEqual([
+      "Reentry", "Consolidate", "Load", "Load +", "Deload",
+      "Consolidate", "Load", "Load +", "Test", "Deload"
+    ]);
+    expect(reentryBlock[0].title).toBe("Week 21 - Gym Reentry Ramp");
+    expect(reentryBlock[0].notice).toContain("70-75%");
+    expect(reentryBlock[0].days[0].exercises[0].sets).toEqual([{ reps: 10, weight: 75 }, { reps: 10, weight: 75 }]);
+    expect(reentryBlock[0].days[5].exercises[0].sets).toEqual([
+      { reps: 8, weight: 20 }, { reps: 8, weight: 20 }, { reps: 8, weight: 20 }
+    ]);
+    expect(reentryBlock[0].days[5].exercises.some((ex) => ex.name === "Assisted Dips")).toBe(false);
+    expect(reentryBlock[4].days[5].exercises.some((ex) => ex.name === "Assisted Dips")).toBe(false);
+    expect(reentryBlock[9].days[5].exercises.some((ex) => ex.name === "Assisted Dips")).toBe(false);
+    expect(reentryBlock[4].days[4].exercises.every((ex) => ex.sets.length === 1)).toBe(true);
+
+    const janLoadBlock = reentryBlock.slice(6, 9);
+    expect(janLoadBlock.map((w) => w.days[0].exercises[0].sets[0])).toEqual([
+      { reps: 8, weight: 102.5 },
+      { reps: 9, weight: 102.5 },
+      { reps: 10, weight: 102.5 }
+    ]);
+    expect(janLoadBlock.map((w) => w.days[0].exercises[3].sets[0])).toEqual([
+      { reps: 16, weight: 45 },
+      { reps: 18, weight: 45 },
+      { reps: 20, weight: 45 }
+    ]);
+    expect(janLoadBlock.map((w) => w.days[5].exercises[0].sets[0])).toEqual([
+      { reps: 8, weight: 30 },
+      { reps: 9, weight: 30 },
+      { reps: 10, weight: 30 }
+    ]);
+    expect(reentryBlock[9].days[6].footer).toContain("February 2027");
+  });
+
   test("keeps dates unique, strict, contiguous, and accurately labelled", () => {
     const days = plan.weeks.flatMap((week) => week.days);
     const ids = days.map((day) => day.id);
@@ -123,16 +166,18 @@ describe("July bridge and Weeks 12-20 training plan", () => {
       expect(day.month).toBe(months[date.getUTCMonth()]);
     });
 
-    const currentBlock = plan.weeks.slice(-7).flatMap((week) => week.days);
-    for (let index = 1; index < currentBlock.length; index += 1) {
-      const previous = new Date(`${currentBlock[index - 1].id}T00:00:00Z`);
-      const current = new Date(`${currentBlock[index].id}T00:00:00Z`);
-      expect(current.valueOf() - previous.valueOf()).toBe(24 * 60 * 60 * 1000);
-    }
+    [plan.weeks.slice(13, 20), plan.weeks.slice(20)].forEach((block) => {
+      const blockDays = block.flatMap((week) => week.days);
+      for (let index = 1; index < blockDays.length; index += 1) {
+        const previous = new Date(`${blockDays[index - 1].id}T00:00:00Z`);
+        const current = new Date(`${blockDays[index].id}T00:00:00Z`);
+        expect(current.valueOf() - previous.valueOf()).toBe(24 * 60 * 60 * 1000);
+      }
+    });
   });
 
   test("uses supported phases and valid prescriptions", () => {
-    plan.weeks.slice(-10).forEach((week) => {
+    plan.weeks.slice(10).forEach((week) => {
       week.days.forEach((day) => {
         if (day.type === "rest") expect(day.exercises).toHaveLength(0);
         day.exercises.forEach((exercise) => {

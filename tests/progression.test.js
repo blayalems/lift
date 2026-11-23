@@ -108,4 +108,57 @@ describe("offline adaptive progression engine", () => {
       expect.objectContaining({ date: "2026-07-08", sets: [expect.objectContaining({ reps: 10 })], flags: { pain: true } })
     ]);
   });
+
+  test("reentry phase returns planned ramp load without overriding from prior peak", () => {
+    const result = progression.suggest({
+      dayId: "2026-11-23",
+      exercise: { name: "Machine Leg Press", repRange: [8, 10], incrementKg: 2.5 },
+      plannedSets: [{ reps: 10, weight: 75 }, { reps: 10, weight: 75 }],
+      history: [{ date: "2026-08-10", sets: [{ reps: 10, weight: 100 }, { reps: 10, weight: 100 }, { reps: 10, weight: 100 }] }],
+      reentry: true
+    });
+    expect(result).toMatchObject({ action: "reentry", weight: 75, reps: 10, sets: 2 });
+    expect(result.reason).toContain("Reentry ramp");
+  });
+
+  test("detraining safeguard resets to planned ramp load when gap is 21+ days", () => {
+    const result = progression.suggest({
+      dayId: "2026-11-30",
+      exercise: { name: "Machine Leg Press", repRange: [8, 10], incrementKg: 2.5 },
+      plannedSets: [{ reps: 10, weight: 85 }, { reps: 10, weight: 85 }, { reps: 10, weight: 85 }],
+      history: [{ date: "2026-08-17", sets: [{ reps: 10, weight: 100 }, { reps: 10, weight: 100 }] }]
+    });
+    expect(result).toMatchObject({ action: "reentry", weight: 85, reps: 10, sets: 3 });
+    expect(result.reason).toContain("Returning after 105 days off");
+
+    const normal = progression.suggest({
+      dayId: "2026-08-15",
+      exercise: { name: "Lat Pulldown", repRange: [10, 12], incrementKg: 2.5 },
+      plannedSets: [{ reps: 10, weight: 50 }, { reps: 10, weight: 50 }, { reps: 10, weight: 50 }],
+      history: [{ date: "2026-08-01", sets: [{ reps: 12, weight: 50 }, { reps: 12, weight: 50 }, { reps: 12, weight: 50, rir: 2 }] }]
+    });
+    expect(normal).toMatchObject({ action: "increase", weight: 52.5, reps: 10 });
+  });
+
+  test("forExercise resolves the day's own week phase even when activeWeekId differs", () => {
+    const legPress = { name: "Machine Leg Press", repRange: [8, 10], incrementKg: 2.5, sets: [{ reps: 10, weight: 75 }, { reps: 10, weight: 75 }] };
+    const priorDay = { id: "2026-08-10", exercises: [{ name: "Machine Leg Press", sets: [{ reps: 10, weight: 100 }] }] };
+    const reentryDay = { id: "2026-11-23", exercises: [legPress] };
+    const reentryWeek = { id: "w21", phase: "Reentry", days: [reentryDay] };
+    const normalWeek = { id: "w14", phase: "Load +", days: [priorDay] };
+    const ctx = {
+      state: {
+        activeWeekId: "w14",
+        settings: { weightStep: 2.5 },
+        days: {
+          "2026-08-10": { status: "completed", completed: { "0.0": { reps: 10, weight: 100 } } }
+        }
+      },
+      allDays: () => [{ week: normalWeek, day: priorDay }, { week: reentryWeek, day: reentryDay }],
+      getWeek: (id) => id === "w21" ? reentryWeek : normalWeek
+    };
+
+    const result = progression.forExercise(ctx, reentryDay, legPress, 0);
+    expect(result).toMatchObject({ action: "reentry", weight: 75, reps: 10, sets: 2 });
+  });
 });
