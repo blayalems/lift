@@ -3261,8 +3261,10 @@
           freezeAdaptiveTargets(readinessDay, readinessDs);
         }
       }
+      var pendingAction = runtime.pendingAction;
       saveState();
       closeSheet();
+      runtime.pendingAction = pendingAction;
       executePendingAction();
       render();
     } else if (action === "export-data") {

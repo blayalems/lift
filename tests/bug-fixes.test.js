@@ -477,6 +477,35 @@ describe("Lift v1.9 bug-fixer regressions", () => {
     expect(saved.days["2026-11-23"].adaptiveTargets["0"].sets).toBe(2);
   });
 
+  test("8b. save-readiness executes pending toggle-set and did-planned actions instead of dropping them on closeSheet", async () => {
+    await bootApp();
+
+    // Tapping Set 1 check on unstarted day opens Readiness sheet; Save and start completes Set 1 and starts rest
+    document.querySelector('[data-action="toggle-set"][data-ex="0"][data-set="0"]').click();
+    expect(document.getElementById("sheet").dataset.open).toBe("true");
+    document.querySelector('[data-action="save-readiness"]').click();
+
+    let saved = JSON.parse(localStorage.getItem("lift.v3.state"));
+    expect(saved.days["2026-11-23"].readiness).toBe(8);
+    expect(saved.days["2026-11-23"].completed["0.0"]).toMatchObject({ reps: 8, weight: 70 });
+    expect(document.querySelector('.set-row[data-done="true"]')).not.toBeNull();
+    expect(document.querySelector('.rest-fab[data-active="true"]')).not.toBeNull();
+
+    // Same flow for did-planned on an unstarted day
+    localStorage.clear();
+    docListeners.forEach(([t, fn, opts]) => document.removeEventListener(t, fn, opts));
+    docListeners = [];
+    await bootApp();
+    document.querySelector('[data-action="did-planned"][data-ex="0"]').click();
+    expect(document.getElementById("sheet").dataset.open).toBe("true");
+    document.querySelector('[data-action="save-readiness"]').click();
+
+    saved = JSON.parse(localStorage.getItem("lift.v3.state"));
+    expect(saved.days["2026-11-23"].completed["0.0"].reps).toBe(8);
+    expect(saved.days["2026-11-23"].completed["0.1"].reps).toBe(8);
+    expect(saved.days["2026-11-23"].completed["0.2"].reps).toBe(8);
+  });
+
   test("9. applyPendingReload toast, buildLog guard, and cal-prev uses todayId", async () => {
     let swListener = null;
     Object.defineProperty(navigator, "serviceWorker", {
