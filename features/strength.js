@@ -6,15 +6,33 @@
 
   var root = window.LIFT_FEATURES = window.LIFT_FEATURES || {};
 
-  function epley(weight, reps) { return Number(weight || 0) * (1 + Number(reps || 0) / 30); }
-  function brzycki(weight, reps) {
-    reps = Number(reps || 0);
-    if (reps >= 36 || reps <= 0) return 0;
-    return Number(weight || 0) * 36 / (37 - reps);
+  function epley(weight, reps) {
+    var w = Number(weight || 0);
+    var r = Number(reps || 0);
+    if (w <= 0 || r <= 0) return 0;
+    if (r === 1) return w;
+    return w * (1 + r / 30);
   }
-  function lombardi(weight, reps) { return Number(weight || 0) * Math.pow(Number(reps || 1), 0.10); }
+  function brzycki(weight, reps) {
+    var w = Number(weight || 0);
+    var r = Number(reps || 0);
+    if (w <= 0 || r <= 0 || r >= 36) return 0;
+    if (r === 1) return w;
+    return w * 36 / (37 - r);
+  }
+  function lombardi(weight, reps) {
+    var w = Number(weight || 0);
+    var r = Number(reps || 0);
+    if (w <= 0 || r <= 0) return 0;
+    if (r === 1) return w;
+    return w * Math.pow(r, 0.10);
+  }
   function average(weight, reps) {
-    return (epley(weight, reps) + brzycki(weight, reps) + lombardi(weight, reps)) / 3;
+    var vals = [epley(weight, reps), brzycki(weight, reps), lombardi(weight, reps)].filter(function (v) {
+      return v > 0;
+    });
+    if (!vals.length) return 0;
+    return vals.reduce(function (sum, v) { return sum + v; }, 0) / vals.length;
   }
 
   function pctOf1RM(rm, pct) {
@@ -22,40 +40,45 @@
     return rm * pct / 100;
   }
 
-  function renderStrength(ctx) {
-    var calc = ctx.runtime && ctx.runtime.strengthCalc || {};
-    var weightDisplay = calc.weight != null ? calc.weight : (ctx.kgToDisplay ? ctx.kgToDisplay(80) : 80);
-    var reps = calc.reps || 5;
-    var weightKg = ctx.displayToKg ? ctx.displayToKg(weightDisplay) : Number(weightDisplay);
-    var unit = ctx.unitLabel ? ctx.unitLabel() : "kg";
+  function calcState(ctx) {
+    var calc = (ctx && ctx.runtime && ctx.runtime.strengthCalc) || {};
+    var weightDisplay = calc.weight != null ? calc.weight : (ctx && ctx.kgToDisplay ? ctx.kgToDisplay(80) : 80);
+    var reps = calc.reps != null ? (calc.reps === "" ? 0 : Number(calc.reps)) : 5;
+    var numericWeight = Number(weightDisplay || 0);
+    var weightKg = ctx && ctx.displayToKg ? ctx.displayToKg(numericWeight) : numericWeight;
+    var unit = ctx && ctx.unitLabel ? ctx.unitLabel() : "kg";
+    return {
+      weightDisplay: weightDisplay,
+      numericWeight: numericWeight,
+      reps: Number.isFinite(reps) ? reps : 0,
+      weightKg: Number.isFinite(weightKg) ? weightKg : 0,
+      unit: unit
+    };
+  }
 
-    var rmEpley = epley(weightKg, reps);
-    var rmAvg = average(weightKg, reps);
+  function formatDisplay(ctx, kgValue) {
+    var display = ctx && ctx.kgToDisplay ? ctx.kgToDisplay(kgValue) : kgValue;
+    return ctx && ctx.cleanNumber ? ctx.cleanNumber(display, 1) : Number(display || 0).toFixed(1);
+  }
 
-    var html = '<div class="sheet-grid">';
-    html += '<div class="overview-card"><strong>1RM estimator</strong>' +
-      '<p>Plug in a tough set; we average Epley, Brzycki and Lombardi for a sensible estimate. Use the percentage table to seed working weights.</p></div>';
+  function renderOutput(ctx) {
+    var s = calcState(ctx);
+    var rmEpley = epley(s.weightKg, s.reps);
+    var rmAvg = average(s.weightKg, s.reps);
+    var unit = ctx.escapeHtml ? ctx.escapeHtml(s.unit) : s.unit;
+    var topSetWeight = ctx.cleanNumber ? ctx.cleanNumber(s.numericWeight, 1) : Number(s.numericWeight || 0).toFixed(1);
 
-    html += '<div class="measure-input-row">' +
-      '<div class="field-block"><label for="rm-w">Weight (' + unit + ')</label>' +
-      '<input id="rm-w" type="number" step="0.5" min="0" data-action="rm-input" data-field="weight" value="' + ctx.escapeHtml(weightDisplay) + '"></div>' +
-      '<div class="field-block"><label for="rm-r">Reps</label>' +
-      '<input id="rm-r" type="number" step="1" min="1" max="20" data-action="rm-input" data-field="reps" value="' + ctx.escapeHtml(reps) + '"></div>' +
-      '<button class="action-btn" data-action="rm-save">Save</button>' +
-      '</div>';
-
-    html += '<div class="est-card">' +
+    var html = '<div class="est-card">' +
       '<div class="est-label">Estimated 1RM</div>' +
-      '<div class="est-big">' + ctx.escapeHtml(ctx.cleanNumber ? ctx.cleanNumber(ctx.kgToDisplay(rmAvg), 1) : rmAvg.toFixed(1)) +
-      ' <span style="font-size:18px;letter-spacing:.04em;text-transform:uppercase;font-variation-settings:\'wght\' 700">' + ctx.escapeHtml(unit) + '</span></div>' +
+      '<div class="est-big">' + (ctx.escapeHtml ? ctx.escapeHtml(formatDisplay(ctx, rmAvg)) : formatDisplay(ctx, rmAvg)) +
+      ' <span style="font-size:18px;letter-spacing:.04em;text-transform:uppercase;font-variation-settings:\'wght\' 700">' + unit + '</span></div>' +
       '<div class="est-row">' +
-      '<div><small>Epley</small><strong>' + ctx.cleanNumber(ctx.kgToDisplay(rmEpley), 1) + ' ' + unit + '</strong></div>' +
-      '<div><small>Brzycki</small><strong>' + ctx.cleanNumber(ctx.kgToDisplay(brzycki(weightKg, reps)), 1) + ' ' + unit + '</strong></div>' +
-      '<div><small>Lombardi</small><strong>' + ctx.cleanNumber(ctx.kgToDisplay(lombardi(weightKg, reps)), 1) + ' ' + unit + '</strong></div>' +
-      '<div><small>Top set used</small><strong>' + ctx.cleanNumber(weightDisplay, 1) + ' &times; ' + reps + '</strong></div>' +
+      '<div><small>Epley</small><strong>' + formatDisplay(ctx, rmEpley) + ' ' + unit + '</strong></div>' +
+      '<div><small>Brzycki</small><strong>' + formatDisplay(ctx, brzycki(s.weightKg, s.reps)) + ' ' + unit + '</strong></div>' +
+      '<div><small>Lombardi</small><strong>' + formatDisplay(ctx, lombardi(s.weightKg, s.reps)) + ' ' + unit + '</strong></div>' +
+      '<div><small>Top set used</small><strong>' + topSetWeight + ' &times; ' + s.reps + '</strong></div>' +
       '</div></div>';
 
-    // Percentage table — common training intensities.
     var pcts = [60, 65, 70, 75, 80, 85, 90, 95];
     html += '<div class="overview-card"><strong>Working weights</strong>' +
       '<table class="mini-table" style="margin-top:6px"><thead><tr><th>%1RM</th><th>Weight</th><th>Reps target</th></tr></thead><tbody>';
@@ -66,9 +89,46 @@
         : p >= 70 ? "5-8"
         : p >= 60 ? "8-12"
         : "12-15";
-      html += '<tr><td>' + p + '%</td><td>' + ctx.cleanNumber(ctx.kgToDisplay(wKg), 1) + ' ' + unit + '</td><td>' + repTarget + '</td></tr>';
+      html += '<tr><td>' + p + '%</td><td>' + formatDisplay(ctx, wKg) + ' ' + unit + '</td><td>' + repTarget + '</td></tr>';
     });
     html += '</tbody></table></div>';
+    return html;
+  }
+
+  function renderSavedEstimates(ctx) {
+    var rows = (ctx && ctx.state && Array.isArray(ctx.state.strengthEstimates)) ? ctx.state.strengthEstimates : [];
+    if (!rows.length) return "";
+    var unit = ctx.escapeHtml ? ctx.escapeHtml(ctx.unitLabel ? ctx.unitLabel() : "kg") : "kg";
+    var html = '<div class="overview-card"><strong>Saved 1RM estimates</strong><table class="mini-table" style="margin-top:6px"><thead><tr><th>Date</th><th>Set</th><th>Est. 1RM</th></tr></thead><tbody>';
+    rows.slice().reverse().slice(0, 10).forEach(function (row) {
+      var wText = formatDisplay(ctx, row.weightKg);
+      var rmText = formatDisplay(ctx, row.estimated1rmKg);
+      html += '<tr><td>' + (ctx.escapeHtml ? ctx.escapeHtml(row.date || "") : (row.date || "")) + '</td><td>' + wText + ' ' + unit + ' &times; ' + Number(row.reps || 0) + '</td><td><strong>' + rmText + ' ' + unit + '</strong></td></tr>';
+    });
+    html += '</tbody></table></div>';
+    return html;
+  }
+
+  function renderStrength(ctx) {
+    var s = calcState(ctx);
+    var unit = ctx.escapeHtml ? ctx.escapeHtml(s.unit) : s.unit;
+
+    var html = '<div class="sheet-grid">';
+    html += '<div class="overview-card"><strong>1RM estimator</strong>' +
+      '<p>Plug in a tough set; we average Epley, Brzycki and Lombardi for a sensible estimate. Use the percentage table to seed working weights.</p></div>';
+
+    html += '<div class="measure-input-row">' +
+      '<div class="field-block"><label for="rm-w">Weight (' + unit + ')</label>' +
+      '<input id="rm-w" type="number" step="0.5" min="0" data-action="rm-input" data-field="weight" value="' + ctx.escapeHtml(s.weightDisplay) + '"></div>' +
+      '<div class="field-block"><label for="rm-r">Reps</label>' +
+      '<input id="rm-r" type="number" step="1" min="1" max="100" data-action="rm-input" data-field="reps" value="' + ctx.escapeHtml(s.reps) + '"></div>' +
+      '<button class="action-btn" data-action="rm-save">Save</button>' +
+      '</div>';
+
+    html += '<div class="sheet-grid" data-rm-output>' + renderOutput(ctx) + '</div>';
+
+    var saved = renderSavedEstimates(ctx);
+    if (saved) html += saved;
 
     // Trend across logged sessions.
     var trend = strengthTrend(ctx);
@@ -76,6 +136,10 @@
 
     html += '</div>';
     return html;
+  }
+
+  function isAssistedExercise(ex) {
+    return !!(ex && ex.loadDirection === "lower") || /\bassisted\b/i.test(ex && ex.name || "");
   }
 
   function strengthTrend(ctx) {
@@ -86,10 +150,12 @@
       var ds = (ctx.state.days && ctx.state.days[day.id]) || {};
       var completed = ds.completed || {};
       (day.exercises || []).forEach(function (ex, exIndex) {
+        if (!ex || isAssistedExercise(ex)) return;
         var best = 0;
         Object.keys(completed).forEach(function (key) {
           if (key.split(".")[0] !== String(exIndex)) return;
           var set = completed[key] || {};
+          if (!(Number(set.reps) > 0)) return;
           best = Math.max(best, epley(set.weight, set.reps));
         });
         if (best) {
@@ -130,6 +196,9 @@
     brzycki: brzycki,
     lombardi: lombardi,
     average: average,
+    renderOutput: renderOutput,
     renderStrength: renderStrength
   };
+
+  if (typeof module !== "undefined" && module.exports) module.exports = root.strength;
 })();

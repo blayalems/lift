@@ -117,17 +117,24 @@
     }
   ];
 
-  function templateCard(t) {
-    var initials = t.title.split(" ").map(function (w) { return w[0]; }).slice(0, 2).join("");
-    var tags = (t.tags || []).slice(0, 3).map(function (g) { return '<span class="tag">' + g + '</span>'; }).join("");
-    return '<button class="market-card" data-vibe="' + t.vibe + '" data-action="market-open" data-id="' + t.id + '">' +
-      '<div class="market-thumb">' + initials.toUpperCase() + '</div>' +
+  function esc(ctx, value) {
+    if (ctx && typeof ctx.escapeHtml === "function") return ctx.escapeHtml(value);
+    return String(value == null ? "" : value).replace(/[&<>"']/g, function (ch) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[ch];
+    });
+  }
+
+  function templateCard(ctx, t) {
+    var initials = String(t.title || "").split(" ").map(function (w) { return w[0] || ""; }).slice(0, 2).join("");
+    var tags = (t.tags || []).slice(0, 3).map(function (g) { return '<span class="tag">' + esc(ctx, g) + '</span>'; }).join("");
+    return '<button class="market-card" data-vibe="' + esc(ctx, t.vibe) + '" data-action="market-open" data-id="' + esc(ctx, t.id) + '">' +
+      '<div class="market-thumb">' + esc(ctx, initials.toUpperCase()) + '</div>' +
       '<div class="market-meta">' +
-      '<strong>' + t.title + '</strong>' +
-      '<span>' + t.summary + '</span>' +
+      '<strong>' + esc(ctx, t.title) + '</strong>' +
+      '<span>' + esc(ctx, t.summary) + '</span>' +
       '<div class="market-tags">' +
-      '<span class="tag" style="background:var(--md-secondary-container);color:var(--md-on-secondary-container)">' + t.duration + '</span>' +
-      '<span class="tag" style="background:var(--md-primary-container);color:var(--md-on-primary-container)">' + t.sessions + '</span>' +
+      '<span class="tag" style="background:var(--md-secondary-container);color:var(--md-on-secondary-container)">' + esc(ctx, t.duration) + '</span>' +
+      '<span class="tag" style="background:var(--md-primary-container);color:var(--md-on-primary-container)">' + esc(ctx, t.sessions) + '</span>' +
       tags +
       '</div>' +
       '</div></button>';
@@ -142,37 +149,37 @@
 
     html += '<div class="segmented" style="overflow-x:auto;flex-wrap:nowrap">';
     vibes.forEach(function (v) {
-      html += '<button data-action="market-filter" data-vibe="' + v + '" data-active="' + (filter === v) + '">' +
-        v.charAt(0).toUpperCase() + v.slice(1) +
+      html += '<button data-action="market-filter" data-vibe="' + esc(ctx, v) + '" data-active="' + (filter === v) + '">' +
+        esc(ctx, v.charAt(0).toUpperCase() + v.slice(1)) +
         '</button>';
     });
     html += '</div>';
 
     var filtered = filter === "all" ? TEMPLATES : TEMPLATES.filter(function (t) { return t.vibe === filter; });
-    html += '<div class="market-list">' + filtered.map(templateCard).join("") + '</div>';
+    html += '<div class="market-list">' + filtered.map(function (t) { return templateCard(ctx, t); }).join("") + '</div>';
 
     if (ctx.runtime && ctx.runtime.marketSelected) {
       var sel = TEMPLATES.find(function (t) { return t.id === ctx.runtime.marketSelected; });
-      if (sel) html += templateDetail(sel);
+      if (sel) html += templateDetail(ctx, sel);
     }
 
     html += '</div>';
     return html;
   }
 
-  function templateDetail(t) {
+  function templateDetail(ctx, t) {
     var blocks = (t.blocks || []).map(function (b) {
-      return '<tr><td><strong>' + b.day + '</strong></td><td>' + b.focus + '</td></tr>';
+      return '<tr><td><strong>' + esc(ctx, b.day) + '</strong></td><td>' + esc(ctx, b.focus) + '</td></tr>';
     }).join("");
     return '<div class="overview-card" style="background:var(--md-primary-container);color:var(--md-on-primary-container);border:0">' +
-      '<strong>' + t.title + '</strong>' +
-      '<p style="color:inherit;opacity:.85">' + t.summary + '</p>' +
+      '<strong>' + esc(ctx, t.title) + '</strong>' +
+      '<p style="color:inherit;opacity:.85">' + esc(ctx, t.summary) + '</p>' +
       '<table class="mini-table" style="margin-top:8px">' +
       '<thead><tr><th style="color:inherit;opacity:.7">Day</th><th style="color:inherit;opacity:.7">Focus</th></tr></thead>' +
       '<tbody>' + blocks + '</tbody>' +
       '</table>' +
       '<div class="sheet-actions" style="margin-top:14px">' +
-      '<button class="action-btn" data-action="market-import" data-id="' + t.id + '">Import to Library</button>' +
+      '<button class="action-btn" data-action="market-import" data-id="' + esc(ctx, t.id) + '">Import to Library</button>' +
       '<button class="action-btn secondary" data-action="market-close">Close</button>' +
       '</div></div>';
   }

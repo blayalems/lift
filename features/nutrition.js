@@ -114,7 +114,17 @@
       mealMetric("Breakfast", distribution.breakfast) + mealMetric("Lunch", distribution.lunch) +
       mealMetric("Dinner", distribution.dinner) + mealMetric("Snack / other", Number(distribution.snack || 0) + Number(distribution.meal || 0)) +
       '</div></div>';
-    html += '<div class="overview-card"><strong>Quick add</strong><p>Approximate protein per common serving - edit with a custom entry when your portion differs.</p><div class="field-block"><label for="protein-quick-meal">Add to meal</label><select id="protein-quick-meal" data-protein-quick-meal><option value="breakfast">Breakfast</option><option value="lunch">Lunch</option><option value="dinner">Dinner</option><option value="snack">Snack</option><option value="meal">Unspecified</option></select></div><div class="food-preset-grid">';
+    var selectedMeal = (ctx.runtime && ctx.runtime.quickMeal) || "breakfast";
+    var quickMealOptions = [
+      ["breakfast", "Breakfast"],
+      ["lunch", "Lunch"],
+      ["dinner", "Dinner"],
+      ["snack", "Snack"],
+      ["meal", "Unspecified"]
+    ].map(function (opt) {
+      return '<option value="' + opt[0] + '"' + (selectedMeal === opt[0] ? " selected" : "") + '>' + opt[1] + '</option>';
+    }).join("");
+    html += '<div class="overview-card"><strong>Quick add</strong><p>Approximate protein per common serving - edit with a custom entry when your portion differs.</p><div class="field-block"><label for="protein-quick-meal">Add to meal</label><select id="protein-quick-meal" data-action="protein-quick-meal" data-protein-quick-meal>' + quickMealOptions + '</select></div><div class="food-preset-grid">';
     FOODS.forEach(function (food) {
       html += '<button class="qa-preset" data-action="protein-preset" data-food="' + food.id + '"><strong>' + ctx.escapeHtml(food.name) + '</strong><small>' + food.proteinG + ' g - ' + ctx.escapeHtml(food.serving) + '</small></button>';
     });

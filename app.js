@@ -91,12 +91,14 @@
     recoveryCandidateAt: 0,
     snapshotRecoveryNeeded: false,
     primaryStateValid: false,
-    strengthCalc: { weight: null, reps: 5 }
+    strengthCalc: { weight: null, reps: 5 },
+    quickMeal: "breakfast"
   };
 
   var state = loadState();
   var rest = loadRest();
   var wakeLock = null;
+  var audioCtx = null;
 
   function escapeHtml(value) {
     return String(value == null ? "" : value).replace(/[&<>"']/g, function (ch) {
@@ -269,12 +271,13 @@
     loaded.calories = loaded.calories || {};
     loaded.restingHr = Array.isArray(loaded.restingHr) ? loaded.restingHr : [];
     loaded.customWorkouts = Array.isArray(loaded.customWorkouts) ? loaded.customWorkouts : [];
+    loaded.strengthEstimates = Array.isArray(loaded.strengthEstimates) ? loaded.strengthEstimates : [];
     loaded.cloudSync = Object.assign({ provider: null, lastBackupAt: null, autoWeekly: false }, loaded.cloudSync || {});
     loaded.weeklyRecapDismissedIso = loaded.weeklyRecapDismissedIso || null;
     loaded.cycleReviewSeen = !!loaded.cycleReviewSeen;
     var program = feature("program");
     if (program && typeof program.ensureRollingPlan === "function" && PLAN) {
-      program.ensureRollingPlan(loaded, PLAN);
+      program.ensureRollingPlan(loaded, PLAN, todayId());
     }
     annotateCustomExerciseIndexes(loaded);
     return loaded;
@@ -541,6 +544,7 @@
       allDays: allDays,
       getDay: getDay,
       getWeek: getWeek,
+      weekForDayId: weekForDayId,
       dayState: dayState,
       totalSetCount: totalSetCount,
       totalSetCountForSource: totalSetCountForSource,
@@ -812,7 +816,15 @@
 
   function phaseName(phase) {
     phase = normalizePhase(phase);
-    return ({ consolidate: "Consolidate", load: "Load", loadplus: "Load+", deload: "Deload", test: "Test" })[phase] || phase || "Plan";
+    return ({ consolidate: "Consolidate", load: "Load", loadplus: "Load+", deload: "Deload", test: "Test", reentry: "Reentry" })[phase] || phase || "Plan";
+  }
+
+  function weekNoticeHeading(phase) {
+    var normalized = normalizePhase(phase);
+    if (normalized === "reentry") return "Reentry note";
+    if (normalized === "deload") return "Deload notice";
+    if (normalized === "test") return "Test week note";
+    return "Week note";
   }
 
   function neuralPhase(phase, day) {
@@ -820,6 +832,7 @@
     var type = String(day && day.type || "").toLowerCase();
     if (normalized === "test") return "test";
     if (normalized === "deload" || type === "rest") return "deload";
+    if (normalized === "reentry") return "reentry";
     if (normalized === "load" || normalized === "loadplus") return "load";
     if (normalized === "consolidate") return "consolidate";
     return "train";
@@ -998,7 +1011,7 @@
     html += renderCompanionSnapshot(day, week);
 
     html += '<main class="content">';
-    if (week.notice) html += '<section class="notice"><strong>Deload notice</strong><p>' + richText(week.notice) + "</p></section>";
+    if (week.notice) html += '<section class="notice" data-phase="' + escapeHtml(normalizePhase(week.phase)) + '"><strong>' + escapeHtml(weekNoticeHeading(week.phase)) + '</strong><p>' + richText(week.notice) + "</p></section>";
     if (ds.readiness != null && total) {
       var low = Number(ds.readiness) < 7;
       html += '<section class="notice ' + (low ? "readiness-warn" : "") + '"><strong>Readiness ' + escapeHtml(ds.readiness) + '/10</strong><p>' + (low ? "Caveat notes are highlighted for this workout." : "Readiness logged for this workout.") + "</p></section>";
@@ -1259,7 +1272,7 @@
     html += '<button class="set-btn" data-action="set-step" data-ex="' + exIndex + '" data-set="' + setIndex + '" data-field="reps" data-delta="1" aria-label="Increase reps">' + icon("plus") + "</button>";
     html += "</div>";
     html += '<button class="check-btn" data-action="toggle-set" data-ex="' + exIndex + '" data-set="' + setIndex + '" aria-label="Toggle set complete">' + icon("check") + "</button>";
-    html += '<label class="rir-control"><span>RIR</span><select data-action="set-rir" data-ex="' + exIndex + '" data-set="' + setIndex + '" aria-label="Reps in reserve for set ' + (setIndex + 1) + '"><option value=""' + (rir === "" ? ' selected' : '') + '>-</option>' + [0,1,2,3,4].map(function (value) { return '<option value="' + value + '"' + (Number(rir) === value ? ' selected' : '') + '>' + value + '</option>'; }).join('') + '</select></label>';
+    html += '<label class="rir-control"><span>RIR</span><select data-action="set-rir" data-ex="' + exIndex + '" data-set="' + setIndex + '" aria-label="Reps in reserve for set ' + (setIndex + 1) + '"><option value=""' + (rir === "" ? ' selected' : '') + '>-</option>' + [0,1,2,3,4].map(function (value) { return '<option value="' + value + '"' + (rir !== "" && rir != null && Number(rir) === value ? ' selected' : '') + '>' + value + '</option>'; }).join('') + '</select></label>';
     html += "</div>";
     return html;
   }
@@ -1678,17 +1691,24 @@
     return html;
   }
 
+  function plateResultText() {
+    var p = runtime.plate || { exerciseName: "Lift", targetKg: 0, barKg: state.settings.barWeight };
+    var targetDisplay = kgToDisplay(p.targetKg);
+    var barDisplay = kgToDisplay(p.barKg == null ? state.settings.barWeight : p.barKg);
+    var db = isDbLift(p.exerciseName);
+    return db ? "Per hand: " + cleanNumber(targetDisplay / 2, 1) + " " + unitLabel() : plateBreakdown(displayToKg(targetDisplay), displayToKg(barDisplay));
+  }
+
   function plateSheet() {
     var p = runtime.plate || { exerciseName: "Lift", targetKg: 0, barKg: state.settings.barWeight };
     var targetDisplay = kgToDisplay(p.targetKg);
     var barDisplay = kgToDisplay(p.barKg == null ? state.settings.barWeight : p.barKg);
     var db = isDbLift(p.exerciseName);
-    var result = db ? "Per hand: " + cleanNumber(targetDisplay / 2, 1) + " " + unitLabel() : plateBreakdown(displayToKg(targetDisplay), displayToKg(barDisplay));
     return '<div class="sheet-grid">' +
       '<div class="field-block"><label>Exercise</label><input value="' + escapeHtml(p.exerciseName) + '" readonly></div>' +
       '<div class="field-block"><label for="plate-target">Target total (' + unitLabel() + ')</label><input id="plate-target" type="number" step="0.5" data-action="plate-input" data-field="target" value="' + escapeHtml(cleanNumber(targetDisplay, 1)) + '"></div>' +
       (db ? "" : '<div class="field-block"><label for="plate-bar">Bar / sled estimate (' + unitLabel() + ')</label><input id="plate-bar" type="number" step="0.5" data-action="plate-input" data-field="bar" value="' + escapeHtml(cleanNumber(barDisplay, 1)) + '"></div>') +
-      '<div class="overview-card"><strong>Breakdown</strong><p>' + escapeHtml(result) + "</p></div>" +
+      '<div class="overview-card" data-plate-result><strong>Breakdown</strong><p>' + escapeHtml(plateResultText()) + "</p></div>" +
       '<p class="section-sub">For dumbbell lifts, plan weights are treated as total weight unless the note says otherwise.</p>' +
       "</div>";
   }
@@ -1800,6 +1820,26 @@
     return true;
   }
 
+  function freezeAdaptiveTargets(day, ds) {
+    if (!day || !ds) return;
+    ds.adaptiveTargets = ds.adaptiveTargets || {};
+    (day.exercises || []).forEach(function (exercise, exIndex) {
+      var suggestion = adaptiveSuggestion(day, exercise, exIndex);
+      if (!suggestion) {
+        delete ds.adaptiveTargets[String(exIndex)];
+        return;
+      }
+      ds.adaptiveTargets[String(exIndex)] = {
+        action: suggestion.action,
+        weight: suggestion.weight,
+        reps: suggestion.reps,
+        sets: suggestion.sets,
+        reason: suggestion.reason,
+        frozenAt: Date.now()
+      };
+    });
+  }
+
   function startWorkout(showToast) {
     var ds = dayState(state.activeDayId);
     if (ds.startedAt && !ds.finishedAt) return;
@@ -1811,19 +1851,7 @@
     ds.status = "planned";
     ds.source = "active-workout";
     var activeDay = getDay(state.activeDayId);
-    ds.adaptiveTargets = ds.adaptiveTargets || {};
-    (activeDay && activeDay.exercises || []).forEach(function (exercise, exIndex) {
-      var suggestion = adaptiveSuggestion(activeDay, exercise, exIndex);
-      if (!suggestion) return;
-      ds.adaptiveTargets[String(exIndex)] = {
-        action: suggestion.action,
-        weight: suggestion.weight,
-        reps: suggestion.reps,
-        sets: suggestion.sets,
-        reason: suggestion.reason,
-        frozenAt: Date.now()
-      };
-    });
+    freezeAdaptiveTargets(activeDay, ds);
     if (!rest.running) {
       rest.completedAt = 0;
       saveRest();
@@ -1897,7 +1925,7 @@
     return {
       weight: entry.weight != null ? numberOr(entry.weight, plan.weight) : plan.weight,
       reps: entry.reps != null ? numberOr(entry.reps, plan.reps) : plan.reps,
-      rir: entry.rir != null ? numberOr(entry.rir, null) : null
+      rir: entry.rir != null && entry.rir !== "" ? numberOr(entry.rir, null) : null
     };
   }
 
@@ -2232,30 +2260,52 @@
   function didAsPlanned(exIndex) {
     if (!requireWorkoutReady({ type: "did-planned", exIndex: exIndex })) return;
     var day = getDay(state.activeDayId);
-    var ex = day.exercises[exIndex];
+    var ex = day && day.exercises && day.exercises[exIndex];
+    if (!day || !ex) return;
     var ds = dayState(day.id);
     var sets = exerciseSets(day, exIndex);
-    if (sets.some(function (set) { return numberOr(set.reps, 0) <= 0; })) {
+    var pending = [];
+    sets.forEach(function (set, setIndex) {
+      var key = exIndex + "." + setIndex;
+      if (isCompletedSet(ds.completed[key])) return;
+      pending.push({ set: set, setIndex: setIndex, key: key, target: adaptiveSet(day, ex, exIndex, set, setIndex) });
+    });
+    if (!pending.length) {
+      toast("All sets already logged.");
+      return;
+    }
+    if (pending.some(function (item) { return numberOr(item.target.reps, 0) <= 0; })) {
       toast("Enter reps for failure sets individually.");
       return;
     }
     var prCount = 0;
+    var prTargets = [];
     sets.forEach(function (set, setIndex) {
       var key = exIndex + "." + setIndex;
+      if (isCompletedSet(ds.completed[key])) return;
       var target = adaptiveSet(day, ex, exIndex, set, setIndex);
       var draft = ds.drafts[key] || {};
+      if (draft.rir === "") draft = Object.assign({}, draft, { rir: null });
       var recordMod = feature("records");
       var evaluation = recordMod && typeof recordMod.evaluateSet === "function"
         ? recordMod.evaluateSet(makeCtx(), ex, target, day.id, key)
         : { type: "baseline", types: ["baseline"], isPr: false };
       var pr = !!evaluation.isPr;
-      if (pr) prCount += 1;
+      if (pr) {
+        prCount += 1;
+        prTargets.push(target);
+      }
       ds.completed[key] = tagSetExercise({ reps: target.reps, weight: target.weight, rir: draft.rir == null ? null : clamp(Math.round(numberOr(draft.rir, 2)), 0, 4), ts: Date.now(), pr: pr, recordType: evaluation.type, recordTypes: evaluation.types }, ex);
       delete ds.drafts[key];
     });
     if (prCount) {
-      var top = Math.max.apply(null, sets.map(function (s, index) { return adaptiveSet(day, ex, exIndex, s, index).weight; }));
-      state.prs[ex.name] = { weight: top, reps: sets[0] ? sets[0].reps : 0, date: day.id };
+      var assisted = (feature("records") && typeof feature("records").isAssisted === "function" && feature("records").isAssisted(ex)) ||
+        (feature("progression") && typeof feature("progression").isAssisted === "function" && feature("progression").isAssisted(ex)) ||
+        !!(ex && ex.loadDirection === "lower") || /\bassisted\b/i.test(ex && ex.name || "");
+      var prWeights = prTargets.map(function (item) { return item.weight; });
+      var top = assisted ? Math.min.apply(null, prWeights) : Math.max.apply(null, prWeights);
+      var matching = prTargets.find(function (item) { return item.weight === top; }) || prTargets[0];
+      state.prs[ex.name] = { weight: top, reps: matching ? matching.reps : 0, date: day.id };
       toast("PR logged for " + ex.name + ".");
     } else {
       toast("Exercise completed as planned.");
@@ -2316,13 +2366,20 @@
 
   function removeSet(exIndex) {
     var day = getDay(state.activeDayId);
+    if (!day) return;
     var ds = dayState(day.id);
     var key = String(exIndex);
     var count = numberOr(ds.extraSets[key], 0);
     if (count <= 0) return;
-    var removeIndex = (day.exercises[exIndex].sets || []).length + count - 1;
-    delete ds.completed[exIndex + "." + removeIndex];
-    delete ds.drafts[exIndex + "." + removeIndex];
+    var removeIndex = exerciseSets(day, exIndex).length - 1;
+    if (removeIndex >= 0) {
+      var removedKey = exIndex + "." + removeIndex;
+      delete ds.completed[removedKey];
+      delete ds.drafts[removedKey];
+      if (runtime.lastLog && runtime.lastLog.dayId === day.id && runtime.lastLog.key === removedKey) {
+        runtime.lastLog = null;
+      }
+    }
     ds.extraSets[key] = count - 1;
     if (ds.extraSets[key] <= 0) delete ds.extraSets[key];
     saveState();
@@ -2406,19 +2463,23 @@
 
   function beep() {
     try {
-      var AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
-      var ctx = new AudioContext();
-      var osc = ctx.createOscillator();
-      var gain = ctx.createGain();
+      var AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextCtor) return;
+      if (!audioCtx || audioCtx.state === "closed") audioCtx = new AudioContextCtor();
+      if (audioCtx.state === "suspended" && typeof audioCtx.resume === "function") {
+        var resumed = audioCtx.resume();
+        if (resumed && typeof resumed.catch === "function") resumed.catch(function () {});
+      }
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
       osc.type = "sine";
       osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
-      osc.connect(gain).connect(ctx.destination);
+      gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.18, audioCtx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.28);
+      osc.connect(gain).connect(audioCtx.destination);
       osc.start();
-      osc.stop(ctx.currentTime + 0.3);
+      osc.stop(audioCtx.currentTime + 0.3);
     } catch (err) {}
   }
 
@@ -2472,9 +2533,11 @@
     var entries = [];
     if (scope === "day") {
       var day = getDay(state.activeDayId);
-      entries = [{ week: getWeek(state.activeWeekId), day: day }];
+      if (!day) return "No active day selected.";
+      entries = [{ week: weekForDayId(day.id) || getWeek(state.activeWeekId), day: day }];
     } else if (scope === "week") {
       var week = getWeek(state.activeWeekId);
+      if (!week) return "No active week selected.";
       entries = (week.days || []).map(function (day) { return { week: week, day: day }; });
     } else {
       entries = allDays();
@@ -2484,12 +2547,14 @@
     lines.push("Scope: " + scope);
     lines.push("");
     entries.forEach(function (entry) {
-      var day = entry.day;
+      var day = entry && entry.day;
+      if (!day) return;
       var ds = state.days[day.id] || {};
       var total = totalSetCountForSource(day, state);
       var completed = completedSetCount(day, state);
       var integrity = historyStatus(day, state);
-      lines.push("Week " + entry.week.num + " - " + day.id + " - " + (day.title || "Day"));
+      var weekNum = entry.week ? entry.week.num : "";
+      lines.push("Week " + weekNum + " - " + day.id + " - " + (day.title || "Day"));
       lines.push("  History: " + (feature("history") && feature("history").statusLabel ? feature("history").statusLabel(integrity) : integrity));
       if (integrity === "reconstructed" && !completed) {
         lines.push("  Trained session reconstructed by the user; weights, reps, volume, calories, and PRs are unavailable.");
@@ -3011,6 +3076,7 @@
     } else if (action === "reset-day") {
       if (confirm("Reset this day's logged sets, timer, readiness, and notes?")) {
         delete state.days[state.activeDayId];
+        if (runtime.lastLog && runtime.lastLog.dayId === state.activeDayId) runtime.lastLog = null;
         saveState();
         render();
       }
@@ -3075,9 +3141,17 @@
       openSheet("journal");
       renderSummaryOverlay();
     } else if (action === "save-readiness") {
-      var input = sheet.querySelector("[data-action='readiness-input']");
-      dayState(state.activeDayId).readiness = Number(input ? input.value : runtime.readinessValue || 8);
-      startWorkout(false);
+      var readinessDay = getDay(state.activeDayId);
+      if (readinessDay) {
+        var input = sheet.querySelector("[data-action='readiness-input']");
+        var readinessDs = dayState(readinessDay.id);
+        readinessDs.readiness = Number(input ? input.value : runtime.readinessValue || 8);
+        var wasRunning = !!(readinessDs.startedAt && !readinessDs.finishedAt);
+        startWorkout(false);
+        if (wasRunning && completedSetCount(readinessDay, state) === 0) {
+          freezeAdaptiveTargets(readinessDay, readinessDs);
+        }
+      }
       saveState();
       closeSheet();
       executePendingAction();
@@ -3180,8 +3254,8 @@
       }
     } else if (action === "cal-prev" || action === "cal-next") {
       var year = runtime.calYear, month = runtime.calMonth;
-      if (year == null) {
-        var today = (localDateId(new Date()) || todayId()).split("-");
+      if (year == null || month == null) {
+        var today = (todayId() || localDateId(new Date())).split("-");
         year = +today[0]; month = +today[1] - 1;
       }
       month += action === "cal-next" ? 1 : -1;
@@ -3341,7 +3415,9 @@
       var food = nutritionPreset && nutritionPreset.foodById(btn.dataset.food);
       if (food) {
         var quickMeal = sheet.querySelector("[data-protein-quick-meal]");
-        nutritionPreset.addFood(state, todayId(), food, { meal: quickMeal && quickMeal.value });
+        var selectedMeal = (quickMeal && quickMeal.value) || runtime.quickMeal || "breakfast";
+        runtime.quickMeal = selectedMeal;
+        nutritionPreset.addFood(state, todayId(), food, { meal: selectedMeal });
         saveState("protein-log");
         toast(food.name + " added.");
         renderSheet();
@@ -3390,7 +3466,31 @@
       var forms = feature("forms");
       if (forms && typeof forms.openForFormVideo === "function") forms.openForFormVideo(makeCtx(), btn.dataset.name);
     } else if (action === "rm-save") {
-      toast("Estimate saved to this session.");
+      var strengthMod = feature("strength");
+      var calc = runtime.strengthCalc || {};
+      var wNode = sheet.querySelector("#rm-w");
+      var rNode = sheet.querySelector("#rm-r");
+      var weightDisplay = wNode ? wNode.value : (calc.weight != null ? calc.weight : kgToDisplay(80));
+      var repsVal = Math.max(0, Math.round(numberOr(rNode ? rNode.value : (calc.reps != null ? calc.reps : 5), 0)));
+      var weightKg = displayToKg(weightDisplay);
+      if (!(weightKg > 0) || !(repsVal > 0)) {
+        toast("Enter a valid weight and reps first.");
+      } else {
+        var estKg = strengthMod && typeof strengthMod.average === "function"
+          ? strengthMod.average(weightKg, repsVal)
+          : weightKg * (1 + repsVal / 30);
+        state.strengthEstimates = Array.isArray(state.strengthEstimates) ? state.strengthEstimates : [];
+        state.strengthEstimates.push({
+          weightKg: weightKg,
+          reps: repsVal,
+          estimated1rmKg: estKg,
+          date: todayId(),
+          ts: Date.now()
+        });
+        saveState("strength-estimate");
+        toast("1RM estimate saved.");
+        renderSheet();
+      }
     } else if (action === "voice-test") {
       var v = feature("voice");
       if (v && typeof v.testVoice === "function") v.testVoice(makeCtx());
@@ -3413,14 +3513,22 @@
       runtime.plate = runtime.plate || { exerciseName: "Lift", targetKg: 0, barKg: state.settings.barWeight };
       if (target.dataset.field === "target") runtime.plate.targetKg = displayToKg(target.value);
       if (target.dataset.field === "bar") runtime.plate.barKg = displayToKg(target.value);
-      renderSheet();
+      var plateCard = sheet.querySelector("[data-plate-result]");
+      if (plateCard) {
+        var platePara = plateCard.querySelector("p");
+        if (platePara) platePara.textContent = plateResultText();
+      }
     } else if (action === "qa-input") {
       runtime.quickAddDraft = runtime.quickAddDraft || {};
       runtime.quickAddDraft[target.dataset.field] = target.value;
     } else if (action === "rm-input") {
       runtime.strengthCalc = runtime.strengthCalc || { weight: null, reps: 5 };
       runtime.strengthCalc[target.dataset.field] = target.value;
-      renderSheet();
+      var rmOutput = sheet.querySelector("[data-rm-output]");
+      var strengthOut = feature("strength");
+      if (rmOutput && strengthOut && typeof strengthOut.renderOutput === "function") {
+        rmOutput.innerHTML = strengthOut.renderOutput(makeCtx());
+      }
     } else if (action === "steps-live") {
       var steps = feature("steps");
       if (steps && typeof steps.addManual === "function") {
@@ -3455,6 +3563,8 @@
         saveState("supplement-preference");
         renderSheet();
       }
+    } else if (action === "protein-quick-meal" || target.hasAttribute("data-protein-quick-meal")) {
+      runtime.quickMeal = target.value || "breakfast";
     } else if (action === "qa-input") {
       runtime.quickAddDraft = runtime.quickAddDraft || {};
       runtime.quickAddDraft[target.dataset.field] = target.value;
@@ -3576,7 +3686,7 @@
       runtime.pendingReload = true;
       toast("App update ready — will reload after your workout.");
     } else {
-      toast("App updated to v" + APP_VERSION + ".");
+      toast("App update ready — reloading…");
       setTimeout(function () { location.reload(); }, 1400);
     }
   }
@@ -3649,7 +3759,10 @@
 
       if (shortcut === "today" || shortcut === "start-workout") {
         goToday();
-        if (shortcut === "start-workout") startWorkout({ showToast: false });
+        if (shortcut === "start-workout") {
+          startWorkout(false);
+          render();
+        }
         return;
       }
 
