@@ -31,11 +31,12 @@
     var completed = ds.completed || {};
     var prs = [];
     var best = null;
-    (day.exercises || []).forEach(function (ex, exIndex) {
+    (day && day.exercises || []).forEach(function (ex, exIndex) {
       Object.keys(completed).forEach(function (key) {
         if (key.split(".")[0] !== String(exIndex)) return;
         var set = completed[key] || {};
-        var score = Number(set.weight || 0) * Math.max(1, Number(set.reps || 0));
+        if (!(Number(set.reps) > 0)) return;
+        var score = Number(set.weight || 0) * Number(set.reps);
         if (!best || score > best.score) best = { name: ex.name, weight: set.weight, reps: set.reps, score: score };
         if (set.pr) prs.push({ name: ex.name, weight: set.weight, reps: set.reps });
       });

@@ -84,6 +84,18 @@
     return out.slice(0, 3);
   }
 
+  function phaseDisplayLabel(phase) {
+    var labels = {
+      reentry: "Reentry",
+      consolidate: "Consolidate",
+      load: "Load",
+      loadplus: "Load+",
+      deload: "Deload",
+      test: "Test"
+    };
+    return labels[phase] || (phase ? phase.charAt(0).toUpperCase() + phase.slice(1) : "Plan");
+  }
+
   function renderCycleReview(ctx) {
     var sessions = 0, volume = 0, prs = 0;
     var phases = {};
@@ -96,7 +108,11 @@
       volume += ctx.completedVolume(entry.day);
       Object.keys(ds.completed || {}).forEach(function (key) { if ((ds.completed[key] || {}).pr) prs += 1; });
     });
-    return '<div class="summary-panel"><button class="icon-btn summary-close" data-action="dismiss-summary" aria-label="Close review">' + ctx.icon("close") + '</button><div class="summary-hero"><div class="eyebrow">Cycle review</div><h2>May-September Cycle</h2><p>' + sessions + ' sessions completed</p></div><div class="sheet-grid" style="margin-top:14px"><div class="metric-grid"><div class="metric-card"><div class="label">Volume</div><div class="value">' + ctx.cleanNumber(ctx.kgToDisplay(volume), 0) + '</div></div><div class="metric-card"><div class="label">PRs</div><div class="value">' + prs + '</div></div><div class="metric-card"><div class="label">Streak</div><div class="value">' + ctx.trainingStreak() + '</div></div><div class="metric-card"><div class="label">Adherence</div><div class="value">' + ctx.cycleAdherence() + '%</div></div></div><div class="overview-card"><strong>Sessions per phase</strong><p>' + ctx.escapeHtml(JSON.stringify(phases)) + '</p></div></div></div>';
+    var cycleTitle = (ctx.plan && ctx.plan.meta && ctx.plan.meta.dateRange) || "Training Cycle";
+    var phaseText = Object.keys(phases).map(function (key) {
+      return phaseDisplayLabel(key) + ": " + phases[key];
+    }).join(", ") || "None yet";
+    return '<div class="summary-panel"><button class="icon-btn summary-close" data-action="dismiss-summary" aria-label="Close review">' + ctx.icon("close") + '</button><div class="summary-hero"><div class="eyebrow">Cycle review</div><h2>' + ctx.escapeHtml(cycleTitle) + '</h2><p>' + sessions + ' sessions completed</p></div><div class="sheet-grid" style="margin-top:14px"><div class="metric-grid"><div class="metric-card"><div class="label">Volume</div><div class="value">' + ctx.cleanNumber(ctx.kgToDisplay(volume), 0) + '</div></div><div class="metric-card"><div class="label">PRs</div><div class="value">' + prs + '</div></div><div class="metric-card"><div class="label">Streak</div><div class="value">' + ctx.trainingStreak() + '</div></div><div class="metric-card"><div class="label">Adherence</div><div class="value">' + ctx.cycleAdherence() + '%</div></div></div><div class="overview-card"><strong>Sessions per phase</strong><p>' + ctx.escapeHtml(phaseText) + '</p></div></div></div>';
   }
 
   root.recap = {

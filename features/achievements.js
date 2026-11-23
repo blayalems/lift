@@ -15,7 +15,7 @@
     ["sets-500", "500 Sets", "Log 500 completed sets."],
     ["sets-1000", "1000 Sets", "Log 1000 completed sets."],
     ["deload-completed", "Deload Complete", "Finish every planned deload training day."],
-    ["cycle-complete", "Cycle Complete", "Complete the full May-September cycle."],
+    ["cycle-complete", "Cycle Complete", "Complete the full training cycle."],
     ["leg-press-80", "80 kg Leg Press", "Log a Machine Leg Press set at 80 kg or more."],
     ["incline-db-30", "30 kg Incline DB", "Log an Incline DB Press set at 30 kg total or more."]
   ];
@@ -58,9 +58,11 @@
     };
     ctx.allDays().forEach(function (entry) {
       var day = entry.day;
-      var ds = ctx.state.days[day.id] || {};
+      var ds = (ctx.state.days && ctx.state.days[day.id]) || {};
       var completed = ds.completed || {};
-      var keys = Object.keys(completed);
+      var keys = Object.keys(completed).filter(function (key) {
+        return Number((completed[key] || {}).reps) > 0;
+      });
       if (keys.length) stats.latestDay = day.id;
       if (ds.finishedAt && keys.length) {
         stats.finishedSessions += 1;

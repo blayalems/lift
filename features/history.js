@@ -21,7 +21,7 @@
     if (explicit === "rest") return "rest";
     if (explicit === "completed") return ds && ds.trained === true ? "reconstructed" : "unknown";
     if (!day || !(day.exercises || []).length) return "rest";
-    if (explicit === "planned") return "planned";
+    if (explicit === "planned") return !todayId || day.id >= todayId ? "planned" : "unknown";
     if (!todayId || day.id >= todayId) return "planned";
     // An unlogged past prescription is not evidence that training did not occur.
     return "unknown";
@@ -75,6 +75,13 @@
     return result;
   }
 
+  function dateDistanceDays(fromId, toId) {
+    var a = new Date(String(fromId) + "T00:00:00Z");
+    var b = new Date(String(toId) + "T00:00:00Z");
+    if (isNaN(a.getTime()) || isNaN(b.getTime())) return 0;
+    return Math.round((b - a) / 86400000);
+  }
+
   function streakMetrics(ctx, asOf) {
     var today = asOf || (ctx.todayId && ctx.todayId()) || "9999-12-31";
     var entries = (ctx.allDays ? ctx.allDays() : []).filter(function (entry) {
@@ -83,14 +90,18 @@
     var combined = 0;
     var reconstructed = 0;
     var started = false;
+    var anchorDate = today !== "9999-12-31" ? today : (entries[0] ? entries[0].day.id : null);
     for (var i = 0; i < entries.length; i += 1) {
-      var status = resolveStatus(entries[i].day, (ctx.state.days || {})[entries[i].day.id], today);
-      if (entries[i].day.id === today && status === "planned" && !started) continue;
+      var entryId = entries[i].day.id;
+      var status = resolveStatus(entries[i].day, (ctx.state.days || {})[entryId], today);
+      if (entryId === today && status === "planned" && !started) continue;
+      if (anchorDate && dateDistanceDays(entryId, anchorDate) > 14) break;
       if (status === "unknown") continue;
       if (status === "missed" || status === "planned") break;
       if (isTrainedStatus(status)) {
         started = true;
         combined += 1;
+        anchorDate = entryId;
         if (status === "reconstructed") reconstructed += 1;
       }
     }
