@@ -38,6 +38,7 @@ const APP_SHELL = [
   "./features/healthkit.js",
   "./features/forms.js",
   "./features/quickadd.js",
+  "./features/reentry.js",
   "./manifest.webmanifest",
   "./screenshots/lift-mobile-home.png",
   "./screenshots/lift-desktop-dashboard.png",
