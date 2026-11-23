@@ -8,7 +8,7 @@
   var sheetBackdrop = document.getElementById("sheet-backdrop");
   var summaryOverlay = document.getElementById("summary-overlay");
 
-  var APP_VERSION = "1.8.0";
+  var APP_VERSION = "1.9.0";
   window.LIFT_APP_VERSION = APP_VERSION;
 
   var STORE_KEY = "lift.v3.state";
@@ -874,9 +874,10 @@
 
   function adaptiveSet(day, ex, exIndex, set, setIndex) {
     var suggestion = adaptiveTarget(day, ex, exIndex);
-    if (!suggestion || suggestion.action === "deload" || suggestion.action === "baseline") return plannedSet(set);
+    if (!suggestion || suggestion.action === "deload" || suggestion.action === "baseline" || suggestion.action === "reentry") return plannedSet(set);
     var first = plannedSet((ex.sets || [])[0] || set);
     var current = plannedSet(set);
+    if (current.reps <= 0 || ex.toFailure) return current;
     var assisted = feature("progression") && feature("progression").isAssisted(ex);
     var weightOffset = current.weight - first.weight;
     var repsOffset = current.reps - first.reps;

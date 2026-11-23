@@ -1,5 +1,5 @@
-const APP_VERSION = "1.8.0";
-const CACHE_VERSION = "lift-v20";
+const APP_VERSION = "1.9.0";
+const CACHE_VERSION = "lift-v21";
 const PRECACHE = `${CACHE_VERSION}-precache`;
 const RUNTIME = `${CACHE_VERSION}-runtime`;
 

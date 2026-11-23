@@ -331,18 +331,26 @@ describe("Lift v1.9 bug-fixer regressions", () => {
     document.querySelector('[data-action="did-planned"][data-ex="0"]').click();
     expect(document.querySelector("#toast-root").textContent).toContain("All sets already logged.");
 
-    // Assisted dips: adaptive adds a rep (8 -> 9) at 40 kg; verify adaptive reps (9) recorded on PR
+    // Assisted dips: non-reentry Load week with recent prior session triggers adaptive add-rep (8 -> 9) at 40 kg
+    saved = JSON.parse(localStorage.getItem("lift.v3.state"));
+    saved.days["2026-11-20"] = { status: "completed", completed: { "0.0": { reps: 8, weight: 45 } } };
+    delete saved.days["2026-08-15"];
+    localStorage.setItem("lift.v3.state", JSON.stringify(saved));
+    window.LIFT_PLAN.weeks[0].phase = "Load";
     window.LIFT_PLAN.weeks.unshift({
       id: "w20",
       num: 20,
       phase: "Load",
       days: [
         {
-          id: "2026-08-15",
+          id: "2026-11-20",
           exercises: [{ name: "Assisted Dips", loadDirection: "lower", sets: [{ reps: 8, weight: 45 }] }]
         }
       ]
     });
+    docListeners.forEach(([t, fn, opts]) => document.removeEventListener(t, fn, opts));
+    docListeners = [];
+    await bootApp({ state: saved });
     document.querySelector('[data-action="did-planned"][data-ex="1"]').click();
     saved = JSON.parse(localStorage.getItem("lift.v3.state"));
     expect(saved.prs["Assisted Dips"]).toMatchObject({ weight: 40, reps: 9 });

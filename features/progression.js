@@ -78,13 +78,16 @@
       };
     }
 
+    var lowReadiness = input.readiness != null && number(input.readiness, 10) <= 5;
     if (input.reentry === true) {
       return {
         action: "reentry",
         weight: planWeight,
         reps: plannedSets[0] ? number(plannedSets[0].reps, range.min) : range.min,
-        sets: plannedSetCount,
-        reason: "Reentry ramp: rebuild movement grooves with 2-3 RIR before pushing load.",
+        sets: lowReadiness ? Math.max(1, plannedSetCount - 1) : plannedSetCount,
+        reason: lowReadiness
+          ? "Reentry ramp with low readiness: keep the light load and trim one working set."
+          : "Reentry ramp: rebuild movement grooves with 2-3 RIR before pushing load.",
         basedOn: last
       };
     }
@@ -95,8 +98,10 @@
         action: "reentry",
         weight: planWeight,
         reps: plannedSets[0] ? number(plannedSets[0].reps, range.min) : range.min,
-        sets: plannedSetCount,
-        reason: "Returning after " + gapDays + " days off: start with the planned ramp load (" + planWeight + " kg) and keep 2-3 RIR.",
+        sets: lowReadiness ? Math.max(1, plannedSetCount - 1) : plannedSetCount,
+        reason: lowReadiness
+          ? "Returning after " + gapDays + " days off with low readiness: use the ramp load (" + planWeight + " kg) and trim one set."
+          : "Returning after " + gapDays + " days off: start with the planned ramp load (" + planWeight + " kg) and keep 2-3 RIR.",
         basedOn: last
       };
     }
