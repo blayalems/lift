@@ -153,12 +153,13 @@
       '<div class="field-block" style="margin-top:10px"><label for="m-date">Date</label>' +
       '<input id="m-date" type="date" data-m-date value="' + ctx.escapeHtml(today) + '"></div>';
     FIELDS.forEach(function (f) {
+      var key = ctx.escapeHtml(f.key);
       html += '<div class="measure-input-row" style="margin-top:8px">' +
-        '<div class="field-block"><label>' + ctx.escapeHtml(f.label) + ' (' + unit + ')</label>' +
-        '<input type="number" step="0.1" min="0" data-m-field="' + ctx.escapeHtml(f.key) + '" placeholder="-"></div>' +
-        '<div class="field-block"><label>Note</label>' +
-        '<input type="text" data-m-note="' + ctx.escapeHtml(f.key) + '" placeholder="optional"></div>' +
-        '<button class="action-btn secondary" data-action="measure-add" data-field="' + ctx.escapeHtml(f.key) + '">Add</button>' +
+        '<div class="field-block"><label for="m-field-' + key + '">' + ctx.escapeHtml(f.label) + ' (' + unit + ')</label>' +
+        '<input id="m-field-' + key + '" type="number" step="0.1" min="0" data-m-field="' + key + '" placeholder="-"></div>' +
+        '<div class="field-block"><label for="m-note-' + key + '">Note</label>' +
+        '<input id="m-note-' + key + '" type="text" data-m-note="' + key + '" placeholder="optional"></div>' +
+        '<button class="action-btn secondary" data-action="measure-add" data-field="' + key + '">Add</button>' +
         '</div>';
     });
     html += '</div>';

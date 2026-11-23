@@ -580,7 +580,6 @@
       isoWeekId: isoWeekId,
       defaultGoals: DEFAULT_GOALS,
       runtime: runtime,
-      allDays: allDays,
       PLAN: PLAN
     };
   }
@@ -2331,37 +2330,6 @@
     updateWorkoutNotification(true);
   }
 
-  function baselineForExercise(name) {
-    var baselines = ((PLAN.meta || {}).baselines || []);
-    var lower = String(name || "").toLowerCase();
-    var best = baselines.find(function (b) {
-      var label = String(b.label || "").toLowerCase();
-      if (lower.indexOf("incline db") >= 0 && label.indexOf("incline db") >= 0) return true;
-      if (lower.indexOf("leg press") >= 0 && label.indexOf("leg press") >= 0) return true;
-      if (lower.indexOf("chest press") >= 0 && label.indexOf("machine chest") >= 0) return true;
-      if (lower.indexOf("cable row") >= 0 && label.indexOf("cable row") >= 0) return true;
-      return false;
-    });
-    return best ? numberOr(best.value, 0) : 0;
-  }
-
-  function maxLoggedWeight(name, dayId, excludeKey) {
-    var max = baselineForExercise(name);
-    allDays().forEach(function (entry) {
-      if (entry.day.id > dayId) return;
-      (entry.day.exercises || []).forEach(function (ex, exIndex) {
-        if (ex.name !== name) return;
-        var completed = ((state.days[entry.day.id] || {}).completed || {});
-        Object.keys(completed).forEach(function (key) {
-          if (entry.day.id === dayId && key === excludeKey) return;
-          if (key.split(".")[0] !== String(exIndex)) return;
-          max = Math.max(max, numberOr(completed[key].weight, 0));
-        });
-      });
-    });
-    return max;
-  }
-
   function startRest(seconds, label) {
     var duration = Math.max(1, numberOr(seconds, state.settings.defaultRest));
     rest = { duration: duration, endsAt: Date.now() + duration * 1000, pausedRemaining: duration, running: true, label: label || "Rest", completedAt: 0 };
@@ -2659,14 +2627,6 @@
     } catch (err) {
       toast("Rollback failed: " + err.message);
     }
-  }
-
-  function mergeBodyweight(a, b) {
-    var map = {};
-    a.concat(b).forEach(function (row) {
-      if (row && row.date) map[row.date] = { date: row.date, kg: numberOr(row.kg, 0) };
-    });
-    return Object.keys(map).sort().map(function (date) { return map[date]; });
   }
 
   function mergeMeasurements(a, b) {
