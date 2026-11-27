@@ -133,8 +133,8 @@
       '<strong>' + esc(ctx, t.title) + '</strong>' +
       '<span>' + esc(ctx, t.summary) + '</span>' +
       '<div class="market-tags">' +
-      '<span class="tag" style="background:var(--md-secondary-container);color:var(--md-on-secondary-container)">' + esc(ctx, t.duration) + '</span>' +
-      '<span class="tag" style="background:var(--md-primary-container);color:var(--md-on-primary-container)">' + esc(ctx, t.sessions) + '</span>' +
+      '<span class="tag market-tag-duration">' + esc(ctx, t.duration) + '</span>' +
+      '<span class="tag market-tag-sessions">' + esc(ctx, t.sessions) + '</span>' +
       tags +
       '</div>' +
       '</div></button>';
@@ -147,9 +147,10 @@
     html += '<div class="overview-card"><strong>Templates marketplace</strong>' +
       '<p>Browse curated plans. Tap one to preview and import into your Library. Everything ships with the app — no network call.</p></div>';
 
-    html += '<div class="segmented" style="overflow-x:auto;flex-wrap:nowrap">';
+    html += '<div class="segmented market-filter-strip" role="tablist" aria-label="Filter workout templates">';
     vibes.forEach(function (v) {
-      html += '<button data-action="market-filter" data-vibe="' + esc(ctx, v) + '" data-active="' + (filter === v) + '">' +
+      var active = filter === v;
+      html += '<button role="tab" aria-selected="' + active + '" data-action="market-filter" data-vibe="' + esc(ctx, v) + '" data-active="' + active + '">' +
         esc(ctx, v.charAt(0).toUpperCase() + v.slice(1)) +
         '</button>';
     });
@@ -171,14 +172,14 @@
     var blocks = (t.blocks || []).map(function (b) {
       return '<tr><td><strong>' + esc(ctx, b.day) + '</strong></td><td>' + esc(ctx, b.focus) + '</td></tr>';
     }).join("");
-    return '<div class="overview-card" style="background:var(--md-primary-container);color:var(--md-on-primary-container);border:0">' +
+    return '<div class="overview-card market-detail">' +
       '<strong>' + esc(ctx, t.title) + '</strong>' +
-      '<p style="color:inherit;opacity:.85">' + esc(ctx, t.summary) + '</p>' +
-      '<table class="mini-table" style="margin-top:8px">' +
-      '<thead><tr><th style="color:inherit;opacity:.7">Day</th><th style="color:inherit;opacity:.7">Focus</th></tr></thead>' +
+      '<p class="market-detail-summary">' + esc(ctx, t.summary) + '</p>' +
+      '<table class="mini-table market-detail-table">' +
+      '<thead><tr><th>Day</th><th>Focus</th></tr></thead>' +
       '<tbody>' + blocks + '</tbody>' +
       '</table>' +
-      '<div class="sheet-actions" style="margin-top:14px">' +
+      '<div class="sheet-actions market-detail-actions">' +
       '<button class="action-btn" data-action="market-import" data-id="' + esc(ctx, t.id) + '">Import to Library</button>' +
       '<button class="action-btn secondary" data-action="market-close">Close</button>' +
       '</div></div>';

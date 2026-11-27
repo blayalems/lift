@@ -15,6 +15,9 @@
     { key: "rearDelts", label: "Rear delts" },
     { key: "arms", label: "Arms" }
   ];
+  var STREAK_PIP_SVG = '<svg class="streak-pip-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M12 3c1.2 3.1 4.4 5.1 4.4 8.8a4.4 4.4 0 1 1-8.8 0c0-2 .9-3.7 2.2-5 .2 1.3 1 2.2 2.2 2.7-.3-2.1 0-4.4 0-6.5Z"/>' +
+    '</svg>';
 
   function isoDateAddDays(iso, days) {
     var parts = iso.split("-");
@@ -225,16 +228,16 @@
       '<div class="streak-ring">' +
       '<svg viewBox="0 0 110 110"><circle class="track" cx="55" cy="55" r="50"/>' +
       '<circle class="bar" cx="55" cy="55" r="50" stroke-dasharray="' + c + '" stroke-dashoffset="' + dashOffset + '"/></svg>' +
-      '<div class="label-num">' + wp.count + '<span style="font-size:14px;font-variation-settings:\'wght\' 600;color:var(--md-on-surface-variant);margin-left:2px">/' + wp.goal + '</span></div>' +
+      '<div class="label-num">' + wp.count + '<span class="streak-ring-goal">/' + wp.goal + '</span></div>' +
       '</div>' +
       '<div class="streak-meta">' +
       '<strong>' + streak + ' session streak</strong>' +
       '<p>' + wp.count + ' of ' + wp.goal + ' weekly sessions logged. ' +
       (wp.ratio >= 1 ? "Weekly target reached; recovery still counts." : (wp.goal - wp.count) + " planned session" + (wp.goal - wp.count === 1 ? "" : "s") + " remain if recovery is good.") +
       '</p><p class="section-sub">Active training weeks: ' + activeWeeks + ' &middot; longest verified: ' + historyMetrics.longestVerified + ' &middot; reconstructed in current: ' + historyMetrics.reconstructedInCurrent + '</p>' +
-      '<div class="streak-flames">' +
+      '<div class="streak-flames" role="img" aria-label="' + Math.min(7, streak) + ' of 7 recent streak sessions active">' +
       Array.from({ length: 7 }, function (_, i) {
-        return '<span data-on="' + (i < streak ? "true" : "false") + '">' + (i < streak ? "&#128293;" : "&#128293;") + '</span>';
+        return '<span class="streak-pip" data-on="' + (i < streak ? "true" : "false") + '">' + STREAK_PIP_SVG + '</span>';
       }).join("") +
       '</div>' +
       '</div></div>';
@@ -251,14 +254,14 @@
     var hist = weeklyHistory(ctx, 12);
     var max = Math.max.apply(null, hist.map(function (h) { return h.sessions; }).concat([1]));
     html += '<div class="overview-card"><strong>Last 12 weeks</strong>' +
-      '<div style="display:flex;align-items:flex-end;gap:6px;height:120px;margin-top:14px;padding:0 4px">';
+      '<div class="streak-bars" role="img" aria-label="Last 12 weeks session counts">';
     hist.forEach(function (h) {
-      var pct = (h.sessions / max) * 100;
-      html += '<div style="flex:1;display:flex;flex-direction:column;gap:4px;align-items:center;height:100%">' +
-        '<div style="width:100%;flex:1;min-height:0;display:flex;align-items:flex-end">' +
-        '<div style="width:100%;height:' + pct + '%;background:linear-gradient(180deg,var(--md-primary),var(--md-secondary));border-radius:6px;min-height:4px" title="' + h.sessions + ' sessions"></div>' +
+      var pct = Math.round((h.sessions / max) * 1000) / 10;
+      html += '<div class="streak-bar-col">' +
+        '<div class="streak-bar-track">' +
+        '<div class="streak-bar-fill" data-sessions="' + h.sessions + '" data-empty="' + (h.sessions > 0 ? "false" : "true") + '" style="height:' + pct + '%" title="' + h.sessions + ' sessions"></div>' +
         '</div>' +
-        '<small style="font-size:9px;color:var(--md-on-surface-variant)">' + h.weekStart.slice(5).replace("-", "/") + '</small>' +
+        '<small class="streak-bar-label">' + h.weekStart.slice(5).replace("-", "/") + '</small>' +
         '</div>';
     });
     html += '</div></div>';

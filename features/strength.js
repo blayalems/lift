@@ -56,6 +56,13 @@
     };
   }
 
+  function esc(ctx, value) {
+    if (ctx && typeof ctx.escapeHtml === "function") return ctx.escapeHtml(value);
+    return String(value == null ? "" : value).replace(/[&<>"']/g, function (ch) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[ch];
+    });
+  }
+
   function formatDisplay(ctx, kgValue) {
     var display = ctx && ctx.kgToDisplay ? ctx.kgToDisplay(kgValue) : kgValue;
     return ctx && ctx.cleanNumber ? ctx.cleanNumber(display, 1) : Number(display || 0).toFixed(1);
@@ -65,13 +72,13 @@
     var s = calcState(ctx);
     var rmEpley = epley(s.weightKg, s.reps);
     var rmAvg = average(s.weightKg, s.reps);
-    var unit = ctx.escapeHtml ? ctx.escapeHtml(s.unit) : s.unit;
-    var topSetWeight = ctx.cleanNumber ? ctx.cleanNumber(s.numericWeight, 1) : Number(s.numericWeight || 0).toFixed(1);
+    var unit = esc(ctx, s.unit);
+    var topSetWeight = ctx && ctx.cleanNumber ? ctx.cleanNumber(s.numericWeight, 1) : Number(s.numericWeight || 0).toFixed(1);
 
     var html = '<div class="est-card">' +
       '<div class="est-label">Estimated 1RM</div>' +
-      '<div class="est-big">' + (ctx.escapeHtml ? ctx.escapeHtml(formatDisplay(ctx, rmAvg)) : formatDisplay(ctx, rmAvg)) +
-      ' <span style="font-size:18px;letter-spacing:.04em;text-transform:uppercase;font-variation-settings:\'wght\' 700">' + unit + '</span></div>' +
+      '<div class="est-big">' + esc(ctx, formatDisplay(ctx, rmAvg)) +
+      ' <span class="est-unit">' + unit + '</span></div>' +
       '<div class="est-row">' +
       '<div><small>Epley</small><strong>' + formatDisplay(ctx, rmEpley) + ' ' + unit + '</strong></div>' +
       '<div><small>Brzycki</small><strong>' + formatDisplay(ctx, brzycki(s.weightKg, s.reps)) + ' ' + unit + '</strong></div>' +
@@ -81,7 +88,7 @@
 
     var pcts = [60, 65, 70, 75, 80, 85, 90, 95];
     html += '<div class="overview-card"><strong>Working weights</strong>' +
-      '<table class="mini-table" style="margin-top:6px"><thead><tr><th>%1RM</th><th>Weight</th><th>Reps target</th></tr></thead><tbody>';
+      '<table class="mini-table strength-table"><thead><tr><th>%1RM</th><th>Weight</th><th>Reps target</th></tr></thead><tbody>';
     pcts.forEach(function (p) {
       var wKg = pctOf1RM(rmAvg, p);
       var repTarget = p >= 90 ? "1-3"
@@ -98,12 +105,12 @@
   function renderSavedEstimates(ctx) {
     var rows = (ctx && ctx.state && Array.isArray(ctx.state.strengthEstimates)) ? ctx.state.strengthEstimates : [];
     if (!rows.length) return "";
-    var unit = ctx.escapeHtml ? ctx.escapeHtml(ctx.unitLabel ? ctx.unitLabel() : "kg") : "kg";
-    var html = '<div class="overview-card"><strong>Saved 1RM estimates</strong><table class="mini-table" style="margin-top:6px"><thead><tr><th>Date</th><th>Set</th><th>Est. 1RM</th></tr></thead><tbody>';
+    var unit = esc(ctx, ctx && ctx.unitLabel ? ctx.unitLabel() : "kg");
+    var html = '<div class="overview-card"><strong>Saved 1RM estimates</strong><table class="mini-table strength-table"><thead><tr><th>Date</th><th>Set</th><th>Est. 1RM</th></tr></thead><tbody>';
     rows.slice().reverse().slice(0, 10).forEach(function (row) {
       var wText = formatDisplay(ctx, row.weightKg);
       var rmText = formatDisplay(ctx, row.estimated1rmKg);
-      html += '<tr><td>' + (ctx.escapeHtml ? ctx.escapeHtml(row.date || "") : (row.date || "")) + '</td><td>' + wText + ' ' + unit + ' &times; ' + Number(row.reps || 0) + '</td><td><strong>' + rmText + ' ' + unit + '</strong></td></tr>';
+      html += '<tr><td>' + esc(ctx, row.date || "") + '</td><td>' + wText + ' ' + unit + ' &times; ' + Number(row.reps || 0) + '</td><td><strong>' + rmText + ' ' + unit + '</strong></td></tr>';
     });
     html += '</tbody></table></div>';
     return html;
@@ -111,7 +118,7 @@
 
   function renderStrength(ctx) {
     var s = calcState(ctx);
-    var unit = ctx.escapeHtml ? ctx.escapeHtml(s.unit) : s.unit;
+    var unit = esc(ctx, s.unit);
 
     var html = '<div class="sheet-grid">';
     html += '<div class="overview-card"><strong>1RM estimator</strong>' +
@@ -119,9 +126,9 @@
 
     html += '<div class="measure-input-row">' +
       '<div class="field-block"><label for="rm-w">Weight (' + unit + ')</label>' +
-      '<input id="rm-w" type="number" step="0.5" min="0" data-action="rm-input" data-field="weight" value="' + ctx.escapeHtml(s.weightDisplay) + '"></div>' +
+      '<input id="rm-w" type="number" step="0.5" min="0" data-action="rm-input" data-field="weight" value="' + esc(ctx, s.weightDisplay) + '"></div>' +
       '<div class="field-block"><label for="rm-r">Reps</label>' +
-      '<input id="rm-r" type="number" step="1" min="1" max="100" data-action="rm-input" data-field="reps" value="' + ctx.escapeHtml(s.reps) + '"></div>' +
+      '<input id="rm-r" type="number" step="1" min="1" max="100" data-action="rm-input" data-field="reps" value="' + esc(ctx, s.reps) + '"></div>' +
       '<button class="action-btn" data-action="rm-save">Save</button>' +
       '</div>';
 
@@ -181,11 +188,12 @@
       var first = vals[0], last = vals[vals.length - 1];
       var delta = +(last - first).toFixed(1);
       var trend = delta > 0.1 ? "up" : delta < -0.1 ? "down" : "flat";
-      html += '<div style="margin-top:12px"><div style="display:flex;justify-content:space-between;font-size:13px;font-variation-settings:\'wght\' 600">' +
-        '<span>' + ctx.escapeHtml(n) + '</span>' +
-        '<span class="measure-delta" data-trend="' + trend + '">' + (delta >= 0 ? "+" : "") + delta + ' ' + ctx.unitLabel() + '</span>' +
+      var unit = esc(ctx, ctx && ctx.unitLabel ? ctx.unitLabel() : "kg");
+      html += '<div class="strength-trend-item"><div class="strength-trend-head">' +
+        '<span>' + esc(ctx, n) + '</span>' +
+        '<span class="measure-delta" data-trend="' + trend + '">' + (delta >= 0 ? "+" : "") + delta + ' ' + unit + '</span>' +
         '</div>' +
-        '<svg viewBox="0 0 320 100" style="width:100%;height:80px"><polyline points="' + pts + '" fill="none" stroke="var(--md-primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
+        '<svg class="strength-sparkline" viewBox="0 0 320 100" aria-hidden="true"><polyline class="strength-sparkline-line" points="' + pts + '" fill="none" stroke="var(--md-primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
     });
     html += '</div>';
     return html;
