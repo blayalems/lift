@@ -5,6 +5,67 @@
   var SCHEMA_VERSION = 4;
   var DAY_STATUSES = ["completed", "planned", "rest", "missed", "unknown", "reconstructed"];
   var GOAL_MODES = ["fat_loss", "recomposition", "maintenance", "muscle_gain"];
+  var COACH_TONES = ["analytical", "stoic", "hype"];
+  var QUOTE_TONES = ["auto", "grit", "stoic", "science", "hype", "analytical"];
+
+  var FORBIDDEN_KEYS = { "__proto__": true, constructor: true, prototype: true };
+
+  function isSafeKey(key) {
+    return typeof key === "string" && !Object.prototype.hasOwnProperty.call(FORBIDDEN_KEYS, key);
+  }
+
+  function finiteNum(value, fallback) {
+    var num = Number(value);
+    return Number.isFinite(num) ? num : (fallback === undefined ? 0 : fallback);
+  }
+
+  function safeCopyProps(target, source) {
+    if (!isObject(source)) return target;
+    Object.keys(source).forEach(function (key) {
+      if (!isSafeKey(key)) return;
+      target[key] = source[key];
+    });
+    return target;
+  }
+
+  function sanitizeValue(value, seen) {
+    if (value == null) return value;
+    var kind = typeof value;
+    if (kind === "boolean" || kind === "string") return value;
+    if (kind === "number") return Number.isFinite(value) ? value : null;
+    if (kind !== "object") return undefined;
+    if (typeof seen === "undefined") {
+      seen = typeof WeakSet === "function" ? new WeakSet() : [];
+    }
+    var hasSeen = typeof seen.has === "function" ? seen.has(value) : seen.indexOf(value) >= 0;
+    if (hasSeen) return Array.isArray(value) ? [] : {};
+    if (typeof seen.add === "function") seen.add(value);
+    else seen.push(value);
+
+    var out;
+    if (Array.isArray(value)) {
+      out = [];
+      for (var i = 0; i < value.length; i += 1) {
+        var item = sanitizeValue(value[i], seen);
+        out.push(item === undefined ? null : item);
+      }
+    } else {
+      out = {};
+      var keys = Object.keys(value);
+      for (var k = 0; k < keys.length; k += 1) {
+        var key = keys[k];
+        if (!isSafeKey(key)) continue;
+        var prop = sanitizeValue(value[key], seen);
+        if (prop !== undefined) out[key] = prop;
+      }
+    }
+    if (typeof seen.delete === "function") seen.delete(value);
+    else {
+      var idx = seen.indexOf(value);
+      if (idx >= 0) seen.splice(idx, 1);
+    }
+    return out;
+  }
 
   function isObject(value) {
     return !!value && typeof value === "object" && !Array.isArray(value);
@@ -12,7 +73,7 @@
 
   function clone(value) {
     if (value == null) return value;
-    return JSON.parse(JSON.stringify(value));
+    return sanitizeValue(value);
   }
 
   function isDateId(value) {
@@ -25,7 +86,7 @@
   function hasCompletedSet(dayState) {
     var completed = isObject(dayState && dayState.completed) ? dayState.completed : {};
     return Object.keys(completed).some(function (key) {
-      return Number((completed[key] || {}).reps) > 0;
+      return isSafeKey(key) && Number((completed[key] || {}).reps) > 0;
     });
   }
 
@@ -33,12 +94,13 @@
     var out = {};
     if (!isObject(input)) return out;
     Object.keys(input).forEach(function (key) {
+      if (!isSafeKey(key)) return;
       var set = input[key];
       if (!isObject(set)) return;
-      var next = Object.assign({}, set);
-      if (next.reps != null) next.reps = Math.max(0, Math.round(Number(next.reps) || 0));
-      if (next.weight != null) next.weight = Math.max(0, Number(next.weight) || 0);
-      if (next.rir != null) next.rir = Math.max(0, Math.min(4, Math.round(Number(next.rir) || 0)));
+      var next = safeCopyProps({}, sanitizeValue(set));
+      if (next.reps != null) next.reps = Math.max(0, Math.round(finiteNum(next.reps, 0)));
+      if (next.weight != null) next.weight = Math.max(0, finiteNum(next.weight, 0));
+      if (next.rir != null) next.rir = Math.max(0, Math.min(4, Math.round(finiteNum(next.rir, 0))));
       out[key] = next;
     });
     return out;
@@ -47,23 +109,23 @@
   function normalizePlannedSets(input) {
     if (!Array.isArray(input)) return [];
     return input.filter(isObject).map(function (set) {
-      var next = Object.assign({}, set);
-      next.reps = Math.max(0, Math.round(Number(next.reps) || 0));
-      next.weight = Math.max(0, Number(next.weight) || 0);
+      var next = safeCopyProps({}, sanitizeValue(set));
+      next.reps = Math.max(0, Math.round(finiteNum(next.reps, 0)));
+      next.weight = Math.max(0, finiteNum(next.weight, 0));
       return next;
     });
   }
 
   function normalizeCustomExercise(exercise) {
     if (!isObject(exercise) || !String(exercise.name || "").trim()) return null;
-    var next = Object.assign({}, exercise);
+    var next = safeCopyProps({}, sanitizeValue(exercise));
     next.name = String(next.name).trim();
     next.custom = true;
     next.sets = normalizePlannedSets(exercise.sets);
-    next.muscleGroups = isObject(exercise.muscleGroups) ? exercise.muscleGroups : {};
+    next.muscleGroups = isObject(exercise.muscleGroups) ? clone(exercise.muscleGroups) : {};
     if (exercise.repRange != null) {
       next.repRange = Array.isArray(exercise.repRange)
-        ? exercise.repRange.slice(0, 2).map(function (value) { return Math.max(1, Math.round(Number(value) || 1)); })
+        ? exercise.repRange.slice(0, 2).map(function (value) { return Math.max(1, Math.round(finiteNum(value, 1))); })
         : [];
     }
     return next;
@@ -71,12 +133,12 @@
 
   function normalizeDay(dayState) {
     var original = isObject(dayState) ? dayState : {};
-    var next = Object.assign({}, original);
+    var next = safeCopyProps({}, sanitizeValue(original));
     next.completed = normalizeCompleted(original.completed);
-    next.extraSets = isObject(original.extraSets) ? original.extraSets : {};
-    next.drafts = isObject(original.drafts) ? original.drafts : {};
-    next.exerciseFlags = isObject(original.exerciseFlags) ? original.exerciseFlags : {};
-    next.adaptiveTargets = isObject(original.adaptiveTargets) ? original.adaptiveTargets : {};
+    next.extraSets = isObject(original.extraSets) ? clone(original.extraSets) : {};
+    next.drafts = isObject(original.drafts) ? clone(original.drafts) : {};
+    next.exerciseFlags = isObject(original.exerciseFlags) ? clone(original.exerciseFlags) : {};
+    next.adaptiveTargets = isObject(original.adaptiveTargets) ? clone(original.adaptiveTargets) : {};
     next.customExercises = Array.isArray(original.customExercises) ? original.customExercises.map(normalizeCustomExercise).filter(Boolean) : [];
 
     if (original.status === "done") next.status = "completed";
@@ -180,13 +242,102 @@
     return plan;
   }
 
+  function normalizeFavoriteQuotes(input) {
+    if (!Array.isArray(input)) return [];
+    var seen = {};
+    var out = [];
+    input.forEach(function (item) {
+      var id = typeof item === "string" ? item.trim() : "";
+      if (id && !seen[id]) {
+        seen[id] = true;
+        out.push(id);
+      }
+    });
+    return out;
+  }
+
+  function normalizeCoachMemory(input) {
+    var raw = isObject(input) ? input : {};
+    var tone = COACH_TONES.indexOf(raw.tone) >= 0 ? raw.tone : "analytical";
+    var messages = Array.isArray(raw.messages)
+      ? raw.messages.filter(function (msg) {
+        return isObject(msg) && (msg.role === "user" || msg.role === "coach") && typeof msg.text === "string" && msg.text.length > 0;
+      }).map(function (msg) {
+        var next = {
+          id: String(msg.id || ("m-" + (msg.ts || Date.now()))),
+          role: msg.role,
+          text: msg.text,
+          ts: Number(msg.ts) || Date.now()
+        };
+        if (msg.actionType) next.actionType = String(msg.actionType);
+        if (msg.actionLabel) next.actionLabel = String(msg.actionLabel);
+        if (isObject(msg.actionPayload)) next.actionPayload = clone(msg.actionPayload);
+        return next;
+      }).slice(-30)
+      : [];
+    var checkins = Array.isArray(raw.checkins)
+      ? raw.checkins.filter(isObject).slice(-30).map(clone)
+      : [];
+    return {
+      tone: tone,
+      messages: messages,
+      checkins: checkins,
+      lastBriefDate: isDateId(raw.lastBriefDate) ? String(raw.lastBriefDate) : null
+    };
+  }
+
+  function normalizeEngagement(input) {
+    var raw = isObject(input) ? input : {};
+    var maxShields = Math.max(1, Math.round(finiteNum(raw.maxShields, 3)));
+    var rawShields = raw.shields == null ? 1 : Math.round(finiteNum(raw.shields, 0));
+    var combo = Math.max(0, Math.round(finiteNum(raw.combo, 0)));
+    var bestCombo = Math.max(combo, Math.round(finiteNum(raw.bestCombo, 0)));
+    var shieldedDates = {};
+    if (isObject(raw.shieldedDates)) {
+      Object.keys(raw.shieldedDates).forEach(function (date) {
+        if (isDateId(date) && raw.shieldedDates[date]) shieldedDates[date] = true;
+      });
+    }
+    var rewardedWorkoutDates = {};
+    if (isObject(raw.rewardedWorkoutDates)) {
+      Object.keys(raw.rewardedWorkoutDates).forEach(function (date) {
+        if (isDateId(date) && raw.rewardedWorkoutDates[date]) rewardedWorkoutDates[date] = true;
+      });
+    }
+    var quests = {};
+    if (isObject(raw.quests)) {
+      Object.keys(raw.quests).forEach(function (date) {
+        if (isDateId(date) && isObject(raw.quests[date])) quests[date] = clone(raw.quests[date]);
+      });
+    }
+    return {
+      xp: Math.max(0, Math.round(finiteNum(raw.xp, 0))),
+      shields: Math.max(0, Math.min(maxShields, rawShields)),
+      maxShields: maxShields,
+      combo: combo,
+      bestCombo: bestCombo,
+      shieldEarnedSessions: Math.max(0, Math.round(finiteNum(raw.shieldEarnedSessions, 0))),
+      quests: quests,
+      pledge: isObject(raw.pledge) ? clone(raw.pledge) : null,
+      pendingLoot: isObject(raw.pendingLoot) ? clone(raw.pendingLoot) : null,
+      unlockedLoot: Array.isArray(raw.unlockedLoot) ? raw.unlockedLoot.filter(isObject).map(clone) : [],
+      feed: Array.isArray(raw.feed) ? raw.feed.filter(isObject).slice(0, 40).map(clone) : [],
+      shieldedDates: shieldedDates,
+      rewardedWorkoutDates: rewardedWorkoutDates,
+      lifetimeSessions: Math.max(0, Math.round(finiteNum(raw.lifetimeSessions, 0))),
+      lifetimeVolumeKg: Math.max(0, Math.round(finiteNum(raw.lifetimeVolumeKg, 0))),
+      hypes: Math.max(0, Math.round(finiteNum(raw.hypes, 0))),
+      lastWorkoutDate: isDateId(raw.lastWorkoutDate) ? String(raw.lastWorkoutDate) : null
+    };
+  }
+
   function migrateState(input) {
     var source = isObject(input) ? clone(input) : {};
-    var fromVersion = Number(source.schemaVersion || source.v || 1) || 1;
-    var next = Object.assign({}, source);
+    var fromVersion = Math.round(finiteNum(source.schemaVersion != null ? source.schemaVersion : source.v, 1)) || 1;
+    var next = safeCopyProps({}, source);
     next.v = SCHEMA_VERSION;
     next.schemaVersion = SCHEMA_VERSION;
-    next.migration = Object.assign({}, isObject(source.migration) ? source.migration : {}, {
+    next.migration = safeCopyProps(safeCopyProps({}, isObject(source.migration) ? source.migration : {}), {
       fromVersion: Math.min(fromVersion, SCHEMA_VERSION),
       migratedAt: source.migration && source.migration.migratedAt ? source.migration.migratedAt : Date.now(),
       emptyLegacyDaysAreUnknown: true
@@ -202,7 +353,7 @@
 
     next.profile = normalizeProfile(source.profile);
     next.bodyweight = Array.isArray(source.bodyweight) ? source.bodyweight.filter(function (row) {
-      return isObject(row) && isDateId(row.date) && Number(row.kg) > 0;
+      return isObject(row) && isDateId(row.date) && finiteNum(row.kg, 0) > 0;
     }) : [];
     next.measurements = Array.isArray(source.measurements) ? source.measurements.filter(function (row) {
       return isObject(row) && isDateId(row.date);
@@ -211,18 +362,26 @@
     next.nutrition = normalizeEntryBuckets(source.nutrition, false);
     next.cardio = normalizeEntryBuckets(source.cardio, true);
     next.supplements = normalizeSupplementBuckets(source.supplements);
-    next.supplementSettings = Object.assign({ creatineDoseG: null }, isObject(source.supplementSettings) ? source.supplementSettings : {});
-    var creatineDose = Number(next.supplementSettings.creatineDoseG);
+    next.supplementSettings = safeCopyProps({ creatineDoseG: null }, isObject(source.supplementSettings) ? source.supplementSettings : {});
+    var creatineDose = finiteNum(next.supplementSettings.creatineDoseG, 0);
     next.supplementSettings.creatineDoseG = creatineDose > 0 ? Math.min(25, Math.round(creatineDose * 10) / 10) : null;
-    next.history = Object.assign({ dataLossEvents: [], reconstructedCount: 0 }, isObject(source.history) ? source.history : {});
+    next.history = safeCopyProps({ dataLossEvents: [], reconstructedCount: 0 }, isObject(source.history) ? source.history : {});
     next.history.dataLossEvents = Array.isArray(next.history.dataLossEvents) ? next.history.dataLossEvents : [];
-    next.backup = Object.assign({
+    next.backup = safeCopyProps({
       lastExternalAt: source.cloudSync && source.cloudSync.lastBackupAt || null,
       lastNativeMirrorAt: null,
       lastRestoreAt: null,
       lastRestoreMode: null
     }, isObject(source.backup) ? source.backup : {});
     next.rollingPlan = normalizeRollingPlan(source.rollingPlan);
+    next.settings = isObject(source.settings) ? clone(source.settings) : {};
+    var vs = next.settings.visualStyle != null ? String(next.settings.visualStyle).trim().toLowerCase() : "expressive";
+    next.settings.visualStyle = ["classic", "expressive", "neural"].indexOf(vs) >= 0 ? vs : "expressive";
+    var qt = next.settings.quoteTone != null ? String(next.settings.quoteTone).trim().toLowerCase() : "auto";
+    next.settings.quoteTone = QUOTE_TONES.indexOf(qt) >= 0 ? qt : "auto";
+    next.engagement = normalizeEngagement(source.engagement);
+    next.coachMemory = normalizeCoachMemory(source.coachMemory);
+    next.favoriteQuotes = normalizeFavoriteQuotes(source.favoriteQuotes);
     return next;
   }
 
@@ -263,7 +422,11 @@
   function parseBackupText(text) {
     var parsed;
     try {
-      parsed = JSON.parse(String(text || ""));
+      parsed = JSON.parse(String(text || ""), function (key, value) {
+        if (key && !isSafeKey(key)) return undefined;
+        return value;
+      });
+      if (parsed && typeof parsed === "object") parsed = sanitizeValue(parsed);
     } catch (err) {
       return { valid: false, errors: ["The selected file is not valid JSON."], state: null };
     }
@@ -447,18 +610,115 @@
     return out;
   }
 
+  function mergeEngagement(leftEng, rightEng) {
+    var left = normalizeEngagement(leftEng);
+    var right = normalizeEngagement(rightEng);
+    var maxShields = Math.max(left.maxShields, right.maxShields, 3);
+    var mergedQuests = clone(left.quests);
+    Object.keys(right.quests).forEach(function (date) {
+      mergedQuests[date] = Object.assign({}, isObject(mergedQuests[date]) ? mergedQuests[date] : {}, right.quests[date]);
+    });
+    var lootMap = {};
+    var unlockedLoot = [];
+    left.unlockedLoot.concat(right.unlockedLoot).forEach(function (item) {
+      var key = item.id ? "id:" + String(item.id) : JSON.stringify(item);
+      if (lootMap[key]) return;
+      lootMap[key] = true;
+      unlockedLoot.push(clone(item));
+    });
+    var feedMap = {};
+    left.feed.concat(right.feed).forEach(function (item) {
+      var key = item.id ? "id:" + String(item.id) : JSON.stringify(item);
+      if (!feedMap[key]) {
+        feedMap[key] = clone(item);
+      } else {
+        feedMap[key] = safeCopyProps(safeCopyProps({}, feedMap[key]), clone(item));
+        feedMap[key].hypes = Math.max(0, Math.round(Math.max(finiteNum(feedMap[key].hypes, 0), finiteNum(item.hypes, 0))));
+      }
+    });
+    var feed = Object.keys(feedMap).map(function (k) { return feedMap[k]; }).sort(function (a, b) {
+      return finiteNum(b.ts, 0) - finiteNum(a.ts, 0);
+    }).slice(0, 40);
+    var pledge = right.pledge && left.pledge
+      ? (String(right.pledge.createdDate || "") >= String(left.pledge.createdDate || "") ? right.pledge : left.pledge)
+      : (right.pledge || left.pledge);
+    var pendingLoot = right.pendingLoot && left.pendingLoot
+      ? (finiteNum(right.pendingLoot.createdAt, 0) >= finiteNum(left.pendingLoot.createdAt, 0) ? right.pendingLoot : left.pendingLoot)
+      : (right.pendingLoot || left.pendingLoot);
+    var lastWorkoutDate = left.lastWorkoutDate && right.lastWorkoutDate
+      ? (left.lastWorkoutDate >= right.lastWorkoutDate ? left.lastWorkoutDate : right.lastWorkoutDate)
+      : (left.lastWorkoutDate || right.lastWorkoutDate);
+
+    return {
+      xp: Math.max(left.xp, right.xp),
+      shields: Math.min(maxShields, Math.max(left.shields, right.shields)),
+      maxShields: maxShields,
+      combo: Math.max(left.combo, right.combo),
+      bestCombo: Math.max(left.bestCombo, right.bestCombo),
+      shieldEarnedSessions: Math.max(left.shieldEarnedSessions, right.shieldEarnedSessions),
+      quests: mergedQuests,
+      pledge: clone(pledge),
+      pendingLoot: clone(pendingLoot),
+      unlockedLoot: unlockedLoot,
+      feed: feed,
+      shieldedDates: safeCopyProps(safeCopyProps({}, left.shieldedDates), right.shieldedDates),
+      rewardedWorkoutDates: safeCopyProps(safeCopyProps({}, left.rewardedWorkoutDates), right.rewardedWorkoutDates),
+      lifetimeSessions: Math.max(left.lifetimeSessions, right.lifetimeSessions),
+      lifetimeVolumeKg: Math.max(left.lifetimeVolumeKg, right.lifetimeVolumeKg),
+      hypes: Math.max(left.hypes, right.hypes),
+      lastWorkoutDate: lastWorkoutDate
+    };
+  }
+
+  function mergeCoachMemory(leftMem, rightMem, rawIncomingMem) {
+    var left = normalizeCoachMemory(leftMem);
+    var right = normalizeCoachMemory(rightMem);
+    var msgMap = {};
+    left.messages.concat(right.messages).forEach(function (msg) {
+      var key = msg.id ? "id:" + String(msg.id) : [msg.role, msg.ts, msg.text].join("|");
+      if (!msgMap[key]) msgMap[key] = clone(msg);
+    });
+    var messages = Object.keys(msgMap).map(function (k) { return msgMap[k]; }).sort(function (a, b) {
+      return Number(a.ts || 0) - Number(b.ts || 0);
+    }).slice(-30);
+    var checkinSeen = {};
+    var checkins = left.checkins.concat(right.checkins).filter(function (item) {
+      var key = JSON.stringify(item);
+      if (checkinSeen[key]) return false;
+      checkinSeen[key] = true;
+      return true;
+    }).slice(-30);
+    var tone = isObject(rawIncomingMem) && COACH_TONES.indexOf(rawIncomingMem.tone) >= 0
+      ? right.tone
+      : left.tone;
+    var lastBriefDate = left.lastBriefDate && right.lastBriefDate
+      ? (left.lastBriefDate >= right.lastBriefDate ? left.lastBriefDate : right.lastBriefDate)
+      : (left.lastBriefDate || right.lastBriefDate);
+    return {
+      tone: tone,
+      messages: messages,
+      checkins: checkins,
+      lastBriefDate: lastBriefDate
+    };
+  }
+
   function mergeStates(current, incoming) {
-    var rawIncoming = isObject(incoming) ? incoming : {};
+    var rawIncoming = isObject(incoming) ? sanitizeValue(incoming) : {};
     var left = migrateState(current);
-    var right = migrateState(incoming);
+    var right = migrateState(rawIncoming);
     var out = clone(left);
-    Object.keys(rawIncoming).forEach(function (key) { out[key] = clone(right[key]); });
-    out.settings = Object.assign({}, left.settings || {}, isObject(rawIncoming.settings) ? right.settings || {} : {});
-    out.goals = Object.assign({}, left.goals || {}, isObject(rawIncoming.goals) ? right.goals || {} : {});
-    out.profile = normalizeProfile(Object.assign({}, left.profile || {}, isObject(rawIncoming.profile) ? rawIncoming.profile : {}));
+    Object.keys(rawIncoming).forEach(function (key) {
+      if (!isSafeKey(key)) return;
+      out[key] = clone(right[key]);
+    });
+    out.settings = safeCopyProps(safeCopyProps({}, left.settings || {}), isObject(rawIncoming.settings) ? right.settings || {} : {});
+    out.goals = safeCopyProps(safeCopyProps({}, left.goals || {}), isObject(rawIncoming.goals) ? right.goals || {} : {});
+    out.profile = normalizeProfile(safeCopyProps(safeCopyProps({}, left.profile || {}), isObject(rawIncoming.profile) ? rawIncoming.profile : {}));
     out.days = {};
     var dates = {};
-    Object.keys(left.days || {}).concat(Object.keys(right.days || {})).forEach(function (date) { dates[date] = true; });
+    Object.keys(left.days || {}).concat(Object.keys(right.days || {})).forEach(function (date) {
+      if (isDateId(date)) dates[date] = true;
+    });
     Object.keys(dates).forEach(function (date) {
       out.days[date] = left.days[date] && right.days[date]
         ? mergeDay(left.days[date], right.days[date])
@@ -470,29 +730,33 @@
     out.nutrition = mergeDateBuckets(left.nutrition, right.nutrition);
     out.cardio = mergeDateBuckets(left.cardio, right.cardio);
     out.supplements = mergeDateBuckets(left.supplements, right.supplements);
-    out.supplementSettings = Object.assign({}, left.supplementSettings || {}, isObject(rawIncoming.supplementSettings) ? rawIncoming.supplementSettings : {});
+    out.supplementSettings = safeCopyProps(safeCopyProps({}, left.supplementSettings || {}), isObject(rawIncoming.supplementSettings) ? rawIncoming.supplementSettings : {});
     if (Array.isArray(left.customWorkouts) || Array.isArray(right.customWorkouts)) {
       out.customWorkouts = mergeTemplatesById(left.customWorkouts, right.customWorkouts);
     }
     if (Array.isArray(left.library) || Array.isArray(right.library)) {
       out.library = mergeTemplatesById(left.library, right.library);
     }
-    out.prs = Object.assign({}, left.prs || {}, right.prs || {});
-    out.achievements = Object.assign({}, left.achievements || {}, right.achievements || {});
-    out.history = Object.assign({}, left.history || {}, isObject(rawIncoming.history) ? right.history || {} : {});
+    out.prs = safeCopyProps(safeCopyProps({}, left.prs || {}), right.prs || {});
+    out.achievements = safeCopyProps(safeCopyProps({}, left.achievements || {}), right.achievements || {});
+    out.history = safeCopyProps(safeCopyProps({}, left.history || {}), isObject(rawIncoming.history) ? right.history || {} : {});
     out.history.dataLossEvents = Array.from(new Map((left.history && left.history.dataLossEvents || []).concat(right.history && right.history.dataLossEvents || []).map(function (event) {
       return [JSON.stringify(event), event];
     })).values());
-    out.history.reconstructedCount = Math.max(Number(left.history && left.history.reconstructedCount || 0), Number(right.history && right.history.reconstructedCount || 0));
-    out.backup = Object.assign({}, left.backup || {});
+    out.history.reconstructedCount = Math.max(finiteNum(left.history && left.history.reconstructedCount, 0), finiteNum(right.history && right.history.reconstructedCount, 0));
+    out.backup = safeCopyProps({}, left.backup || {});
     if (isObject(rawIncoming.backup)) {
       Object.keys(rawIncoming.backup).forEach(function (key) {
+        if (!isSafeKey(key)) return;
         if (right.backup[key] != null) out.backup[key] = right.backup[key];
       });
     }
-    out.backup.lastExternalAt = Math.max(Number(left.backup && left.backup.lastExternalAt || 0), Number(right.backup && right.backup.lastExternalAt || 0)) || null;
+    out.backup.lastExternalAt = Math.max(finiteNum(left.backup && left.backup.lastExternalAt, 0), finiteNum(right.backup && right.backup.lastExternalAt, 0)) || null;
     out.backup.lastRestoreAt = Date.now();
     out.backup.lastRestoreMode = "merge";
+    out.engagement = mergeEngagement(left.engagement, right.engagement);
+    out.coachMemory = mergeCoachMemory(left.coachMemory, right.coachMemory, rawIncoming.coachMemory);
+    out.favoriteQuotes = normalizeFavoriteQuotes((left.favoriteQuotes || []).concat(right.favoriteQuotes || []));
     return migrateState(out);
   }
 

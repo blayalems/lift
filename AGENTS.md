@@ -26,10 +26,12 @@ lift/
         └── src/main/
             ├── AndroidManifest.xml
             └── kotlin/io/github/blayalems/lift/
-                ├── MainActivity.kt         # WebView host, fullscreen, file chooser
+                ├── MainActivity.kt         # WebView host, edge-to-edge, predictive back, file chooser
                 ├── LiftBridge.kt           # @JavascriptInterface exposed as window.LiftAndroid
+                ├── WorkoutNotification.kt  # API 36/37 ProgressStyle Live Update & compat builders
                 ├── WorkoutService.kt       # Foreground service for API 35+ Live Update chip
-                └── LiftWidgetProvider.kt   # Native home-screen workout widget
+                ├── HabitReminderReceiver.kt # AlarmManager anti-hiatus reminder notifications
+                └── LiftWidgetProvider.kt   # Native Material 3 Expressive home/keyguard widget
 ```
 
 ---
@@ -108,18 +110,18 @@ The `build` date in `version.json` should be today's date in `YYYY-MM-DD` format
 
 ## Android Gradle / SDK version matrix
 
-Tested working combination as of v1.2.3:
+Tested working combination as of v2.0.0 (Android 17):
 
 | Component | Version |
 |---|---|
 | AGP | 9.1.1 |
 | Gradle | 9.3.1 |
 | Kotlin | Not declared — AGP 9 built-in Kotlin handles `.kt` compilation |
-| compileSdk / targetSdk | 36 |
+| compileSdk / targetSdk | 37 (Android 17) |
 | minSdk | 26 |
 | Java | 17 (Temurin) |
-| CI SDK platform | `android-36` |
-| CI build-tools | `36.0.0` |
+| CI SDK platform | `android-37` |
+| CI build-tools | `37.0.0` |
 
 ### AGP 9.x rules (IMPORTANT)
 
@@ -130,11 +132,31 @@ Tested working combination as of v1.2.3:
   AGP 9 built-in Kotlin reads JVM target from `compileOptions { sourceCompatibility = VERSION_17 }`.
 - Plugin versions live in `settings.gradle.kts` → `pluginManagement { plugins { } }`, not in `build.gradle.kts`.
 
+### Android 17 (API 37) platform behaviors
+
+- **Mandatory large-screen/foldable resizability**: `AndroidManifest.xml` sets
+  `android:resizeableActivity="true"` and `MainActivity` handles
+  `orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density|uiMode`
+  so window resize/fold/theme changes preserve WebView state.
+- **Edge-to-edge API 35–37**: `MainActivity.applySystemBars()` uses
+  `WindowCompat.setDecorFitsSystemWindows(window, false)` + `WindowInsetsControllerCompat`
+  and guards deprecated `statusBarColor`/`navigationBarColor`/`isStatusBarContrastEnforced`
+  behind `Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM`.
+- **Live Updates (API 36/37)**: `WorkoutNotification.kt` builds `Notification.ProgressStyle`
+  with phase-aware accents (active pink, resting blue, rest-done emerald, complete gold),
+  optional `quote` `.setSubText(...)`, strict vector icon usage (`ic_dumbbell`, zero bitmaps),
+  and reflection-guarded `NotificationManager.canPostPromotedNotifications()`.
+- **Predictive Back**: `MainActivity` syncs `OnBackPressedCallback.isEnabled` via
+  `LiftAndroid.setBackConsumerActive(active)`. When active, Android Back invokes
+  `window.__liftHandleBack()` / dispatches `"navigate-back"` before `webView.canGoBack()`.
+- **Habit Reminders**: `scheduleHabitReminder` uses `AlarmManager.setAndAllowWhileIdle`
+  (no `SCHEDULE_EXACT_ALARM` needed) targeting `HabitReminderReceiver` on channel `"lift_reminders"`.
+
 ---
 
 ## Foreground service type reference
 
-Valid `foregroundServiceType` values for `compileSdk = 36` (confirmed by AAPT):
+Valid `foregroundServiceType` values for `compileSdk = 37` (confirmed by AAPT):
 
 | Type | Value | Extra permission required | Notes |
 |---|---|---|---|
@@ -223,8 +245,8 @@ Fields to keep in sync with the Gradle project:
 - name: Install required Android SDK components
   run: |
     yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
-      "platforms;android-36"   # ← must match compileSdk
-      "build-tools;36.0.0"     # ← must match compileSdk
+      "platforms;android-37"   # ← must match compileSdk
+      "build-tools;37.0.0"     # ← must match compileSdk
       "platform-tools"
 
 - name: Setup Gradle 9.3.1
@@ -239,9 +261,16 @@ Fields to keep in sync with the Gradle project:
 
 | Method | Called from | What it does |
 |---|---|---|
-| `onWorkoutState(json)` | PWA workout loop | Posts/updates workout notification; routes through WorkoutService on API 35+ |
-| `clearWorkout()` | PWA on finish | Cancels notification, stops service |
+| `onWorkoutState(json)` | PWA workout loop | Posts/updates workout notification (with optional `quote` subtext) & home widget; routes through WorkoutService on API 35+ |
+| `clearWorkout()` | PWA on finish | Cancels notification, resets workout widget state, stops service |
 | `isNative()` | PWA startup | Returns `true` — used to gate native-only paths |
+| `setSystemBars(theme)` | `app.js` theme sync | Updates status/navigation bar contrast icons via `WindowInsetsControllerCompat` |
+| `getAndroidInfo()` | `app.js` settings/diagnostics | Returns JSON with `sdk`, `release`, `manufacturer`, `model`, `brand`, `isAndroid17`, `supportsLiveUpdates`, `supportsWidgetPreview`, `canPostPromotedNotifications`, `isLargeScreen`, `notificationsEnabled` |
+| `setBackConsumerActive(active)` | `app.js` sheet/drawer sync | Enables predictive `OnBackPressedCallback` interception so Back closes open UI via `navigate-back` / `window.__liftHandleBack` |
+| `updateWidgetEngagement(json)` | `app.js` / `engagement.js` sync | Forwards parsed engagement JSON to `LiftWidgetProvider.updateEngagement(context, snap)` |
+| `scheduleHabitReminder(delayMinutes, title, body)` | `app.js` / `engagement.js` | Schedules an anti-hiatus reminder via `AlarmManager.setAndAllowWhileIdle` on `HabitReminderReceiver` |
+| `cancelHabitReminder()` | `app.js` / `engagement.js` | Cancels pending/shown anti-hiatus reminder alarm and notification |
+| `openNotificationSettings()` | `app.js` settings | Opens `Settings.ACTION_APP_NOTIFICATION_SETTINGS` for Lift |
 | `saveBackupFile(filename, json)` | `cloud.js` downloadBackup | Writes JSON to MediaStore Downloads (API 29+) |
 | `saveImageFile(filename, dataUrl)` | `app.js` workout image export | Writes PNG snapshots to Downloads |
 | `shareText(title, text)` | `app.js` copy/share log | Opens Android Sharesheet for text logs |
@@ -252,8 +281,8 @@ Fields to keep in sync with the Gradle project:
 | `loadStateMirror()` | `features/persistence.js` startup recovery | Returns the validated canonical state mirror, or an empty string when unavailable |
 | `clearStateMirror()` | explicit Reset all flow | Deletes the native mirror so an intentional reset cannot resurrect old data |
 
-`window.LIFT_IS_NATIVE` is set to `true` by the WebViewClient's `onPageFinished` injection.
-Check this flag before calling any `window.LiftAndroid.*` method from JS.
+`window.LIFT_IS_NATIVE = true` and `window.LIFT_ANDROID_SDK = Build.VERSION.SDK_INT` are injected by `MainActivity`'s `WebViewClient.onPageFinished`.
+Check `window.LIFT_IS_NATIVE` before calling any `window.LiftAndroid.*` method from JS.
 
 The canonical mirror is covered by `res/xml/backup_rules.xml` and
 `res/xml/data_extraction_rules.xml`. Android Auto Backup is an additional recovery

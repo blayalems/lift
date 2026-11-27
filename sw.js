@@ -1,5 +1,5 @@
-const APP_VERSION = "1.9.1";
-const CACHE_VERSION = "lift-v22";
+const APP_VERSION = "2.0.0";
+const CACHE_VERSION = "lift-v23";
 const PRECACHE = `${CACHE_VERSION}-precache`;
 const RUNTIME = `${CACHE_VERSION}-runtime`;
 
@@ -39,6 +39,9 @@ const APP_SHELL = [
   "./features/forms.js",
   "./features/quickadd.js",
   "./features/reentry.js",
+  "./features/quotes.js",
+  "./features/engagement.js",
+  "./features/coach.js",
   "./manifest.webmanifest",
   "./screenshots/lift-mobile-home.png",
   "./screenshots/lift-desktop-dashboard.png",

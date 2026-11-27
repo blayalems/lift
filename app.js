@@ -8,7 +8,7 @@
   var sheetBackdrop = document.getElementById("sheet-backdrop");
   var summaryOverlay = document.getElementById("summary-overlay");
 
-  var APP_VERSION = "1.9.1";
+  var APP_VERSION = "2.0.0";
   window.LIFT_APP_VERSION = APP_VERSION;
 
   var STORE_KEY = "lift.v3.state";
@@ -24,7 +24,8 @@
     defaultRest: 90,
     weightStep: 2.5,
     theme: "system",
-    visualStyle: "neural",
+    visualStyle: "expressive",
+    quoteTone: "auto",
     haptics: true,
     sound: true,
     workoutNotifications: true,
@@ -87,16 +88,23 @@
     historyDate: null,
     lastLog: null,
     focusBeforeSheet: null,
+    focusBeforeDrawer: null,
     recoveredFrom: null,
     recoveryCandidateAt: 0,
     snapshotRecoveryNeeded: false,
     primaryStateValid: false,
     strengthCalc: { weight: null, reps: 5 },
-    quickMeal: "breakfast"
+    quickMeal: "breakfast",
+    sessionQuote: null,
+    quoteHistory: [],
+    rest: null,
+    lastWidgetEngagementSig: "",
+    lastBackConsumerActive: null
   };
 
   var state = loadState();
   var rest = loadRest();
+  runtime.rest = rest;
   var wakeLock = null;
   var audioCtx = null;
 
@@ -144,12 +152,11 @@
   }
 
   function isoWeekId(date) {
-    var d = new Date(date.getTime());
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
-    var week1 = new Date(d.getFullYear(), 0, 4);
-    var week = 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
-    return d.getFullYear() + "-W" + pad2(week);
+    var d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    d.setUTCDate(d.getUTCDate() + 3 - ((d.getUTCDay() + 6) % 7));
+    var week1 = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+    var week = 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getUTCDay() + 6) % 7)) / 7);
+    return d.getUTCFullYear() + "-W" + pad2(week);
   }
 
   function clamp(n, min, max) {
@@ -243,7 +250,9 @@
       mic: '<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
       ruler: '<path d="M3 17 17 3l4 4L7 21z"/><path d="m7 11 2 2M11 7l2 2M15 11l2 2"/>',
       heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
-      market: '<path d="M3 6h18l-2 6H5L3 6Z"/><path d="M6 12v8h12v-8M9 4l1-2h4l1 2"/>'
+      market: '<path d="M3 6h18l-2 6H5L3 6Z"/><path d="M6 12v8h12v-8M9 4l1-2h4l1 2"/>',
+      spark: '<path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z"/><path d="M5 18l.9 2.1L8 21l-2.1.9L5 24l-.9-2.1L2 21l2.1-.9L5 18z"/>',
+      bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7Z"/>'
     };
     return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (paths[name] || paths.more) + "</svg>";
   }
@@ -276,6 +285,17 @@
     loaded.weeklyRecapDismissedIso = loaded.weeklyRecapDismissedIso || null;
     loaded.reentryDismissedWeekId = loaded.reentryDismissedWeekId || null;
     loaded.cycleReviewSeen = !!loaded.cycleReviewSeen;
+    loaded.favoriteQuotes = Array.isArray(loaded.favoriteQuotes)
+      ? Array.from(new Set(loaded.favoriteQuotes.filter(function (id) { return typeof id === "string" && id.trim(); }).map(function (id) { return id.trim(); })))
+      : [];
+    var coachMod = feature("coach");
+    if (coachMod && typeof coachMod.ensureCoachMemory === "function") {
+      coachMod.ensureCoachMemory(loaded);
+    }
+    var engagementMod = feature("engagement");
+    if (engagementMod && typeof engagementMod.ensureEngagement === "function") {
+      engagementMod.ensureEngagement(loaded);
+    }
     var program = feature("program");
     if (program && typeof program.ensureRollingPlan === "function" && PLAN) {
       program.ensureRollingPlan(loaded, PLAN, todayId());
@@ -416,8 +436,16 @@
   function migrateToV3(loaded) {
     var stateMod = window.LIFT_FEATURES && window.LIFT_FEATURES.state;
     if (stateMod && typeof stateMod.migrateState === "function") return stateMod.migrateState(loaded);
-    if (!loaded || typeof loaded !== "object") loaded = {};
-    return Object.assign({}, loaded, { v: 4, schemaVersion: 4 });
+    var safe = {};
+    if (loaded && typeof loaded === "object" && !Array.isArray(loaded)) {
+      Object.keys(loaded).forEach(function (key) {
+        if (key === "__proto__" || key === "constructor" || key === "prototype") return;
+        safe[key] = loaded[key];
+      });
+    }
+    safe.v = 4;
+    safe.schemaVersion = 4;
+    return safe;
   }
 
   function migrateV1(next) {
@@ -457,6 +485,7 @@
   }
 
   function saveRest() {
+    runtime.rest = rest;
     try {
       localStorage.setItem(REST_KEY, JSON.stringify(rest));
     } catch (err) {}
@@ -584,6 +613,8 @@
       normalizePhase: normalizePhase,
       isoWeekId: isoWeekId,
       defaultGoals: DEFAULT_GOALS,
+      progression: feature("progression"),
+      reentry: feature("reentry"),
       runtime: runtime,
       PLAN: PLAN
     };
@@ -659,6 +690,7 @@
   }
 
   function dayState(dayId) {
+    if (!dayId) return { completed: {}, extraSets: {}, drafts: {}, exerciseFlags: {}, adaptiveTargets: {} };
     if (!state.days[dayId]) {
       var plannedDay = getDay(dayId);
       var status = plannedDay && !(plannedDay.exercises || []).length
@@ -708,7 +740,8 @@
   }
 
   function completedSetCount(day, sourceState) {
-    var ds = (sourceState || state).days[day.id] || {};
+    if (!day) return 0;
+    var ds = ((sourceState || state).days || {})[day.id] || {};
     var completed = ds.completed || {};
     return Object.keys(completed).filter(function (key) { return isCompletedSet(completed[key]); }).length;
   }
@@ -749,16 +782,18 @@
   }
 
   function completedVolume(day) {
-    var ds = state.days[day.id] || { completed: {} };
+    if (!day) return 0;
+    var ds = (state.days || {})[day.id] || { completed: {} };
     var volume = 0;
     Object.keys(ds.completed || {}).forEach(function (key) {
       var entry = ds.completed[key];
-      if (entry) volume += numberOr(entry.weight, 0) * numberOr(entry.reps, 0);
+      if (isCompletedSet(entry)) volume += Math.max(0, numberOr(entry.weight, 0)) * numberOr(entry.reps, 0);
     });
     return volume;
   }
 
   function workoutElapsed(dayId) {
+    if (!dayId) return 0;
     var ds = dayState(dayId);
     var before = numberOr(ds.elapsedBeforeStart, 0);
     if (ds.startedAt) {
@@ -769,6 +804,7 @@
   }
 
   function isWorkoutRunning(dayId) {
+    if (!dayId) return false;
     var ds = dayState(dayId);
     return !!(ds.startedAt && !ds.finishedAt);
   }
@@ -789,7 +825,7 @@
 
   function applyVisualStyle(style) {
     var allowed = { classic: true, expressive: true, neural: true };
-    var selected = allowed[style] ? style : "classic";
+    var selected = allowed[style] ? style : "expressive";
     document.documentElement.dataset.visualStyle = selected;
     if (state && state.settings) state.settings.visualStyle = selected;
   }
@@ -929,6 +965,7 @@
       return;
     }
     runtime.now = Date.now();
+    applyVisualStyle(state && state.settings && state.settings.visualStyle);
     var week = getWeek(state.activeWeekId) || PLAN.weeks[0];
     var day = getDay(state.activeDayId) || (week.days || [])[0];
     if (!day) {
@@ -1010,12 +1047,27 @@
     }
     html += "</section>";
 
-    html += renderCompanionSnapshot(day, week);
-
     var reentry = feature("reentry");
     if (reentry && typeof reentry.shouldShowBanner === "function" && reentry.shouldShowBanner(makeCtx())) {
       html += reentry.renderBanner(makeCtx());
     }
+
+    var quotesMod = feature("quotes");
+    if (isWorkoutRunning(day.id) && quotesMod && typeof quotesMod.renderSessionQuote === "function") {
+      html += quotesMod.renderSessionQuote(makeCtx(), day, quoteRuntime());
+    }
+
+    var coachMod = feature("coach");
+    if (coachMod && typeof coachMod.renderCoachStrip === "function") {
+      html += coachMod.renderCoachStrip(makeCtx(), day);
+    }
+
+    var engMod = feature("engagement");
+    if (engMod && typeof engMod.renderMomentumGadget === "function") {
+      html += engMod.renderMomentumGadget(makeCtx(), day);
+    }
+
+    html += renderCompanionSnapshot(day, week);
 
     html += '<main class="content">';
     if (week.notice) html += '<section class="notice" data-phase="' + escapeHtml(normalizePhase(week.phase)) + '"><strong>' + escapeHtml(weekNoticeHeading(week.phase)) + '</strong><p>' + richText(week.notice) + "</p></section>";
@@ -1027,7 +1079,7 @@
     if (total) {
       html += '<div class="section-head"><div><div class="section-title">Workout</div><div class="section-sub">' + (day.exercises || []).length + ' exercises - ' + percent + '% complete</div></div><div class="workout-head-actions">';
       html += '<button class="action-btn compact" data-action="open-sheet" data-sheet="quickadd">' + icon("plus") + ' Exercise</button>';
-      if (runtime.lastLog) html += '<button class="link-btn" data-action="undo-last">Undo last</button>';
+      if (runtime.lastLog && runtime.lastLog.dayId === day.id) html += '<button class="link-btn" data-action="undo-last">Undo last</button>';
       html += '<button class="link-btn" data-action="reset-day">Reset day</button></div></div>';
       html += '<section class="exercise-grid">';
       (day.exercises || []).forEach(function (ex, exIndex) {
@@ -1100,7 +1152,7 @@
   function renderFab() {
     var fab = document.getElementById("fab");
     if (!fab) return;
-    if ((runtime.activeTab || "today") === "today") {
+    if ((runtime.activeTab || "today") === "today" || (runtime.sheet && runtime.sheetMode !== "page")) {
       fab.dataset.hidden = "true";
       return;
     }
@@ -1123,12 +1175,44 @@
     fab.dataset.action = running ? "finish-workout" : "start-workout";
   }
 
+  function openDrawer() {
+    if (!runtime.drawerOpen && typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+      runtime.focusBeforeDrawer = document.activeElement;
+    }
+    runtime.drawerOpen = true;
+    renderNavDrawer();
+    setTimeout(function () {
+      if (!runtime.drawerOpen) return;
+      var drawer = document.getElementById("nav-drawer");
+      var first = drawer && drawer.querySelector(".nav-item, [data-action='close-drawer']");
+      if (first) first.focus();
+    }, 0);
+  }
+
+  function closeDrawer(restoreFocus) {
+    var returnFocus = restoreFocus === false ? null : runtime.focusBeforeDrawer;
+    runtime.drawerOpen = false;
+    runtime.focusBeforeDrawer = null;
+    renderNavDrawer();
+    if (returnFocus) {
+      setTimeout(function () {
+        var target = document.contains(returnFocus)
+          ? returnFocus
+          : document.querySelector('#app [data-action="open-drawer"]');
+        if (target && typeof target.focus === "function") target.focus();
+      }, 0);
+    }
+  }
+
   function renderNavDrawer() {
     var drawer = document.getElementById("nav-drawer");
     var backdrop = document.getElementById("drawer-backdrop");
     if (!drawer || !backdrop) return;
-    drawer.dataset.open = String(!!runtime.drawerOpen);
-    backdrop.dataset.open = String(!!runtime.drawerOpen);
+    var isOpen = !!runtime.drawerOpen;
+    drawer.dataset.open = String(isOpen);
+    drawer.setAttribute("aria-hidden", String(!isOpen));
+    drawer.setAttribute("tabindex", "-1");
+    backdrop.dataset.open = String(isOpen);
 
     var version = window.LIFT_APP_VERSION || APP_VERSION;
     var streaksMod = feature("streaks");
@@ -1148,6 +1232,7 @@
     }
 
     html += '<div class="nav-section-head">Train</div>';
+    html += navItem("coach", "Adaptive Coach", "spark");
     html += navItem("library", "Workout library", "bag");
     html += navItem("marketplace", "Templates marketplace", "market");
     html += navItem("quickadd", "Quick-add exercise", "plus");
@@ -1164,6 +1249,7 @@
     html += navItem("goals", "Goals", "target");
 
     html += '<div class="nav-section-head">Trends</div>';
+    html += navItem("feed", "Momentum & Quests", "bolt");
     html += navItem("rings", "Activity rings", "rings");
     html += navItem("streaks", "Streaks & weekly", "today");
     html += navItem("volume", "Muscle workload", "chart");
@@ -1187,6 +1273,10 @@
     html += '<div class="nav-drawer-foot"><span>Lift v' + escapeHtml(version) + '</span>' +
       '<button class="icon-btn" data-action="close-drawer" aria-label="Close menu">' + icon("close") + '</button></div>';
     drawer.innerHTML = html;
+    drawer.querySelectorAll("button, [href], input, select, textarea").forEach(function (node) {
+      node.tabIndex = isOpen ? 0 : -1;
+    });
+    syncNativeBackConsumer();
   }
 
   function renderSummaryOverlay() {
@@ -1195,6 +1285,7 @@
       summaryOverlay.dataset.open = "false";
       summaryOverlay.innerHTML = "";
       document.body.classList.remove("summary-open");
+      syncNativeBackConsumer();
       return;
     }
     document.body.classList.add("summary-open");
@@ -1203,6 +1294,7 @@
       if (recap && typeof recap.renderCycleReview === "function") {
         summaryOverlay.innerHTML = recap.renderCycleReview(makeCtx());
         summaryOverlay.dataset.open = "true";
+        syncNativeBackConsumer();
         return;
       }
     }
@@ -1211,10 +1303,12 @@
       summaryOverlay.dataset.open = "false";
       summaryOverlay.innerHTML = "";
       document.body.classList.remove("summary-open");
+      syncNativeBackConsumer();
       return;
     }
     summaryOverlay.innerHTML = mod.renderOverlay(makeCtx(), runtime.summaryDayId);
     summaryOverlay.dataset.open = "true";
+    syncNativeBackConsumer();
   }
 
   function shouldShowCopySet1(day, exIndex, sets) {
@@ -1349,7 +1443,18 @@
     REST_PRESETS.concat([state.settings.defaultRest]).filter(function (value, index, arr) { return arr.indexOf(value) === index; }).forEach(function (seconds) {
       html += '<button class="preset" data-action="rest-preset" data-sec="' + seconds + '">' + formatDuration(seconds) + "</button>";
     });
-    html += "</div></aside>";
+    html += "</div>";
+    if (isActive) {
+      var quotesMod = feature("quotes");
+      var restDay = getDay(state.activeDayId);
+      var restQuote = quotesMod && typeof quotesMod.getRestQuoteText === "function"
+        ? quotesMod.getRestQuoteText(makeCtx(), restDay, quoteRuntime())
+        : "";
+      if (restQuote) {
+        html += '<div class="rest-quote" data-rest-quote>' + escapeHtml(restQuote) + "</div>";
+      }
+    }
+    html += "</aside>";
     return html;
   }
 
@@ -1368,6 +1473,7 @@
       document.body.classList.remove("sheet-open");
       document.body.classList.remove("sheet-mode-page");
       document.body.classList.remove("sheet-mode-modal");
+      syncNativeBackConsumer();
       return;
     }
     document.body.classList.add("sheet-open");
@@ -1403,11 +1509,14 @@
         '</div>';
     }
     sheet.innerHTML = headHtml + '<div class="sheet-body">' + sheetBody(runtime.sheet) + "</div>";
+    syncNativeBackConsumer();
   }
 
   function sheetTitle(type) {
     return {
       menu: "Menu",
+      coach: "Adaptive Coach",
+      feed: "Momentum & Quests",
       copy: "Copy and Export",
       settings: "Settings",
       notes: "Workout Notes",
@@ -1442,6 +1551,8 @@
 
   function sheetBody(type) {
     if (type === "menu") return menuSheet();
+    if (type === "coach") return featureSheet("coach", "renderCoachSheet");
+    if (type === "feed") return featureSheet("engagement", "renderFeedSheet");
     if (type === "copy") return copySheet();
     if (type === "settings") return settingsSheet();
     if (type === "notes") return notesSheet();
@@ -1485,6 +1596,7 @@
   function menuSheet() {
     return '<div class="sheet-grid">' +
       menuSection("Train", [
+        menuCard("coach", "Adaptive Coach", "Daily brief, autoregulation, Q&A"),
         menuCard("rings", "Rings", "Train, Volume, Move"),
         menuCard("library", "Library", "Travel, mobility, custom"),
         menuCard("goals", "Goals", "Targets for the rings")
@@ -1495,6 +1607,7 @@
         menuCard("steps", "Steps", "Sensor or manual entry")
       ]) +
       menuSection("Trends", [
+        menuCard("feed", "Momentum & Quests", "XP, crates, shields, pledges"),
         menuCard("prs", "PRs", "Records and 1RM"),
         menuCard("progress", "Progress", "Charts, adherence, streak"),
         menuCard("heatmap", "Heatmap", "Training calendar"),
@@ -1522,6 +1635,8 @@
 
   function menuIcon(sheetName) {
     var icons = {
+      coach: "spark",
+      feed: "bolt",
       rings: "rings",
       library: "bag",
       goals: "target",
@@ -1562,14 +1677,23 @@
     return '<button data-action="copy-scope" data-scope="' + value + '" data-active="' + String(active === value) + '">' + label + "</button>";
   }
 
+  function voiceApiSupported() {
+    var voiceMod = feature("voice");
+    if (voiceMod && typeof voiceMod.supported === "function") return !!voiceMod.supported();
+    return typeof window !== "undefined" &&
+      !!window.speechSynthesis &&
+      typeof window.speechSynthesis.speak === "function" &&
+      typeof window.SpeechSynthesisUtterance === "function";
+  }
+
   function settingsSheet() {
     var s = state.settings;
-    var voiceSupported = typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+    var voiceSupported = voiceApiSupported();
     return '<div class="settings-page">' +
       settingsHero() +
       settingsGroup("Display", [
         settingChoiceGroup("theme", "Theme", "Match Android, force light, or force dark.", s.theme, [["system", "System"], ["light", "Light"], ["dark", "Dark"]], "sun"),
-        settingChoiceGroup("visualStyle", "Visual style", "Keep today's UI stable or opt into expressive motion and surfaces.", s.visualStyle || "classic", [["classic", "Calm"], ["expressive", "Expressive"], ["neural", "Neural"]], "rings"),
+        settingChoiceGroup("visualStyle", "Visual style", "Keep today's UI stable or opt into expressive motion and surfaces.", s.visualStyle || "expressive", [["classic", "Calm"], ["expressive", "Expressive"], ["neural", "Neural"]], "rings"),
         settingChoiceGroup("units", "Units", "Use the units you log with most often.", s.units, [["kg", "kg"], ["lb", "lb"]], "plate")
       ]) +
       settingsGroup("Workout defaults", [
@@ -1581,7 +1705,8 @@
         settingSwitch("haptics", "Haptics", nativeHapticAvailable() ? "Uses Android native haptic feedback when installed." : "Uses browser vibration when available.", !!s.haptics, "rings"),
         settingSwitch("sound", "Sound", "Short timer and completion cues.", !!s.sound, "bell"),
         settingSwitch("autoStartRest", "Auto-start rest", "Start the rest timer when a set is checked off.", s.autoStartRest !== false, "play"),
-        settingSwitch("voiceRestCue", "Voice rest cue", voiceSupported ? "Speak when rest finishes." : "Not supported in this browser.", !!s.voiceRestCue, "mic", !voiceSupported)
+        settingSwitch("voiceRestCue", "Voice rest cue", voiceSupported ? "Speak when rest finishes." : "Not supported in this browser.", !!s.voiceRestCue, "mic", !voiceSupported),
+        settingSelectRow("quoteTone", "Quote tone", "Motivational quote voice during active sessions.", s.quoteTone || "auto", [["auto", "Auto"], ["grit", "Grit"], ["stoic", "Stoic"], ["science", "Science"], ["hype", "Hype"]], "note")
       ]) +
       settingsGroup("Android integration", androidIntegrationRows()) +
       '<div class="settings-actions">' +
@@ -1626,6 +1751,16 @@
       '<label class="settings-number"><input id="setting-' + escapeHtml(name) + '" data-action="setting" data-setting="' + escapeHtml(name) + '" type="number" min="' + min + '" max="' + max + '" step="' + step + '" value="' + escapeHtml(cleanNumber(value, 2)) + '"><small>' + escapeHtml(suffix || "") + "</small></label></div>";
   }
 
+  function settingSelectRow(name, label, desc, value, options, iconKey) {
+    var opts = options.map(function (opt) {
+      var selected = String(value) === String(opt[0]) ? " selected" : "";
+      return '<option value="' + escapeHtml(opt[0]) + '"' + selected + ">" + escapeHtml(opt[1]) + "</option>";
+    }).join("");
+    return '<div class="settings-row">' + settingIcon(iconKey, name) +
+      '<span class="settings-copy"><strong>' + escapeHtml(label) + "</strong><span>" + escapeHtml(desc) + "</span></span>" +
+      '<label class="settings-number" for="setting-' + escapeHtml(name) + '"><select id="setting-' + escapeHtml(name) + '" data-action="setting" data-setting="' + escapeHtml(name) + '" aria-label="' + escapeHtml(label) + '">' + opts + "</select></label></div>";
+  }
+
   function settingSwitch(name, label, desc, enabled, iconKey, disabled) {
     return '<button class="settings-row settings-row-button" type="button" data-action="setting-toggle" data-setting="' + escapeHtml(name) + '" data-value="' + (enabled ? "false" : "true") + '" data-disabled="' + String(!!disabled) + '"' + (disabled ? " disabled" : "") + ">" + settingIcon(iconKey, name) +
       '<span class="settings-copy"><strong>' + escapeHtml(label) + "</strong><span>" + escapeHtml(desc) + "</span></span>" +
@@ -1655,18 +1790,41 @@
     var info = nativeAndroidInfo();
     var native = !!window.LIFT_IS_NATIVE;
     var notificationStatus = notificationStatusText();
-    return [
-      settingsStatusRow("Native shell", native ? ((info.manufacturer || "Android") + " " + (info.model || "device")) : "Install the APK for bridge features.", native ? "On" : "PWA", "gear", native ? "success" : "neutral"),
+    var sdkLabel = native
+      ? (info.isAndroid17 ? "Android 17 (API " + (info.sdk || 37) + ")" : (info.sdk ? "API " + info.sdk : "On"))
+      : "PWA";
+    var liveLabel = !native
+      ? "APK only"
+      : info.supportsLiveUpdates
+        ? (info.canPostPromotedNotifications ? "Promoted" : "Standard")
+        : "Compat";
+    var liveTone = !native ? "neutral" : (info.supportsLiveUpdates && !info.canPostPromotedNotifications ? "warning" : "success");
+    var rows = [
+      settingsStatusRow("Native shell", native ? ((info.manufacturer || "Android") + " " + (info.model || "device") + (info.isLargeScreen ? " · Large screen" : "")) : "Install the APK for bridge features.", sdkLabel, "gear", native ? "success" : "neutral"),
       settingsStatusRow("System bars", "Light screens use dark status/navigation icons; dark mode flips them.", "Synced", "sun", "success"),
       settingSwitch("workoutNotifications", "Live workout notification", notificationStatus, !!state.settings.workoutNotifications, "bell"),
-      settingsStatusRow("Home widget", "Workout widget updates through the Android bridge in the native app.", native ? "Ready" : "APK only", "grid", native ? "success" : "neutral"),
+      settingsStatusRow("Live Updates", "Android 16/17 status-bar timer chip and quote subtext.", liveLabel, "bolt", liveTone),
+      settingsStatusRow("Home & Lock widget", "Material 3 Expressive widget syncs streaks, level, and active rest.", native ? (info.supportsWidgetPreview ? "M3E + Keyguard" : "M3E Home") : "APK only", "grid", native ? "success" : "neutral"),
       settingsStatusRow("Native export", "Backup and workout images use Android share/save targets when installed.", canUseNative("shareJsonFile") || canUseNative("saveBackupFile") ? "Ready" : "Web", "upload", canUseNative("shareJsonFile") || canUseNative("saveBackupFile") ? "success" : "neutral")
     ];
+    if (native && canUseNative("openNotificationSettings")) {
+      var notifNeedsFix = info.notificationsEnabled === false || (info.supportsLiveUpdates && !info.canPostPromotedNotifications);
+      rows.push(
+        '<button class="settings-row settings-row-button" type="button" data-action="open-android-notif-settings">' +
+        settingIcon("bell", "workoutNotifications") +
+        '<span class="settings-copy"><strong>Android notification settings</strong><span>Allow notifications or Promoted Live Updates in system settings.</span></span>' +
+        '<span class="settings-status" data-tone="' + (notifNeedsFix ? "warning" : "neutral") + '">' + (notifNeedsFix ? "Open" : "Manage") + "</span></button>"
+      );
+    }
+    return rows;
   }
 
   function notificationStatusText() {
+    if (canNotifyNative()) {
+      return "Managed through the Android app live workout service.";
+    }
     var status = "Unavailable in this browser.";
-    if ("Notification" in window) {
+    if ("Notification" in window && window.Notification) {
       if (Notification.permission === "granted") status = "Allowed. Lift will keep one live workout notification active while you train.";
       else if (Notification.permission === "denied") status = "Blocked. Re-enable notifications from Chrome site settings for this app.";
       else status = state.settings.notifSkipped ? "Off. Turn this on to ask again next time." : "Ask on the next workout start.";
@@ -1780,7 +1938,9 @@
   }
 
   function openSheet(type, options, opts) {
-    if (!runtime.sheet && document.activeElement instanceof HTMLElement) runtime.focusBeforeSheet = document.activeElement;
+    if (!runtime.sheet && !runtime.focusBeforeSheet && document.activeElement instanceof HTMLElement) {
+      runtime.focusBeforeSheet = document.activeElement;
+    }
     runtime.sheet = type;
     runtime.sheetMode = (opts && opts.mode) || "modal";
     if (type === "history") runtime.historyDate = typeof options === "string" ? options : options && options.date || state.activeDayId;
@@ -1795,6 +1955,7 @@
     renderBottomNav();
     renderFab();
     setTimeout(function () {
+      if (!runtime.sheet) return;
       var first = sheet.querySelector("[data-action='close-sheet'], .sheet-back, button, input, select, textarea");
       (first || sheet).focus();
     }, 0);
@@ -1810,7 +1971,16 @@
     renderSheet();
     renderBottomNav();
     renderFab();
-    if (returnFocus && document.contains(returnFocus)) setTimeout(function () { returnFocus.focus(); }, 0);
+    if (returnFocus) {
+      setTimeout(function () {
+        var target = document.contains(returnFocus)
+          ? returnFocus
+          : (returnFocus.dataset && returnFocus.dataset.action === "open-drawer"
+            ? document.querySelector('#app [data-action="open-drawer"]')
+            : null);
+        if (target && typeof target.focus === "function") target.focus();
+      }, 0);
+    }
   }
 
   function isCaveatNote(note) {
@@ -1870,16 +2040,169 @@
     return true;
   }
 
+  function quoteRuntime() {
+    runtime.rest = Object.assign({}, rest, {
+      remaining: rest.running ? restRemaining() : 0
+    });
+    return runtime;
+  }
+
+  function syncNativeWidgetEngagement() {
+    if (!canUseNative("updateWidgetEngagement")) return false;
+    var engagementMod = feature("engagement");
+    if (!engagementMod || typeof engagementMod.widgetPayload !== "function") return false;
+    try {
+      var payload = engagementMod.widgetPayload(makeCtx());
+      var sig = JSON.stringify(payload);
+      if (sig === runtime.lastWidgetEngagementSig) return true;
+      runtime.lastWidgetEngagementSig = sig;
+      window.LiftAndroid.updateWidgetEngagement(sig);
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function scheduleHabitReminderFromPledge(pledge) {
+    if (!pledge || state.settings.workoutNotifications === false) return false;
+    if (!canUseNative("scheduleHabitReminder")) return false;
+    var slot = String(pledge.slot || "Morning").toLowerCase();
+    var targetHour = slot === "evening" ? 18 : slot === "afternoon" ? 13 : 8;
+    var delayMinutes = 1440;
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(pledge.targetDate || ""));
+    if (m) {
+      var targetMs = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), targetHour, 0, 0, 0).getTime();
+      var diffMin = Math.round((targetMs - Date.now()) / 60000);
+      delayMinutes = diffMin >= 15 ? diffMin : 90;
+    }
+    delayMinutes = clamp(delayMinutes, 1, 43200);
+    var title = "Lift · Training Pledge";
+    var body = (pledge.when || "Upcoming") + " · " + (pledge.slot || "Session") + " (" + (pledge.targetDate || "today") + ") — +150 XP awaits.";
+    try {
+      return !!window.LiftAndroid.scheduleHabitReminder(delayMinutes, title, body);
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function schedulePostWorkoutHabitReminder() {
+    if (state.settings.workoutNotifications === false) return false;
+    if (!canUseNative("scheduleHabitReminder")) return false;
+    var eng = state && state.engagement;
+    if (eng && eng.pledge && eng.pledge.status === "active") {
+      return scheduleHabitReminderFromPledge(eng.pledge);
+    }
+    var today = todayId();
+    var nextEntry = allDays().find(function (entry) {
+      return entry && entry.day && entry.day.id > today && (entry.day.exercises || []).length && dayStatus(entry.day, state) !== "done";
+    });
+    var delayMinutes = 2880;
+    if (nextEntry && nextEntry.day) {
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(nextEntry.day.id);
+      if (m) {
+        var targetMs = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 8, 0, 0, 0).getTime();
+        var diffMin = Math.round((targetMs - Date.now()) / 60000);
+        if (diffMin >= 60) delayMinutes = diffMin;
+      }
+    }
+    delayMinutes = clamp(delayMinutes, 1, 43200);
+    var title = "Next Lift Session";
+    var body = nextEntry && nextEntry.day
+      ? "Back on track: " + (nextEntry.day.title || "Next workout") + "."
+      : "Keep your momentum moving with today's session.";
+    try {
+      return !!window.LiftAndroid.scheduleHabitReminder(delayMinutes, title, body);
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function cancelNativeHabitReminder() {
+    if (!canUseNative("cancelHabitReminder")) return false;
+    try {
+      return !!window.LiftAndroid.cancelHabitReminder();
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function syncNativeBackConsumer() {
+    var active = !!(runtime.sheet || runtime.summaryDayId || runtime.drawerOpen);
+    if (runtime.lastBackConsumerActive === active) return active;
+    runtime.lastBackConsumerActive = active;
+    if (canUseNative("setBackConsumerActive")) {
+      try {
+        window.LiftAndroid.setBackConsumerActive(active);
+      } catch (err) {}
+    }
+    return active;
+  }
+
+  function handleBackNavigation() {
+    if (runtime.sheet) {
+      closeSheet();
+      return true;
+    }
+    if (runtime.summaryDayId) {
+      runtime.summaryDayId = null;
+      runtime.cycleReview = false;
+      renderSummaryOverlay();
+      return true;
+    }
+    if (runtime.drawerOpen) {
+      closeDrawer(true);
+      return true;
+    }
+    syncNativeBackConsumer();
+    return false;
+  }
+
+  function submitCoachQuestion(promptText) {
+    var input = sheet.querySelector("[data-coach-input]");
+    var question = String(promptText != null ? promptText : (input ? input.value : "")).trim();
+    if (!question) {
+      toast("Ask the coach a question first.");
+      if (input && typeof input.focus === "function") input.focus();
+      return;
+    }
+    var coachMod = feature("coach");
+    if (!coachMod || typeof coachMod.askCoach !== "function") {
+      toast("Adaptive Coach is unavailable right now.");
+      return;
+    }
+    coachMod.askCoach(Object.assign({}, makeCtx(), { saveState: null }), question);
+    if (input) input.value = "";
+    saveState("coach-ask");
+    if (runtime.sheet !== "coach") {
+      openSheet("coach");
+    } else {
+      renderSheet();
+      if (sheet) {
+        var chatLog = sheet.querySelector(".coach-chat-log");
+        if (chatLog) chatLog.scrollTop = chatLog.scrollHeight;
+        var sheetBodyEl = sheet.querySelector(".sheet-body");
+        if (sheetBodyEl) sheetBodyEl.scrollTop = sheetBodyEl.scrollHeight;
+      }
+      var bodyEl = document.getElementById("sheet-body");
+      if (bodyEl) bodyEl.scrollTop = bodyEl.scrollHeight;
+    }
+  }
+
   function freezeAdaptiveTargets(day, ds) {
     if (!day || !ds) return;
     ds.adaptiveTargets = ds.adaptiveTargets || {};
     (day.exercises || []).forEach(function (exercise, exIndex) {
-      var suggestion = adaptiveSuggestion(day, exercise, exIndex);
-      if (!suggestion) {
-        delete ds.adaptiveTargets[String(exIndex)];
+      var key = String(exIndex);
+      var existing = ds.adaptiveTargets[key];
+      if (existing && (existing.action === "express-mode" || existing.action === "reduced-volume" || existing.action === "pr-push")) {
         return;
       }
-      ds.adaptiveTargets[String(exIndex)] = {
+      var suggestion = adaptiveSuggestion(day, exercise, exIndex);
+      if (!suggestion) {
+        delete ds.adaptiveTargets[key];
+        return;
+      }
+      ds.adaptiveTargets[key] = {
         action: suggestion.action,
         weight: suggestion.weight,
         reps: suggestion.reps,
@@ -1891,6 +2214,7 @@
   }
 
   function startWorkout(showToast) {
+    if (!state.activeDayId) return;
     var ds = dayState(state.activeDayId);
     if (ds.startedAt && !ds.finishedAt) return;
     if (ds.finishedAt) {
@@ -1907,6 +2231,8 @@
       saveRest();
     }
     saveState();
+    cancelNativeHabitReminder();
+    syncNativeWidgetEngagement();
     haptic("workoutStart");
     requestWakeLock();
     showWorkoutNotification();
@@ -1914,11 +2240,12 @@
   }
 
   function finishWorkout() {
+    if (!state.activeDayId) return;
     var ds = dayState(state.activeDayId);
     if (!ds.startedAt) ds.startedAt = Date.now();
     ds.finishedAt = Date.now();
     var finishedDay = getDay(state.activeDayId);
-    var verifiedSets = completedSetCount(finishedDay, state);
+    var verifiedSets = finishedDay ? completedSetCount(finishedDay, state) : 0;
     if (verifiedSets > 0) {
       ds.status = "completed";
       ds.source = "verified-log";
@@ -1930,11 +2257,25 @@
     }
     rest = idleRest();
     saveRest();
+    var engagementMod = feature("engagement");
+    var finishReward = null;
+    if (verifiedSets > 0 && engagementMod && typeof engagementMod.onWorkoutFinished === "function") {
+      finishReward = engagementMod.onWorkoutFinished(
+        Object.assign({}, makeCtx(), { saveState: null }),
+        state.activeDayId,
+        { streak: trainingStreak() }
+      );
+    }
     saveState();
+    syncNativeWidgetEngagement();
+    if (verifiedSets > 0) schedulePostWorkoutHabitReminder();
     releaseWakeLock();
     clearWorkoutNotification();
     haptic("workoutFinish");
     toast("Workout finished.");
+    if (finishReward && finishReward.xpGained) {
+      toast("+" + finishReward.xpGained + " XP earned" + (finishReward.pendingLoot ? " · Loot crate unlocked!" : "."));
+    }
     if (verifiedSets > 0) {
       runtime.summaryDayId = state.activeDayId;
       if (!state.cycleReviewSeen && isCycleComplete()) {
@@ -2031,6 +2372,13 @@
 
     var currentExercise = next ? next.exIndex + 1 : totalExercises;
     var elapsedSec = workoutElapsed(day.id);
+    var quotesMod = feature("quotes");
+    var notifQuote = quotesMod && typeof quotesMod.getActiveQuote === "function"
+      ? quotesMod.getActiveQuote(makeCtx(), day, quoteRuntime(), false)
+      : null;
+    var quoteText = notifQuote && notifQuote.text
+      ? (notifQuote.text + (notifQuote.author ? " — " + notifQuote.author : "")).slice(0, 120)
+      : "";
 
     return {
       phase: phase,
@@ -2050,9 +2398,11 @@
       pendingExIndex: next ? next.exIndex : null,
       pendingSetIndex: next ? next.setIndex : null,
       restRemainingSec: remaining,
+      restEndsAt: (rest.running && remaining > 0) ? numberOr(rest.endsAt, 0) : 0,
       restLabel: formatDuration(remaining),
       unitLabel: unitLabel(),
       setText: setText,
+      quote: quoteText,
       signature: signature
     };
   }
@@ -2136,6 +2486,10 @@
     var snap = buildNotifSnapshot();
     runtime.lastNotifSig = snap.signature;
     runtime.lastNotifSnapshot = snap;
+    if (snap.phase === "idle") {
+      clearWorkoutNotification();
+      return;
+    }
     if (canNotifyNative()) {
       notifyNative(snap);
       return;
@@ -2145,8 +2499,10 @@
     var ctx = makeCtx();
     mod.ensurePermission(ctx).then(function (permission) {
       if (permission !== "granted") return;
-      mod.show(snap);
-    });
+      var latest = buildNotifSnapshot();
+      if (latest.phase === "idle") return;
+      mod.show(latest);
+    }).catch(function () {});
   }
 
   function updateWorkoutNotification(force) {
@@ -2154,7 +2510,11 @@
     var snap = buildNotifSnapshot();
     runtime.lastNotifSnapshot = snap;
     if (snap.phase === "idle") {
-      clearWorkoutNotification();
+      if (force || (runtime.lastNotifSig && runtime.lastNotifSig.indexOf("idle:") !== 0)) {
+        clearWorkoutNotification();
+      } else {
+        runtime.lastNotifSig = snap.signature;
+      }
       return;
     }
     if (!force && snap.signature === runtime.lastNotifSig) return;
@@ -2179,7 +2539,13 @@
   function handleNotifAction(action) {
     action = action || "open";
     if (action === "open") return;
+    if (action === "navigate-back") {
+      handleBackNavigation();
+      return;
+    }
     if (action === "finish") {
+      var finishDs = state.activeDayId && state.days ? state.days[state.activeDayId] : null;
+      if (!finishDs || finishDs.finishedAt) return;
       finishWorkout();
       return;
     }
@@ -2209,6 +2575,7 @@
 
   function updateSetValue(exIndex, setIndex, field, rawValue, isDisplayValue) {
     var day = getDay(state.activeDayId);
+    if (!day) return;
     var ds = dayState(day.id);
     var key = exIndex + "." + setIndex;
     var exercise = (day.exercises || [])[exIndex];
@@ -2221,6 +2588,8 @@
     if (ds.completed[key] && field === "reps" && value <= 0) {
       delete bucket.ts;
       delete bucket.pr;
+      delete bucket.recordType;
+      delete bucket.recordTypes;
       delete ds.completed[key];
       ds.drafts[key] = bucket;
     } else if (ds.completed[key]) {
@@ -2291,7 +2660,8 @@
   function toggleSet(exIndex, setIndex) {
     if (!requireWorkoutReady({ type: "toggle-set", exIndex: exIndex, setIndex: setIndex })) return;
     var day = getDay(state.activeDayId);
-    var ex = day.exercises[exIndex];
+    var ex = day && day.exercises && day.exercises[exIndex];
+    if (!day || !ex) return;
     var ds = dayState(day.id);
     var key = exIndex + "." + setIndex;
     if (ds.completed[key] && !isCompletedSet(ds.completed[key])) {
@@ -2299,7 +2669,7 @@
       delete ds.completed[key];
     }
     if (isCompletedSet(ds.completed[key])) {
-      runtime.lastLog = { dayId: day.id, key: key, previous: Object.assign({}, ds.completed[key]), action: "restore" };
+      runtime.lastLog = { dayId: day.id, key: key, previous: Object.assign({}, ds.completed[key]), draft: null, action: "restore" };
       delete ds.completed[key];
       haptic("warning");
       saveState();
@@ -2314,7 +2684,13 @@
       render();
       return;
     }
-    runtime.lastLog = { dayId: day.id, key: key, previous: ds.completed[key] ? Object.assign({}, ds.completed[key]) : null, action: "remove" };
+    runtime.lastLog = {
+      dayId: day.id,
+      key: key,
+      previous: ds.completed[key] ? Object.assign({}, ds.completed[key]) : null,
+      draft: ds.drafts[key] ? Object.assign({}, ds.drafts[key]) : null,
+      action: "remove"
+    };
     var recordMod = feature("records");
     var evaluation = recordMod && typeof recordMod.evaluateSet === "function"
       ? recordMod.evaluateSet(makeCtx(), ex, value, day.id, key)
@@ -2332,7 +2708,23 @@
     if (state.settings.autoStartRest !== false) {
       startRest(numberOr(ex.defaultRest, state.settings.defaultRest), ex.name);
     }
+    var engagementMod = feature("engagement");
+    var setXp = engagementMod && typeof engagementMod.onSetCompleted === "function"
+      ? engagementMod.onSetCompleted(Object.assign({}, makeCtx(), { saveState: null }), {
+          dayId: day.id,
+          setKey: key,
+          pr: pr,
+          rir: value.rir,
+          weight: value.weight,
+          reps: value.reps,
+          exerciseName: ex.name
+        })
+      : null;
     saveState();
+    syncNativeWidgetEngagement();
+    if (setXp && setXp.celebrationText && (setXp.leveledUp || (setXp.questsDone && setXp.questsDone.length) || (!pr && evaluation.type !== "baseline"))) {
+      toast(setXp.celebrationText);
+    }
     render();
     updateWorkoutNotification(true);
     requestAnimationFrame(function() {
@@ -2367,6 +2759,7 @@
     }
     var prCount = 0;
     var prTargets = [];
+    var loggedSets = [];
     sets.forEach(function (set, setIndex) {
       var key = exIndex + "." + setIndex;
       if (isCompletedSet(ds.completed[key])) return;
@@ -2382,8 +2775,10 @@
         prCount += 1;
         prTargets.push(target);
       }
-      ds.completed[key] = tagSetExercise({ reps: target.reps, weight: target.weight, rir: draft.rir == null ? null : clamp(Math.round(numberOr(draft.rir, 2)), 0, 4), ts: Date.now(), pr: pr, recordType: evaluation.type, recordTypes: evaluation.types }, ex);
+      var entry = tagSetExercise({ reps: target.reps, weight: target.weight, rir: draft.rir == null ? null : clamp(Math.round(numberOr(draft.rir, 2)), 0, 4), ts: Date.now(), pr: pr, recordType: evaluation.type, recordTypes: evaluation.types }, ex);
+      ds.completed[key] = entry;
       delete ds.drafts[key];
+      loggedSets.push({ dayId: day.id, setKey: key, pr: pr, rir: entry.rir, weight: entry.weight, reps: entry.reps, exerciseName: ex.name });
     });
     if (prCount) {
       var assisted = (feature("records") && typeof feature("records").isAssisted === "function" && feature("records").isAssisted(ex)) ||
@@ -2401,7 +2796,15 @@
     if (state.settings.autoStartRest !== false) {
       startRest(numberOr(ex.defaultRest, state.settings.defaultRest), ex.name);
     }
+    var engagementMod = feature("engagement");
+    if (engagementMod && typeof engagementMod.onSetCompleted === "function") {
+      var silentCtx = Object.assign({}, makeCtx(), { saveState: null });
+      loggedSets.forEach(function (item) {
+        engagementMod.onSetCompleted(silentCtx, item);
+      });
+    }
     saveState();
+    syncNativeWidgetEngagement();
     render();
     updateWorkoutNotification(true);
   }
@@ -2431,15 +2834,28 @@
 
   function undoLastLog() {
     var undo = runtime.lastLog;
-    if (!undo || !state.days[undo.dayId]) return;
-    var completed = state.days[undo.dayId].completed = state.days[undo.dayId].completed || {};
-    if (undo.action === "restore" && undo.previous) completed[undo.key] = undo.previous;
-    else if (undo.previous) completed[undo.key] = undo.previous;
-    else delete completed[undo.key];
+    if (!undo || !undo.dayId || !state.days || !state.days[undo.dayId]) return;
+    var dayRecord = state.days[undo.dayId];
+    var completed = dayRecord.completed = dayRecord.completed || {};
+    var drafts = dayRecord.drafts = dayRecord.drafts || {};
+    if (undo.action === "restore" && undo.previous) {
+      completed[undo.key] = undo.previous;
+    } else if (undo.previous) {
+      completed[undo.key] = undo.previous;
+    } else {
+      delete completed[undo.key];
+      if (undo.draft) drafts[undo.key] = undo.draft;
+    }
+    var undoDay = getDay(undo.dayId);
+    if (undoDay && completedSetCount(undoDay, state) === 0 && dayRecord.status === "completed") {
+      dayRecord.status = dayRecord.startedAt && !dayRecord.finishedAt ? "planned" : (undo.dayId < todayId() ? "unknown" : "planned");
+      dayRecord.trained = false;
+    }
     runtime.lastLog = null;
     saveState("undo-set");
     toast("Last set change undone.");
     render();
+    updateWorkoutNotification(true);
   }
 
   function addSet(exIndex) {
@@ -2519,6 +2935,9 @@
 
   function presetRest(seconds) {
     startRest(Math.max(1, numberOr(seconds, state.settings.defaultRest)), "Rest");
+    haptic("select");
+    render();
+    updateWorkoutNotification(true);
   }
 
   function completeRestIfNeeded() {
@@ -2611,6 +3030,17 @@
         syncRestFabLayout();
       } else {
         fab.dataset.active = nextActive;
+      }
+      var restQuoteEl = fab.querySelector("[data-rest-quote]");
+      if (restQuoteEl && rest.running) {
+        var quotesMod = feature("quotes");
+        var restDay = getDay(state.activeDayId);
+        var nextQuote = quotesMod && typeof quotesMod.getRestQuoteText === "function"
+          ? quotesMod.getRestQuoteText(makeCtx(), restDay, quoteRuntime())
+          : "";
+        if (nextQuote && restQuoteEl.textContent !== nextQuote) {
+          restQuoteEl.textContent = nextQuote;
+        }
       }
     }
     updateWorkoutNotification(false);
@@ -2735,9 +3165,16 @@
           var selection = chooseInitialSelection(state);
           state.activeWeekId = selection.weekId;
           state.activeDayId = selection.dayId;
+          runtime.lastLog = null;
+          runtime.summaryDayId = null;
+          runtime.cycleReview = false;
+          runtime.sessionQuote = null;
+          runtime.quoteHistory = [];
+          runtime.lastWidgetEngagementSig = "";
           saveState("restore-" + (merge ? "merge" : "replace"));
           applyTheme(state.settings.theme);
           applyVisualStyle(state.settings.visualStyle);
+          syncNativeWidgetEngagement();
           toast(merge ? "Backup merged safely." : "Backup restored.");
           render();
         } catch (err) {
@@ -2771,9 +3208,16 @@
       var selection = chooseInitialSelection(state);
       state.activeWeekId = selection.weekId;
       state.activeDayId = selection.dayId;
+      runtime.lastLog = null;
+      runtime.summaryDayId = null;
+      runtime.cycleReview = false;
+      runtime.sessionQuote = null;
+      runtime.quoteHistory = [];
+      runtime.lastWidgetEngagementSig = "";
       saveState("rollback");
       applyTheme(state.settings.theme);
       applyVisualStyle(state.settings.visualStyle);
+      syncNativeWidgetEngagement();
       toast("Rolled back to " + new Date(snapshot.record.createdAt).toLocaleString() + ".");
       render();
     } catch (err) {
@@ -2824,6 +3268,9 @@
     runtime.snapshotRecoveryNeeded = false;
     runtime.primaryStateValid = false;
     runtime.lastLog = null;
+    runtime.sessionQuote = null;
+    runtime.quoteHistory = [];
+    runtime.lastWidgetEngagementSig = "";
     state = normalizeState({ v: 4, schemaVersion: 4, settings: {}, days: {}, bodyweight: [], measurements: [], prs: {} });
     var selection = chooseInitialSelection(state);
     state.activeWeekId = selection.weekId;
@@ -2831,10 +3278,12 @@
     rest = idleRest();
     saveRest();
     clearWorkoutNotification();
+    cancelNativeHabitReminder();
     releaseWakeLock();
     applyTheme(state.settings.theme);
     applyVisualStyle(state.settings.visualStyle);
     saveState("reset-all");
+    syncNativeWidgetEngagement();
     toast("All Lift data and recovery copies were reset.");
     render();
   }
@@ -2850,14 +3299,16 @@
   function plannedSeries(name) {
     var rows = [];
     allDays().forEach(function (entry) {
-      (entry.day.exercises || []).forEach(function (ex) {
+      (entry.day.exercises || []).forEach(function (ex, exIndex) {
         if (ex.name !== name) return;
-        var plannedTop = Math.max.apply(null, (ex.sets || []).map(function (s) { return plannedSet(s).weight; }));
+        var plannedWeights = (ex.sets || []).map(function (s) { return plannedSet(s).weight; });
+        var plannedTop = plannedWeights.length ? Math.max.apply(null, plannedWeights) : 0;
         var actualTop = 0;
-        var exIndex = entry.day.exercises.indexOf(ex);
         var completed = ((state.days[entry.day.id] || {}).completed || {});
         Object.keys(completed).forEach(function (key) {
-          if (key.split(".")[0] === String(exIndex)) actualTop = Math.max(actualTop, numberOr(completed[key].weight, 0));
+          if (key.split(".")[0] === String(exIndex) && isCompletedSet(completed[key])) {
+            actualTop = Math.max(actualTop, numberOr(completed[key].weight, 0));
+          }
         });
         rows.push({ date: entry.day.id, week: entry.week.num, planned: plannedTop, actual: actualTop });
       });
@@ -3081,6 +3532,10 @@
   }
 
   function toast(message) {
+    if (!toastRoot) return;
+    while (toastRoot.children && toastRoot.children.length >= 3) {
+      toastRoot.removeChild(toastRoot.firstChild);
+    }
     var node = document.createElement("div");
     node.className = "toast";
     node.textContent = message;
@@ -3103,24 +3558,32 @@
   }
 
   function handleClick(event) {
-    var btn = event.target.closest("[data-action]");
+    var btn = event.target && event.target.closest ? event.target.closest("[data-action]") : null;
     if (!btn) return;
     var action = btn.dataset.action;
-    if (action !== "set-input") event.preventDefault();
+    var btnTag = btn.tagName;
+    var targetTag = event.target && event.target.tagName;
+    if (btnTag !== "INPUT" && btnTag !== "SELECT" && btnTag !== "TEXTAREA" &&
+        targetTag !== "INPUT" && targetTag !== "SELECT" && targetTag !== "TEXTAREA" && targetTag !== "OPTION" &&
+        typeof event.preventDefault === "function") {
+      event.preventDefault();
+    }
     if (action === "select-week") {
       var week = getWeek(btn.dataset.week);
       if (!week) return;
       state.activeWeekId = week.id;
       if (!(week.days || []).some(function (d) { return d.id === state.activeDayId; })) {
-        var open = firstIncompleteDay(week, state) || week.days[0];
-        state.activeDayId = open.id;
+        var open = firstIncompleteDay(week, state) || (week.days || [])[0];
+        if (open) state.activeDayId = open.id;
       }
       haptic(3);
       saveState();
       closeSheet();
       render();
     } else if (action === "select-day") {
-      state.activeDayId = btn.dataset.day;
+      var targetDayId = btn.dataset.day;
+      if (!targetDayId || !getDay(targetDayId)) return;
+      state.activeDayId = targetDayId;
       state.activeWeekId = (weekForDayId(state.activeDayId) || getWeek(state.activeWeekId)).id;
       haptic(3);
       saveState();
@@ -3176,9 +3639,21 @@
       finishWorkout();
     } else if (action === "reset-day") {
       if (confirm("Reset this day's logged sets, timer, readiness, and notes?")) {
-        delete state.days[state.activeDayId];
-        if (runtime.lastLog && runtime.lastLog.dayId === state.activeDayId) runtime.lastLog = null;
+        var resetDayId = state.activeDayId;
+        delete state.days[resetDayId];
+        if (runtime.lastLog && runtime.lastLog.dayId === resetDayId) runtime.lastLog = null;
+        if (runtime.summaryDayId === resetDayId) runtime.summaryDayId = null;
+        runtime.sessionQuote = null;
+        if (state.engagement) {
+          if (state.engagement.quests) delete state.engagement.quests[resetDayId];
+          if (state.engagement.rewardedWorkoutDates) delete state.engagement.rewardedWorkoutDates[resetDayId];
+        }
+        rest = idleRest();
+        saveRest();
         saveState();
+        clearWorkoutNotification();
+        releaseWakeLock();
+        syncNativeWidgetEngagement();
         render();
       }
     } else if (action === "toggle-set") {
@@ -3209,9 +3684,11 @@
       removeSet(Number(btn.dataset.ex));
     } else if (action === "plate") {
       var day = getDay(state.activeDayId);
+      if (!day) return;
       var exIndex = Number(btn.dataset.ex);
       var setIndex = Number(btn.dataset.set || 0);
-      var ex = day.exercises[exIndex];
+      var ex = (day.exercises || [])[exIndex];
+      if (!ex) return;
       var current = getCurrentSetValue(day, exIndex, setIndex);
       openSheet("plate", { exerciseName: ex.name, targetKg: current.weight, barKg: state.settings.barWeight });
     } else if (action === "rest-adjust") {
@@ -3346,16 +3823,17 @@
       }
     } else if (action === "open-drawer") {
       haptic(3);
-      runtime.drawerOpen = true;
-      renderNavDrawer();
+      openDrawer();
     } else if (action === "close-drawer") {
       haptic(3);
-      runtime.drawerOpen = false;
-      renderNavDrawer();
+      closeDrawer(true);
     } else if (action === "drawer-open-sheet") {
       haptic(3);
-      runtime.drawerOpen = false;
-      renderNavDrawer();
+      var returnFocusFromDrawer = runtime.focusBeforeDrawer;
+      closeDrawer(false);
+      if (!runtime.sheet && returnFocusFromDrawer) {
+        runtime.focusBeforeSheet = returnFocusFromDrawer;
+      }
       openSheet(btn.dataset.sheet, null, { mode: "page" });
     } else if (action === "fab-tap") {
       // Resolved at render time to start-workout or finish-workout.
@@ -3625,6 +4103,154 @@
     } else if (action === "voice-test") {
       var v = feature("voice");
       if (v && typeof v.testVoice === "function") v.testVoice(makeCtx());
+    } else if (action === "open-android-notif-settings") {
+      if (canUseNative("openNotificationSettings")) {
+        try { window.LiftAndroid.openNotificationSettings(); } catch (err) {}
+      } else {
+        toast("Android notification channel controls are available in the Android app.");
+      }
+    } else if (action === "quote-next") {
+      var quotesNext = feature("quotes");
+      if (quotesNext && typeof quotesNext.getActiveQuote === "function") {
+        quotesNext.getActiveQuote(makeCtx(), getDay(state.activeDayId), quoteRuntime(), true);
+        render();
+        if (isWorkoutRunning(state.activeDayId)) updateWorkoutNotification(true);
+      }
+    } else if (action === "quote-fav") {
+      var quotesFav = feature("quotes");
+      var qid = btn.dataset.quoteId || btn.dataset.id || (runtime.sessionQuote && runtime.sessionQuote.id) || "";
+      if (quotesFav && typeof quotesFav.toggleFavorite === "function" && qid) {
+        var favRes = quotesFav.toggleFavorite(Object.assign({}, makeCtx(), { saveState: null }), qid);
+        saveState("quote-fav");
+        toast(favRes && favRes.favorited ? "Quote saved to favorites." : "Quote removed from favorites.");
+        render();
+      }
+    } else if (action === "coach-ask") {
+      submitCoachQuestion();
+    } else if (action === "coach-quick-ask") {
+      submitCoachQuestion(btn.dataset.prompt || btn.textContent || "");
+    } else if (action === "coach-action") {
+      var coachMod = feature("coach");
+      var actionType = btn.dataset.coachAction || "";
+      var rawPayload = btn.dataset.coachPayload || btn.dataset.payload || "";
+      var payload = {};
+      if (rawPayload) {
+        try { payload = JSON.parse(rawPayload); } catch (err) { payload = { value: rawPayload }; }
+      }
+      if (actionType === "open-coach" || actionType === "open") {
+        openSheet("coach");
+      } else if (actionType === "readiness") {
+        openSheet("readiness");
+      } else if (actionType === "open-sheet" && payload && payload.sheet) {
+        openSheet(payload.sheet, payload);
+      } else if (coachMod && typeof coachMod.applyCoachAction === "function" && actionType) {
+        var coachRes = coachMod.applyCoachAction(Object.assign({}, makeCtx(), { saveState: null, openSheet: openSheet }), actionType, payload);
+        saveState("coach-action");
+        toast((coachRes && coachRes.message) || "Coach adjustment applied.");
+        render();
+        if (runtime.sheet === "coach") renderSheet();
+      }
+    } else if (action === "coach-tone") {
+      var nextTone = btn.dataset.tone || "analytical";
+      var coachToneMod = feature("coach");
+      var toneRes = coachToneMod && typeof coachToneMod.applyCoachAction === "function"
+        ? coachToneMod.applyCoachAction(Object.assign({}, makeCtx(), { saveState: null }), "set-tone", { tone: nextTone })
+        : null;
+      if (!toneRes) {
+        state.coachMemory = state.coachMemory || {};
+        state.coachMemory.tone = nextTone;
+      }
+      if (state.settings.quoteTone === "auto") runtime.sessionQuote = null;
+      saveState("coach-tone");
+      toast((toneRes && toneRes.message) || ("Coach tone set to " + nextTone + "."));
+      render();
+      if (runtime.sheet === "coach") renderSheet();
+    } else if (action === "claim-loot") {
+      var engLoot = feature("engagement");
+      var claimed = engLoot && typeof engLoot.claimLoot === "function"
+        ? engLoot.claimLoot(Object.assign({}, makeCtx(), { saveState: null }))
+        : null;
+      if (claimed) {
+        saveState("claim-loot");
+        syncNativeWidgetEngagement();
+        toast((claimed.rarity || "Loot") + " crate claimed: " + (claimed.title || claimed.kind || "reward") + ".");
+        render();
+        if (runtime.sheet === "feed") renderSheet();
+      } else {
+        toast("No unopened crate available right now.");
+      }
+    } else if (action === "activate-shield") {
+      var engShield = feature("engagement");
+      var shieldDate = btn.dataset.date || todayId();
+      var shieldRes = engShield && typeof engShield.activateShield === "function"
+        ? engShield.activateShield(Object.assign({}, makeCtx(), { saveState: null }), shieldDate)
+        : null;
+      if (shieldRes && shieldRes.ok) {
+        saveState("activate-shield");
+        syncNativeWidgetEngagement();
+        toast(shieldRes.alreadyShielded ? ("Streak already shielded for " + shieldRes.dateId + ".") : ("Streak Shield activated for " + shieldRes.dateId + "."));
+        render();
+        if (runtime.sheet === "feed") renderSheet();
+      } else {
+        toast("No Streak Shields remaining. Finish 4 sessions to earn one.");
+      }
+    } else if (action === "set-pledge") {
+      var engPledge = feature("engagement");
+      var whenLabel = btn.dataset.when || "Tomorrow";
+      var slotLabel = btn.dataset.slot || "Morning";
+      if (engPledge && typeof engPledge.setPledge === "function") {
+        var pledge = engPledge.setPledge(Object.assign({}, makeCtx(), { saveState: null }), whenLabel, slotLabel);
+        saveState("set-pledge");
+        scheduleHabitReminderFromPledge(pledge);
+        syncNativeWidgetEngagement();
+        toast("Pledge locked: " + pledge.when + " · " + pledge.slot + " (+150 XP bonus).");
+        render();
+        if (runtime.sheet === "feed") renderSheet();
+      }
+    } else if (action === "hype-feed") {
+      var engHype = feature("engagement");
+      var itemId = btn.dataset.itemId || btn.dataset.id || "";
+      var hypeRes = engHype && typeof engHype.hypeFeedItem === "function" && itemId
+        ? engHype.hypeFeedItem(Object.assign({}, makeCtx(), { saveState: null }), itemId)
+        : null;
+      if (hypeRes) {
+        saveState("hype-feed");
+        render();
+        if (runtime.sheet === "feed") renderSheet();
+      }
+    } else if (action === "share-story") {
+      var engShare = feature("engagement");
+      var storyText = engShare && typeof engShare.shareStoryText === "function"
+        ? engShare.shareStoryText(makeCtx())
+        : "";
+      if (!storyText) {
+        toast("Complete a workout to build a shareable card.");
+      } else if (nativeShareText("Lift Momentum Card", storyText)) {
+        toast("Opening Android share sheet.");
+      } else if (navigator.share) {
+        Promise.resolve(navigator.share({ title: "Lift Momentum Card", text: storyText })).catch(function () {});
+      } else if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        navigator.clipboard.writeText(storyText).then(function () {
+          toast("Story card copied to clipboard.");
+        }).catch(function () {
+          toast("Story card ready.");
+        });
+      } else {
+        try {
+          var ta = document.createElement("textarea");
+          ta.value = storyText;
+          ta.setAttribute("readonly", "");
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          ta.remove();
+          toast("Story card copied.");
+        } catch (err) {
+          toast("Story card ready.");
+        }
+      }
     }
   }
 
@@ -3703,10 +4329,52 @@
   }
 
   function handleKeydown(event) {
-    if (!runtime.sheet) return;
+    if (runtime.drawerOpen && !runtime.sheet) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeDrawer(true);
+        return;
+      }
+      if (event.key === "Tab") {
+        var drawer = document.getElementById("nav-drawer");
+        if (!drawer) return;
+        var drawerFocusable = Array.from(drawer.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter(function (node) {
+          return node.offsetParent !== null || node === document.activeElement;
+        });
+        if (!drawerFocusable.length) {
+          event.preventDefault();
+          drawer.focus();
+          return;
+        }
+        var dFirst = drawerFocusable[0];
+        var dLast = drawerFocusable[drawerFocusable.length - 1];
+        if (event.shiftKey && document.activeElement === dFirst) {
+          event.preventDefault();
+          dLast.focus();
+        } else if (!event.shiftKey && document.activeElement === dLast) {
+          event.preventDefault();
+          dFirst.focus();
+        }
+      }
+      return;
+    }
+    if (!runtime.sheet) {
+      if (event.key === "Escape" && runtime.summaryDayId) {
+        event.preventDefault();
+        runtime.summaryDayId = null;
+        runtime.cycleReview = false;
+        renderSummaryOverlay();
+      }
+      return;
+    }
     if (event.key === "Escape") {
       event.preventDefault();
       closeSheet();
+      return;
+    }
+    if (event.key === "Enter" && runtime.sheet === "coach" && event.target && event.target.matches && event.target.matches("[data-coach-input]")) {
+      event.preventDefault();
+      submitCoachQuestion();
       return;
     }
     if (event.key !== "Tab" || runtime.sheetMode === "page") return;
@@ -3736,7 +4404,7 @@
     else if (key === "barWeight") state.settings.barWeight = displayToKg(value);
     else if (key === "haptics" || key === "sound") state.settings[key] = value === "true";
     else if (key === "autoStartRest" || key === "voiceRestCue") {
-      if (key === "voiceRestCue" && value === "true" && !(typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window)) {
+      if (key === "voiceRestCue" && value === "true" && !voiceApiSupported()) {
         state.settings[key] = false;
       } else {
         state.settings[key] = value === "true";
@@ -3750,7 +4418,9 @@
       state.settings.notifSkipped = value !== "true";
       saveState();
       if (value === "true") {
-        if ("Notification" in window && Notification.permission === "denied") {
+        if (canNotifyNative()) {
+          if (isWorkoutRunning(state.activeDayId)) updateWorkoutNotification(true);
+        } else if ("Notification" in window && window.Notification && Notification.permission === "denied") {
           toast("Notifications are blocked. Re-enable them in Chrome site settings.");
         } else {
           var notifications = feature("notifications");
@@ -3758,7 +4428,7 @@
             notifications.ensurePermission(makeCtx()).then(function (permission) {
               if (permission === "granted" && isWorkoutRunning(state.activeDayId)) updateWorkoutNotification(true);
               renderSheet();
-            });
+            }).catch(function () {});
           }
         }
       } else {
@@ -3773,6 +4443,7 @@
     else state.settings[key] = value;
     if (key === "theme") applyTheme(state.settings.theme);
     if (key === "visualStyle") applyVisualStyle(state.settings.visualStyle);
+    if (key === "quoteTone") runtime.sessionQuote = null;
     saveState();
     render();
   }
@@ -3789,10 +4460,10 @@
         var online = data && data.version;
         if (online && online !== APP_VERSION) {
           toast("Update available (v" + online + "). Applying…");
-          if ("serviceWorker" in navigator) {
+          if ("serviceWorker" in navigator && navigator.serviceWorker && navigator.serviceWorker.ready && typeof navigator.serviceWorker.ready.then === "function") {
             navigator.serviceWorker.ready.then(function (reg) {
-              reg.update().catch(function () {});
-            });
+              if (reg && typeof reg.update === "function") reg.update().catch(function () {});
+            }).catch(function () {});
           }
         } else {
           toast("Already on the latest version (v" + APP_VERSION + ").");
@@ -3823,20 +4494,22 @@
   }
 
   function registerServiceWorker() {
-    if (!("serviceWorker" in navigator)) return;
+    if (!("serviceWorker" in navigator) || !navigator.serviceWorker || typeof navigator.serviceWorker.register !== "function") return;
     if (!location.protocol.startsWith("http")) {
       console.info("Service worker skipped outside http/https.");
       return;
     }
     navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then(function (registration) {
       console.info("Lift service worker registered.");
-      registration.update().catch(function () {});
+      if (registration && typeof registration.update === "function") registration.update().catch(function () {});
     }).catch(function (err) {
       console.warn("Lift service worker registration failed.", err);
     });
-    navigator.serviceWorker.addEventListener("controllerchange", function () {
-      applyPendingReload();
-    });
+    if (typeof navigator.serviceWorker.addEventListener === "function") {
+      navigator.serviceWorker.addEventListener("controllerchange", function () {
+        applyPendingReload();
+      });
+    }
   }
 
   function bindNotificationActionMessages() {
@@ -3849,7 +4522,10 @@
     (window.__liftPendingNativeActions || []).splice(0).forEach(function (action) {
       if (action) handleNotifAction(String(action));
     });
-    if (!("serviceWorker" in navigator)) return;
+    window.addEventListener("liftHandleColdAction", function () {
+      handleColdNotificationAction();
+    });
+    if (!("serviceWorker" in navigator) || !navigator.serviceWorker || typeof navigator.serviceWorker.addEventListener !== "function") return;
     navigator.serviceWorker.addEventListener("message", function (event) {
       if (!event.data) return;
       if (event.data.type === "LIFT_NOTIF_ACTION") {
@@ -3857,9 +4533,6 @@
       } else if (event.data.type === "LIFT_SW_UPDATED") {
         applyPendingReload();
       }
-    });
-    window.addEventListener("liftHandleColdAction", function () {
-      handleColdNotificationAction();
     });
   }
 
@@ -3900,7 +4573,9 @@
       var sheetByShortcut = {
         records: "prs",
         library: "library",
-        backup: "backup"
+        backup: "backup",
+        coach: "coach",
+        feed: "feed"
       };
       if (sheetByShortcut[shortcut]) openSheet(sheetByShortcut[shortcut]);
     } catch (err) {}
@@ -3916,6 +4591,9 @@
       await persistence.forceSnapshot(state, "startup").catch(function () {});
     }
     render();
+    window.__liftHandleBack = handleBackNavigation;
+    syncNativeWidgetEngagement();
+    syncNativeBackConsumer();
     if (runtime.recoveredFrom) toast("Recovered Lift data from " + runtime.recoveredFrom + ".");
     registerServiceWorker();
     bindNotificationActionMessages();
@@ -3933,8 +4611,7 @@
     var drawerBackdrop = document.getElementById("drawer-backdrop");
     if (drawerBackdrop) {
       drawerBackdrop.addEventListener("click", function () {
-        runtime.drawerOpen = false;
-        renderNavDrawer();
+        closeDrawer(true);
       });
     }
     // Swipe from left edge to open the drawer.
@@ -3953,8 +4630,7 @@
       var dx = t.clientX - edgeSwipe.startX;
       var dy = Math.abs(t.clientY - edgeSwipe.startY);
       if (dx > 60 && dx > dy * 1.5) {
-        runtime.drawerOpen = true;
-        renderNavDrawer();
+        openDrawer();
         edgeSwipe = null;
       }
     }, { passive: true });
@@ -3994,7 +4670,11 @@
       sheet.style.transform = "";
     });
     document.addEventListener("visibilitychange", function () {
-      if (document.visibilityState === "visible" && isWorkoutRunning(state.activeDayId)) requestWakeLock();
+      if (document.visibilityState === "visible") {
+        completeRestIfNeeded();
+        refreshTimers();
+        if (isWorkoutRunning(state.activeDayId)) requestWakeLock();
+      }
       if (document.visibilityState !== "visible") releaseWakeLock();
     });
     if (window.matchMedia) {
@@ -4007,6 +4687,8 @@
       });
     }
   }
+
+  if (typeof window !== "undefined") window.__liftHandleBack = handleBackNavigation;
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
@@ -4033,6 +4715,15 @@
       handleClick: handleClick,
       startRest: startRest,
       openSheet: openSheet,
+      closeSheet: closeSheet,
+      handleBackNavigation: handleBackNavigation,
+      freezeAdaptiveTargets: freezeAdaptiveTargets,
+      startWorkout: startWorkout,
+      finishWorkout: finishWorkout,
+      buildNotifSnapshot: buildNotifSnapshot,
+      handleNotifAction: handleNotifAction,
+      toggleSet: toggleSet,
+      didAsPlanned: didAsPlanned,
       getState: function () { return state; },
       getRest: function () { return rest; },
       getRuntime: function () { return runtime; }

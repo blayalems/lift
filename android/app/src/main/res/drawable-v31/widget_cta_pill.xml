@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- M3 Expressive dynamic 1-tap CTA pill (API 31-37). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/widget_v31_cta_bg" />
+    <corners android:radius="999dp" />
+</shape>

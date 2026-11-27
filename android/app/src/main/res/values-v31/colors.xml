@@ -1,7 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Material You / M3 Expressive dynamic tonal tokens (API 31-37) -->
     <color name="widget_background">@android:color/system_neutral1_900</color>
     <color name="widget_background_high">@android:color/system_neutral1_800</color>
+    <color name="widget_outline">@android:color/system_neutral2_700</color>
     <color name="widget_accent">@android:color/system_accent1_100</color>
-    <color name="widget_outline">@android:color/system_neutral1_700</color>
+    <color name="widget_on_accent">@android:color/system_accent1_900</color>
+    <color name="widget_chip_bg">@android:color/system_accent2_800</color>
+    <color name="widget_on_chip">@android:color/system_accent2_100</color>
+    <color name="widget_on_surface">@android:color/system_neutral1_50</color>
+    <color name="widget_on_surface_variant">@android:color/system_neutral2_200</color>
+    <color name="widget_rail_start">@android:color/system_accent1_200</color>
+    <color name="widget_rail_end">@android:color/system_accent2_400</color>
+
+    <!-- Non-night-shadowed dynamic aliases used by drawable-v31 shapes -->
+    <color name="widget_v31_background">@android:color/system_neutral1_900</color>
+    <color name="widget_v31_background_high">@android:color/system_neutral1_800</color>
+    <color name="widget_v31_outline">@android:color/system_neutral2_700</color>
+    <color name="widget_v31_chip_bg">@android:color/system_accent2_800</color>
+    <color name="widget_v31_cta_bg">@android:color/system_accent1_100</color>
+    <color name="widget_v31_rail_start">@android:color/system_accent1_200</color>
+    <color name="widget_v31_rail_end">@android:color/system_accent2_400</color>
 </resources>

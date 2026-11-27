@@ -3,4 +3,17 @@
     <color name="status_bar_light">#FF161616</color>
     <color name="navigation_bar_light">#FF0A0A0A</color>
     <color name="splash_background">#FF0A0A0A</color>
+
+    <!-- v2.0: Material 3 Expressive widget tonal night fallbacks. -->
+    <color name="widget_background">#FF18181B</color>
+    <color name="widget_background_high">#FF242429</color>
+    <color name="widget_outline">#FF3A3A40</color>
+    <color name="widget_accent">#FFEBEBED</color>
+    <color name="widget_on_accent">#FF18181B</color>
+    <color name="widget_chip_bg">#FF2B2B31</color>
+    <color name="widget_on_chip">#FFEBEBED</color>
+    <color name="widget_on_surface">#FFF4F4F7</color>
+    <color name="widget_on_surface_variant">#FFC7C7CC</color>
+    <color name="widget_rail_start">#FFEBEBED</color>
+    <color name="widget_rail_end">#FF7A7A80</color>
 </resources>

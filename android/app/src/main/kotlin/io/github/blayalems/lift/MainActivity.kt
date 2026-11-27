@@ -34,6 +34,23 @@ class MainActivity : AppCompatActivity() {
     private var pendingAction: String? = null
     private var pendingAssetRefreshVersion: Int = 0
     @Volatile private var nativeBridgeReady: Boolean = false
+    @Volatile private var backConsumerActive: Boolean = false
+
+    private val backPressedCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            if (backConsumerActive && ::webView.isInitialized) {
+                dispatchAction("navigate-back")
+                return
+            }
+            if (::webView.isInitialized && webView.canGoBack()) {
+                webView.goBack()
+                syncBackCallbackState()
+                return
+            }
+            isEnabled = false
+            onBackPressedDispatcher.onBackPressed()
+        }
+    }
 
     // File chooser callback held while the system picker is open
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
@@ -85,16 +102,7 @@ class MainActivity : AppCompatActivity() {
             wv.addJavascriptInterface(LiftBridge(this), "LiftAndroid")
             setContentView(wv)
         }
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (::webView.isInitialized && webView.canGoBack()) {
-                    webView.goBack()
-                    return
-                }
-                isEnabled = false
-                onBackPressedDispatcher.onBackPressed()
-            }
-        })
+        onBackPressedDispatcher.addCallback(this, backPressedCallback)
 
         // Buffer any cold-start notification action; flushed in onPageFinished after
         // the JS listener is installed — dispatching here would race the page load.
@@ -107,16 +115,34 @@ class MainActivity : AppCompatActivity() {
 
     fun applySystemBars(theme: String?) {
         val dark = theme == "dark"
-        window.statusBarColor = Color.TRANSPARENT
-        window.navigationBarColor = Color.TRANSPARENT
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            @Suppress("DEPRECATION")
+            window.statusBarColor = Color.TRANSPARENT
+            @Suppress("DEPRECATION")
+            window.navigationBarColor = Color.TRANSPARENT
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            window.isStatusBarContrastEnforced = false
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                @Suppress("DEPRECATION")
+                window.isStatusBarContrastEnforced = false
+            }
             window.isNavigationBarContrastEnforced = false
         }
         WindowInsetsControllerCompat(window, window.decorView).apply {
             isAppearanceLightStatusBars = !dark
             isAppearanceLightNavigationBars = !dark
         }
+    }
+
+    internal fun setBackConsumerActive(active: Boolean) {
+        backConsumerActive = active
+        runOnUiThread { syncBackCallbackState() }
+    }
+
+    private fun syncBackCallbackState() {
+        val canGoBack = ::webView.isInitialized && webView.canGoBack()
+        backPressedCallback.isEnabled = backConsumerActive || canGoBack
     }
 
     private fun isSystemDarkMode(): Boolean =
@@ -135,7 +161,7 @@ class MainActivity : AppCompatActivity() {
         dispatchAction(action)
     }
 
-    override fun onResume()  { super.onResume();  webView.onResume()  }
+    override fun onResume()  { super.onResume();  webView.onResume(); syncBackCallbackState() }
     override fun onPause()   { super.onPause();   webView.onPause()   }
     override fun onDestroy() { super.onDestroy(); webView.destroy()   }
 
@@ -144,10 +170,12 @@ class MainActivity : AppCompatActivity() {
     private fun dispatchAction(action: String) {
         val safe = JSONObject.quote(action)
         webView.post {
-            webView.evaluateJavascript(
-                "if(window.__liftDispatchNativeAction){window.__liftDispatchNativeAction($safe);}else{window.dispatchEvent(new CustomEvent('liftNativeAction',{detail:$safe}));}",
-                null
-            )
+            val script = if (action == "navigate-back") {
+                "if(typeof window.__liftHandleBack==='function'&&window.__liftHandleBack()){}else if(window.__liftDispatchNativeAction){window.__liftDispatchNativeAction($safe);}else{window.dispatchEvent(new CustomEvent('liftNativeAction',{detail:$safe}));}"
+            } else {
+                "if(window.__liftDispatchNativeAction){window.__liftDispatchNativeAction($safe);}else{window.dispatchEvent(new CustomEvent('liftNativeAction',{detail:$safe}));}"
+            }
+            webView.evaluateJavascript(script, null)
         }
     }
 
@@ -189,16 +217,38 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun isTrustedOrigin(uri: Uri?): Boolean {
+        if (uri == null) return false
+        val path = uri.path
+        return uri.scheme == "https" && uri.host == "blayalems.github.io" && (uri.port == -1 || uri.port == 443) &&
+            (path.isNullOrEmpty() || path == "/" || path == "/lift" || path.startsWith("/lift/"))
+    }
+
     // ── WebView clients ────────────────────────────────────────────────────────
 
     private inner class LiftWebViewClient : WebViewClient() {
-        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = false
+        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+            val target = request.url
+            if (isTrustedOrigin(target)) return false
+            if (request.isForMainFrame && (target.scheme == "https" || target.scheme == "http")) {
+                runCatching { startActivity(Intent(Intent.ACTION_VIEW, target)) }
+            }
+            return true
+        }
+
+        override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+            super.doUpdateVisitedHistory(view, url, isReload)
+            syncBackCallbackState()
+        }
 
         override fun onPageFinished(view: WebView, url: String) {
             super.onPageFinished(view, url)
+            val parsed = runCatching { Uri.parse(url) }.getOrNull()
+            if (!isTrustedOrigin(parsed)) return
             view.evaluateJavascript("""
                 (function(){
-                    if(window.__liftNativeHooked)return;
+                    window.LIFT_ANDROID_SDK=${Build.VERSION.SDK_INT};
+                    if(window.__liftNativeHooked)return window.LIFT_IS_NATIVE === true;
                     window.__liftNativeHooked=true;
                     window.LIFT_IS_NATIVE=true;
                     window.dispatchEvent(new Event('liftNativeReady'));
@@ -213,6 +263,7 @@ class MainActivity : AppCompatActivity() {
                     return window.LIFT_IS_NATIVE === true;
                 })();
             """.trimIndent()) { nativeBridgeReady = it == "true" }
+            syncBackCallbackState()
 
             if (pendingAssetRefreshVersion > 0) {
                 val refreshVersion = pendingAssetRefreshVersion
@@ -235,7 +286,7 @@ class MainActivity : AppCompatActivity() {
 
     private inner class LiftChromeClient : WebChromeClient() {
         override fun onPermissionRequest(request: PermissionRequest) {
-            if (request.origin.toString().startsWith("https://blayalems.github.io")) {
+            if (isTrustedOrigin(request.origin)) {
                 request.grant(request.resources)
             } else {
                 request.deny()

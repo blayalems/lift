@@ -35,7 +35,7 @@
   }
 
   function resolveVersion(ctx) {
-    return (ctx && ctx.appVersion) || window.LIFT_APP_VERSION || "1.9.1";
+    return (ctx && ctx.appVersion) || window.LIFT_APP_VERSION || "2.0.0";
   }
 
   function csvCell(value) {
@@ -158,30 +158,40 @@
     }
   }
 
+  function iconOrFallback(ctx, name, fallbackSvg) {
+    if (ctx && typeof ctx.icon === "function") return ctx.icon(name);
+    return fallbackSvg;
+  }
+
   function renderHealthExport(ctx) {
+    var downloadIcon = iconOrFallback(ctx, "download", '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>');
+    var appleIcon = iconOrFallback(ctx, "heart", '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>');
+    var googleIcon = iconOrFallback(ctx, "rings", '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/></svg>');
+    var stravaIcon = iconOrFallback(ctx, "chart", '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16"/><path d="m7 15 4-4 3 3 5-7"/></svg>');
+    var jsonIcon = '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4H6a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-2"/></svg>';
     var html = '<div class="sheet-grid">';
     html += '<div class="overview-card"><strong>Manual export</strong>' +
       '<p>Direct sync with Apple Health and Google Fit requires their native SDKs — instead, Lift hands you a file in the right shape. Pair with apps like Health Auto Export or FitnessSyncer to import.</p></div>';
 
     html += '<button class="health-target-row" data-action="health-export" data-target="apple">' +
-      '<div class="health-icon" data-target="apple">&#127822;</div>' +
+      '<div class="health-icon" data-target="apple">' + appleIcon + '</div>' +
       '<div class="health-meta"><strong>Apple Health (CSV)</strong><span>Health Auto Export compatible workout log.</span></div>' +
-      ctx.icon("download") +
+      downloadIcon +
       '</button>';
     html += '<button class="health-target-row" data-action="health-export" data-target="google">' +
-      '<div class="health-icon" data-target="google">&#9774;</div>' +
+      '<div class="health-icon" data-target="google">' + googleIcon + '</div>' +
       '<div class="health-meta"><strong>Google Fit (JSON)</strong><span>ActivitySegment shape for FitnessSyncer and Tasker.</span></div>' +
-      ctx.icon("download") +
+      downloadIcon +
       '</button>';
     html += '<button class="health-target-row" data-action="health-export" data-target="strava">' +
-      '<div class="health-icon" data-target="strava">&#9881;</div>' +
+      '<div class="health-icon" data-target="strava">' + stravaIcon + '</div>' +
       '<div class="health-meta"><strong>Strava manual log</strong><span>Weight training entries you can post-process into activities.</span></div>' +
-      ctx.icon("download") +
+      downloadIcon +
       '</button>';
     html += '<button class="health-target-row" data-action="health-export" data-target="generic">' +
-      '<div class="health-icon" data-target="generic">{ }</div>' +
+      '<div class="health-icon" data-target="generic">' + jsonIcon + '</div>' +
       '<div class="health-meta"><strong>Full JSON dump</strong><span>Everything Lift has: settings, days, PRs, body data.</span></div>' +
-      ctx.icon("download") +
+      downloadIcon +
       '</button>';
     html += '<p class="section-sub">Files land in Downloads. Lift never uploads on its own.</p>';
     html += '</div>';

@@ -107,7 +107,7 @@
       '<span><span class="legend-mark">?</span>Unknown</span>' +
       '<span><span class="legend-mark">!</span>Missed</span>' +
       '<span><span class="legend-mark">\u2013</span>Rest</span>' +
-      '<span><span class="dot" style="background:transparent;border:2px solid var(--md-primary)"></span>Today</span>' +
+      '<span><span class="dot dot-today"></span>Today</span>' +
       '</div></div>';
 
     // Summary metrics for the visible month.
