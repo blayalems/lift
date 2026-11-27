@@ -4,14 +4,14 @@ plugins {
 
 android {
     namespace = "io.github.blayalems.lift"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "io.github.blayalems.lift"
         minSdk = 26
-        targetSdk = 36
-        versionCode = 25
-        versionName = "1.9.1"
+        targetSdk = 37
+        versionCode = 26
+        versionName = "2.0.0"
     }
 
     signingConfigs {

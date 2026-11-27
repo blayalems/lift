@@ -29,8 +29,8 @@ jobs:
           # GitHub-hosted runners ship the Android SDK at $ANDROID_SDK_ROOT.
           # Install the exact platform + build-tools the project needs.
           yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
-            "platforms;android-36" \
-            "build-tools;36.0.0" \
+            "platforms;android-37" \
+            "build-tools;37.0.0" \
             "platform-tools" 2>&1 | tail -5
 
       - name: Setup Gradle 9.3.1
@@ -69,8 +69,8 @@ jobs:
       - name: Create latest-apk release
         run: |
           gh release create latest-apk lift-android-debug.apk \
-            --title "Lift Android APK — latest build" \
-            --notes "## Lift — Android Debug APK
+            --title "Lift v2.0.0 — Android 17 Debug APK" \
+            --notes "## Lift v2.0.0 — Android 17 Debug APK
 
           Built from commit \`${{ github.sha }}\`
 
@@ -79,10 +79,11 @@ jobs:
           2. Allow installs from your browser or file manager
           3. Download \`lift-android-debug.apk\` below and tap **Install**
 
-          ### What this APK does
-          - Opens the Lift PWA in a full-screen native wrapper
-          - Live Update notification during workouts: coloured status-bar chip, accent card, action buttons (−15 s / Skip rest / +15 s / Logged it / Finish)
-          - Notification actions feed back into the PWA in real time
+          ### What's new in Lift v2.0.0
+          - **Android 17 (API 37) ready**: Adaptive large-screen/foldable resizability, edge-to-edge system bars, and predictive back sheet handling
+          - **Enhanced Live Updates**: Phase-aware ProgressStyle workout chips (active sets, rest countdown, rest-done emerald, complete gold) with motivational quote subtext and quick actions (−15 s / Skip rest / +15 s / Logged it / Finish)
+          - **Material 3 Expressive Widgets**: Home screen and lock screen keyguard widgets synced with live streak, level, and anti-hiatus cues
+          - **Offline AI Coach & Momentum Engine**: Zero-API local coaching, XP/quests, Streak Freeze Shields, Mystery Crates, and scheduled habit reminder nudges
 
           > Debug build — safe to sideload; not Play Store signed." \
             --latest
