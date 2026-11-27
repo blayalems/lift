@@ -5,39 +5,71 @@
 
   var TAG = "lift-workout";
   var pendingPermission = null;
+  var cleanupRationale = null;
 
   function isSupported() {
+    if (typeof window === "undefined" || typeof navigator === "undefined" || typeof location === "undefined") {
+      return false;
+    }
+    if (window.LIFT_IS_NATIVE) return false;
     return !!(
       "serviceWorker" in navigator &&
+      navigator.serviceWorker &&
       "Notification" in window &&
-      location.protocol.indexOf("http") === 0
+      window.Notification &&
+      String(location.protocol || "").indexOf("http") === 0
     );
+  }
+
+  function requestNotificationPermission() {
+    if (typeof window === "undefined" || !window.Notification || typeof window.Notification.requestPermission !== "function") {
+      return Promise.resolve("denied");
+    }
+    return new Promise(function (resolve) {
+      var settled = false;
+      function finish(permission) {
+        if (settled) return;
+        settled = true;
+        resolve(permission || window.Notification.permission || "default");
+      }
+      try {
+        var result = window.Notification.requestPermission(finish);
+        if (result && typeof result.then === "function") {
+          result.then(finish, function () { finish("default"); });
+        } else if (typeof result === "string") {
+          finish(result);
+        } else if (window.Notification.requestPermission.length === 0) {
+          finish(window.Notification.permission || "default");
+        }
+      } catch (err) {
+        finish("default");
+      }
+    });
   }
 
   function ensurePermission(ctx) {
     if (!isSupported()) return Promise.resolve("denied");
     var settings = ctx && ctx.state && ctx.state.settings;
-    if (settings && settings.workoutNotifications === false) return Promise.resolve(Notification.permission);
-    if (settings && settings.notifSkipped && Notification.permission === "default") return Promise.resolve("default");
-    if (Notification.permission === "granted" || Notification.permission === "denied") {
-      return Promise.resolve(Notification.permission);
+    var currentPerm = window.Notification.permission || "default";
+    if (settings && settings.workoutNotifications === false) return Promise.resolve(currentPerm);
+    if (settings && settings.notifSkipped && currentPerm === "default") return Promise.resolve("default");
+    if (currentPerm === "granted" || currentPerm === "denied") {
+      return Promise.resolve(currentPerm);
     }
     if (pendingPermission) return pendingPermission;
 
     pendingPermission = showPermissionRationale(ctx).then(function (choice) {
       if (choice !== "allow") {
         setOptIn(ctx, false, true);
-        return Notification.permission;
+        return (window.Notification && window.Notification.permission) || "default";
       }
-      try {
-        return Notification.requestPermission().then(function (permission) {
-          setOptIn(ctx, permission === "granted", permission !== "granted");
-          return permission;
-        });
-      } catch (err) {
-        setOptIn(ctx, false, true);
-        return "default";
-      }
+      return requestNotificationPermission().then(function (permission) {
+        setOptIn(ctx, permission === "granted", permission !== "granted");
+        return permission;
+      });
+    }).catch(function () {
+      setOptIn(ctx, false, true);
+      return "default";
     }).finally(function () {
       pendingPermission = null;
     });
@@ -61,13 +93,17 @@
   }
 
   function canPost() {
-    return isSupported() && Notification.permission === "granted";
+    return isSupported() && window.Notification.permission === "granted";
   }
 
   function post(type, payload) {
-    return navigator.serviceWorker.ready.then(function (registration) {
-      var worker = navigator.serviceWorker.controller || registration.active || registration.waiting || registration.installing;
-      if (!worker) return false;
+    var sw = typeof navigator !== "undefined" ? navigator.serviceWorker : null;
+    if (!sw || !sw.ready || typeof sw.ready.then !== "function") {
+      return Promise.resolve(false);
+    }
+    return sw.ready.then(function (registration) {
+      var worker = sw.controller || (registration && (registration.active || registration.waiting || registration.installing));
+      if (!worker || typeof worker.postMessage !== "function") return false;
       worker.postMessage({ type: type, payload: payload });
       return true;
     }).catch(function () {
@@ -153,7 +189,10 @@
   }
 
   function showPermissionRationale(ctx) {
-    var overlay = document.getElementById("notification-permission");
+    if (typeof cleanupRationale === "function") {
+      cleanupRationale("skip");
+    }
+    var overlay = typeof document !== "undefined" ? document.getElementById("notification-permission") : null;
     if (!overlay) return Promise.resolve("allow");
 
     overlay.innerHTML = "";
@@ -201,14 +240,35 @@
     overlay.dataset.open = "true";
 
     return new Promise(function (resolve) {
-      function onClick(event) {
-        var button = event.target.closest("[data-notif-permission]");
-        if (!button) return;
+      var settled = false;
+      function finish(choice) {
+        if (settled) return;
+        settled = true;
         overlay.removeEventListener("click", onClick);
+        if (typeof document !== "undefined") document.removeEventListener("keydown", onKeydown);
         overlay.dataset.open = "false";
-        resolve(button.dataset.notifPermission || "skip");
+        if (cleanupRationale === finish) cleanupRationale = null;
+        resolve(choice || "skip");
       }
+      function onClick(event) {
+        if (event.target === overlay) {
+          finish("skip");
+          return;
+        }
+        var button = event.target && event.target.closest ? event.target.closest("[data-notif-permission]") : null;
+        if (!button) return;
+        finish(button.dataset.notifPermission || "skip");
+      }
+      function onKeydown(event) {
+        if (event.key === "Escape") {
+          if (typeof event.preventDefault === "function") event.preventDefault();
+          finish("skip");
+        }
+      }
+      cleanupRationale = finish;
       overlay.addEventListener("click", onClick);
+      if (typeof document !== "undefined") document.addEventListener("keydown", onKeydown);
+      if (typeof allowBtn.focus === "function") allowBtn.focus();
     });
   }
 
@@ -250,4 +310,6 @@
     isSupported: isSupported,
     buildPayload: buildPayload
   };
+
+  if (typeof module !== "undefined" && module.exports) module.exports = window.LIFT_FEATURES.notifications;
 })();

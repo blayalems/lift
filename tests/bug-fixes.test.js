@@ -827,3 +827,367 @@ describe("Lift v1.9 bug-fixer regressions", () => {
     expect(document.querySelector('[data-action="undo-last"]')).toBeNull();
   });
 });
+
+describe("Lift v2.0 Wave 1 bug-fixer regressions", () => {
+  const origSpeechSynthesis = window.speechSynthesis;
+  const origUtterance = window.SpeechSynthesisUtterance;
+  const origNotification = window.Notification;
+  const origServiceWorker = navigator.serviceWorker;
+  const origIndexedDB = window.indexedDB;
+  const origFile = global.File;
+  const origLiftNative = window.LIFT_IS_NATIVE;
+  const origLiftAndroid = window.LiftAndroid;
+
+  beforeEach(() => {
+    jest.resetModules();
+    localStorage.clear();
+    window.LIFT_FEATURES = {};
+    delete window.LIFT_IS_NATIVE;
+    delete window.LiftAndroid;
+    document.body.innerHTML = `
+      <div id="app"></div>
+      <div id="toast-root"></div>
+      <div id="sheet"></div>
+      <div id="sheet-backdrop"></div>
+      <div id="summary-overlay"></div>
+      <nav id="bottom-nav"></nav>
+      <button id="fab"></button>
+      <aside id="nav-drawer"></aside>
+      <div id="drawer-backdrop"></div>
+      <div id="notification-permission" data-open="false"></div>
+    `;
+    window.requestAnimationFrame = (cb) => cb();
+    global.requestAnimationFrame = window.requestAnimationFrame;
+    window.scrollTo = () => {};
+    window.matchMedia = () => ({ matches: false, addEventListener: () => {} });
+    window.confirm = () => true;
+  });
+
+  afterEach(() => {
+    if (origSpeechSynthesis === undefined) delete window.speechSynthesis;
+    else Object.defineProperty(window, "speechSynthesis", { configurable: true, value: origSpeechSynthesis });
+    if (origUtterance === undefined) delete window.SpeechSynthesisUtterance;
+    else Object.defineProperty(window, "SpeechSynthesisUtterance", { configurable: true, value: origUtterance });
+    if (origNotification === undefined) delete window.Notification;
+    else Object.defineProperty(window, "Notification", { configurable: true, value: origNotification });
+    if (origServiceWorker === undefined) delete navigator.serviceWorker;
+    else Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: origServiceWorker });
+    if (origIndexedDB === undefined) delete window.indexedDB;
+    else Object.defineProperty(window, "indexedDB", { configurable: true, value: origIndexedDB });
+    global.File = origFile;
+    if (origLiftNative === undefined) delete window.LIFT_IS_NATIVE;
+    else window.LIFT_IS_NATIVE = origLiftNative;
+    if (origLiftAndroid === undefined) delete window.LiftAndroid;
+    else window.LiftAndroid = origLiftAndroid;
+    jest.restoreAllMocks();
+  });
+
+  test("rings: uses UTC week/month bounds, handles zero/negative goals safely, escapes metric HTML, and handles compressed w21", () => {
+    const rings = require("../features/rings.js");
+    const days = [
+      { id: "2026-11-23", exercises: [] },
+      { id: "2026-11-24", exercises: [] },
+      { id: "2026-11-27", exercises: [{ name: "Leg Press" }] },
+      { id: "2026-11-28", exercises: [{ name: "Incline DB Press" }] },
+      { id: "2026-11-29", exercises: [] },
+      { id: "2026-12-28", exercises: [{ name: "Leg Press" }] },
+      { id: "2027-01-01", exercises: [{ name: "Incline DB Press" }] }
+    ];
+    const state = {
+      goals: { weeklySessions: 0, weeklyVolumeKg: -500, dailySteps: Number.NaN, monthlyVolumeKg: 0 },
+      steps: { "2026-11-27": { count: 4000 } },
+      days: {
+        "2026-11-23": { finishedAt: 1, completed: {} },
+        "2026-11-27": { finishedAt: 1, completed: { "0.0": { weight: 75, reps: 10 } } },
+        "2026-12-28": { finishedAt: 1, completed: { "0.0": { weight: 100, reps: 10 } } },
+        "2027-01-01": { finishedAt: 1, completed: { "0.0": { weight: 25, reps: 10 } } }
+      }
+    };
+    const ctx = {
+      state,
+      defaultGoals: { weeklySessions: 6, weeklyVolumeKg: 10000, dailySteps: 7000, monthlyVolumeKg: 40000 },
+      allDays: () => days.map((day) => ({ day })),
+      completedVolume: (day) => Object.values((state.days[day.id] || {}).completed || {}).reduce((s, x) => s + x.weight * x.reps, 0),
+      completedSetCount: (day) => Object.values((state.days[day.id] || {}).completed || {}).filter((x) => x.reps > 0).length,
+      kgToDisplay: (v) => v,
+      cleanNumber: (v) => String(Math.round(Number(v) || 0)),
+      unitLabel: () => '<img src=x onerror="alert(1)">',
+      cycleAdherence: () => 100,
+      trainingStreak: () => 2,
+      todayId: () => "2026-11-27",
+      icon: () => "<svg/>",
+      escapeHtml: (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]))
+    };
+
+    const w21 = rings.metrics(ctx, "2026-11-27");
+    expect(w21.train).toEqual({ value: 1, goal: 0, pct: 0 });
+    expect(w21.volume).toEqual({ value: 750, goal: 0, pct: 0 });
+    expect(w21.move).toEqual({ value: 4000, goal: 7000, pct: 4000 / 7000 });
+    expect(w21.monthlyVolume.pct).toBe(0);
+
+    // Year rollover week (Dec 28, 2026 - Jan 3, 2027) groups both into weekly volume while splitting monthly volume.
+    const rollover = rings.metrics(ctx, "2027-01-01");
+    expect(rollover.train.value).toBe(2);
+    expect(rollover.volume.value).toBe(1250);
+    expect(rollover.monthlyVolume.value).toBe(250);
+
+    const html = rings.renderRings(ctx);
+    expect(html).not.toContain("<img src=x");
+    expect(html).toContain("&lt;img src=x");
+    expect(html).not.toContain("NaN");
+  });
+
+  test("notifications: guards missing/null APIs, native WebView, callback requestPermission, and rationale listener cleanup", async () => {
+    const notifications = require("../features/notifications.js");
+
+    // Null serviceWorker and null Notification even when keys exist on navigator/window
+    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: null });
+    Object.defineProperty(window, "Notification", { configurable: true, value: null });
+    expect(notifications.isSupported()).toBe(false);
+    await expect(notifications.ensurePermission({ state: { settings: {} } })).resolves.toBe("denied");
+    await expect(notifications.show({ phase: "resting" })).resolves.toBe(false);
+    await expect(notifications.clear()).resolves.toBe(false);
+
+    // Native WebView skips web notifications even when browser APIs exist
+    const postMessage = jest.fn();
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: { controller: { postMessage }, ready: Promise.resolve({ active: { postMessage } }) }
+    });
+    Object.defineProperty(window, "Notification", {
+      configurable: true,
+      value: { permission: "granted", requestPermission: jest.fn() }
+    });
+    window.LIFT_IS_NATIVE = true;
+    expect(notifications.isSupported()).toBe(false);
+    await expect(notifications.clear()).resolves.toBe(false);
+    expect(postMessage).not.toHaveBeenCalled();
+    delete window.LIFT_IS_NATIVE;
+
+    // Callback-style requestPermission + Escape cleanup in rationale dialog
+    const ctx = { state: { settings: { workoutNotifications: true, notifSkipped: false } }, saveState: jest.fn() };
+    Object.defineProperty(window, "Notification", {
+      configurable: true,
+      value: {
+        permission: "default",
+        requestPermission: (cb) => {
+          if (typeof cb === "function") cb("granted");
+          return undefined;
+        }
+      }
+    });
+    const permPromise = notifications.ensurePermission(ctx);
+    const overlay = document.getElementById("notification-permission");
+    expect(overlay.dataset.open).toBe("true");
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await expect(permPromise).resolves.toBe("default");
+    expect(overlay.dataset.open).toBe("false");
+
+    // Allow flow with callback-only requestPermission
+    ctx.state.settings.workoutNotifications = true;
+    ctx.state.settings.notifSkipped = false;
+    const allowPromise = notifications.ensurePermission(ctx);
+    expect(overlay.dataset.open).toBe("true");
+    overlay.querySelector('[data-notif-permission="allow"]').click();
+    await expect(allowPromise).resolves.toBe("granted");
+    expect(ctx.state.settings.workoutNotifications).toBe(true);
+  });
+
+  test("voice: guards null speechSynthesis, blank speech, and missing cancel method", () => {
+    const voice = require("../features/voice.js");
+    Object.defineProperty(window, "speechSynthesis", { configurable: true, value: null });
+    Object.defineProperty(window, "SpeechSynthesisUtterance", { configurable: true, value: function () {} });
+    expect(voice.supported()).toBe(false);
+    expect(voice.speak("Test")).toBe(false);
+    expect(() => voice.speakRestDone({ state: { settings: { voiceRestCue: true } } })).not.toThrow();
+
+    const speak = jest.fn();
+    Object.defineProperty(window, "speechSynthesis", { configurable: true, value: { speak } });
+    Object.defineProperty(window, "SpeechSynthesisUtterance", {
+      configurable: true,
+      value: function Utterance(text) { this.text = text; }
+    });
+    expect(voice.supported()).toBe(true);
+    expect(voice.speak("   ")).toBe(false);
+    expect(voice.speak("Rest complete", { rate: 1.1, volume: 2 })).toBe(true);
+    expect(speak).toHaveBeenCalledTimes(1);
+    expect(speak.mock.calls[0][0].volume).toBe(1);
+  });
+
+  test("records, volume, cloud, persistence, and history edge cases", async () => {
+    const records = require("../features/records.js");
+    const volume = require("../features/volume.js");
+    const cloud = require("../features/cloud.js");
+    const persistence = require("../features/persistence.js");
+    const history = require("../features/history.js");
+
+    expect(records.epley(100, 0)).toBe(0);
+    expect(records.epley(100, 1)).toBe(100);
+    expect(records.evaluateSet({ state: { days: {} }, allDays: () => [] }, { name: "Leg Press" }, { weight: 100, reps: 0 }, "2026-11-27", "0.0")).toMatchObject({
+      type: "none", isPr: false
+    });
+    const chartHtml = records.renderOneRmChart({
+      state: {
+        days: {
+          "2026-11-28": { completed: { "0.0": { weight: 90, reps: 10 } } },
+          "2026-11-27": { completed: { "0.0": { weight: 75, reps: 10 } } }
+        }
+      },
+      allDays: () => [
+        { day: { id: "2026-11-28", exercises: [{ name: "Leg Press" }] } },
+        { day: { id: "2026-11-27", exercises: [{ name: "Leg Press" }] } }
+      ],
+      kgToDisplay: (v) => v
+    }, "Leg Press");
+    // 2026-11-27 (lower 1RM -> higher Y coordinate) must come first on the polyline
+    const pts = chartHtml.match(/points="([^"]+)"/)[1].split(" ").map((p) => p.split(",").map(Number));
+    expect(pts[0][1]).toBeGreaterThan(pts[1][1]);
+
+    // volume: missing reps is not a hard set, unknown muscleGroup doesn't introduce NaN
+    expect(volume.isHardSet({ weight: 50 }, {}, "Load")).toBe(false);
+    const vol = volume.rangeMetrics({
+      state: { days: { "2026-11-27": { completed: { "0.0": { reps: 10, weight: 50 }, "0.1": { weight: 50 } } } } },
+      allDays: () => [{ week: { phase: "Reentry" }, day: { id: "2026-11-27", exercises: [{ name: "Weird", muscleGroups: { nonexistentGroup: 1, quads: 1 } }] } }]
+    }, "2026-11-27", "2026-11-27");
+    expect(vol.quads).toBe(1);
+    expect(vol.nonexistentGroup).toBeUndefined();
+    expect(volume.weeklyMetrics({ state: { days: {} }, allDays: () => [] }, "bad-date").weekStart).toBe("");
+
+    // persistence: handles null indexedDB even when property exists on window
+    Object.defineProperty(window, "indexedDB", { configurable: true, value: null });
+    const meta = await persistence.forceSnapshot({ v: 4, days: {} }, "null-idb");
+    expect(meta.storage).toBe("local-fallback");
+    await expect(persistence.clearAll()).resolves.toBe(false);
+
+    // cloud: restoreFromFile null guard + shareBackup without File constructor
+    const cb = jest.fn();
+    cloud.restoreFromFile({}, null, cb);
+    expect(cb).toHaveBeenCalledWith(expect.objectContaining({ valid: false }));
+    global.File = undefined;
+    global.URL = global.URL || {};
+    URL.createObjectURL = jest.fn(() => "blob:test");
+    URL.revokeObjectURL = jest.fn();
+    await expect(cloud.shareBackup({ state: { v: 4, days: {} }, todayId: () => "2026-11-27", toast: jest.fn() })).resolves.toBe(true);
+
+    // history: markStatus away from reconstructed updates reconstructedCount; w21 rest days resolve "rest"
+    const hState = { days: {}, history: { reconstructedCount: 0 } };
+    history.markReconstructed(hState, "2026-11-27", "Full Body", "Test");
+    expect(hState.history.reconstructedCount).toBe(1);
+    history.markStatus(hState, "2026-11-27", "missed", "Sick");
+    expect(hState.history.reconstructedCount).toBe(0);
+    expect(history.resolveStatus({ id: "2026-11-23", exercises: [] }, {}, "2026-11-27")).toBe("rest");
+  });
+
+  test("app.js: eliminates idle 1Hz notification churn, respects input clicks, closes drawer/summary on Escape, and isolates undo-last", async () => {
+    const clearWorkout = jest.fn();
+    const onWorkoutState = jest.fn();
+    window.LIFT_IS_NATIVE = true;
+    window.LiftAndroid = { clearWorkout, onWorkoutState };
+    Object.defineProperty(window, "speechSynthesis", { configurable: true, value: null });
+
+    let tickFn = null;
+    const origSetInterval = global.setInterval;
+    const origDocAdd = document.addEventListener.bind(document);
+    const origWinAdd = window.addEventListener.bind(window);
+    const docListeners = [];
+    const winListeners = [];
+    const intervals = [];
+    document.addEventListener = (type, fn, opts) => {
+      docListeners.push([type, fn, opts]);
+      return origDocAdd(type, fn, opts);
+    };
+    window.addEventListener = (type, fn, opts) => {
+      winListeners.push([type, fn, opts]);
+      return origWinAdd(type, fn, opts);
+    };
+    global.setInterval = (fn, ms) => {
+      if (ms === 1000) tickFn = fn;
+      const id = origSetInterval(fn, ms);
+      intervals.push(id);
+      return id;
+    };
+
+    window.LIFT_PLAN = makePlan();
+    localStorage.setItem("lift.v3.state", JSON.stringify({
+      v: 4,
+      settings: { voiceRestCue: true, workoutNotifications: true },
+      days: { "2026-11-23": { readiness: 8 } }
+    }));
+
+    require("../features/state.js");
+    require("../features/history.js");
+    require("../features/records.js");
+    require("../features/progression.js");
+    require("../features/strength.js");
+    require("../features/voice.js");
+    require("../features/notifications.js");
+    require("../features/summary.js");
+
+    const appSource = readSource("app.js");
+    const fn = new Function("module", appSource);
+    fn(undefined);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    try {
+      // Idle 1s ticks must NOT repeatedly invoke LiftAndroid.clearWorkout()
+      clearWorkout.mockClear();
+      tickFn();
+      tickFn();
+      tickFn();
+      expect(clearWorkout).not.toHaveBeenCalled();
+
+      // Drawer opens, traps focus / sets aria-hidden, and closes on Escape
+      document.querySelector('[data-action="open-drawer"]').click();
+      const drawer = document.getElementById("nav-drawer");
+      expect(drawer.dataset.open).toBe("true");
+      expect(drawer.getAttribute("aria-hidden")).toBe("false");
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      expect(drawer.dataset.open).toBe("false");
+      expect(drawer.getAttribute("aria-hidden")).toBe("true");
+
+      // voiceRestCue is disabled in Settings when speechSynthesis is null
+      document.querySelector('[data-action="open-drawer"]').click();
+      document.querySelector('[data-action="drawer-open-sheet"][data-sheet="settings"]').click();
+      const voiceBtn = document.querySelector('[data-setting="voiceRestCue"]');
+      expect(voiceBtn.disabled).toBe(true);
+      document.querySelector('[data-action="close-sheet"]').click();
+
+      // Clicking form controls with data-action must NOT call preventDefault
+      const rirSelect = document.querySelector('select[data-action="set-rir"]');
+      const rirClick = new MouseEvent("click", { bubbles: true, cancelable: true });
+      rirSelect.dispatchEvent(rirClick);
+      expect(rirClick.defaultPrevented).toBe(false);
+
+      // Undo-last only shows on the logged day and not when switching to another day
+      document.querySelector('[data-action="toggle-set"][data-ex="0"][data-set="0"]').click();
+      expect(document.querySelector('[data-action="undo-last"]')).not.toBeNull();
+      document.querySelector('[data-action="select-week"][data-week="w25"]').click();
+      expect(document.querySelector('[data-action="undo-last"]')).toBeNull();
+      document.querySelector('[data-action="select-week"][data-week="w21"]').click();
+      expect(document.querySelector('[data-action="undo-last"]')).not.toBeNull();
+
+      // Clicking a rest preset updates timer text immediately
+      const presetBtn = document.querySelector('[data-action="rest-preset"][data-sec="180"]');
+      presetBtn.click();
+      expect(document.querySelector("[data-rest-time]").textContent).toBe("3:00");
+
+      // Finishing workout clears once, opens summary overlay, Escape dismisses it, and subsequent idle ticks don't re-clear
+      clearWorkout.mockClear();
+      document.querySelector('[data-action="finish-workout"]').click();
+      expect(clearWorkout).toHaveBeenCalledTimes(1);
+      expect(document.getElementById("summary-overlay").dataset.open).toBe("true");
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      expect(document.getElementById("summary-overlay").dataset.open).toBe("false");
+      tickFn();
+      tickFn();
+      expect(clearWorkout).toHaveBeenCalledTimes(1);
+    } finally {
+      intervals.forEach((id) => clearInterval(id));
+      docListeners.forEach(([t, handler, opts]) => document.removeEventListener(t, handler, opts));
+      winListeners.forEach(([t, handler, opts]) => window.removeEventListener(t, handler, opts));
+      document.addEventListener = origDocAdd;
+      window.addEventListener = origWinAdd;
+      global.setInterval = origSetInterval;
+    }
+  });
+});

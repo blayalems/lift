@@ -58,7 +58,7 @@
   }
 
   function isHardSet(set, exercise, phase) {
-    if (!set || Number(set.reps) <= 0 || set.warmup === true || set.hardSet === false) return false;
+    if (!set || !(Number(set.reps) > 0) || set.warmup === true || set.hardSet === false) return false;
     if (set.rir != null && Number(set.rir) > 4) return false;
     if (exercise && exercise.warmup === true) return false;
     return true;
@@ -77,23 +77,38 @@
     return out;
   }
 
+  function parseUtcDate(dateId) {
+    var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateId || ""));
+    if (!match) return null;
+    var y = Number(match[1]);
+    var m = Number(match[2]);
+    var d = Number(match[3]);
+    var dt = new Date(Date.UTC(y, m - 1, d));
+    if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+    return dt;
+  }
+
   function dateAdd(dateId, days) {
-    var date = new Date(dateId + "T00:00:00Z");
+    var date = parseUtcDate(dateId);
+    if (!date) return "";
     date.setUTCDate(date.getUTCDate() + days);
     return date.toISOString().slice(0, 10);
   }
 
   function startOfWeek(dateId) {
-    var date = new Date(dateId + "T00:00:00Z");
+    var date = parseUtcDate(dateId);
+    if (!date) return "";
     date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
     return date.toISOString().slice(0, 10);
   }
 
   function rangeMetrics(ctx, start, end) {
     var metrics = emptyMetrics();
-    (ctx.allDays ? ctx.allDays() : []).forEach(function (entry) {
-      if (!entry || !entry.day || entry.day.id < start || entry.day.id > end) return;
-      var ds = (ctx.state.days || {})[entry.day.id] || {};
+    if (!start || !end) return metrics;
+    var stateDays = (ctx && ctx.state && ctx.state.days) || {};
+    (ctx && ctx.allDays ? ctx.allDays() : []).forEach(function (entry) {
+      if (!entry || !entry.day || !entry.day.id || entry.day.id < start || entry.day.id > end) return;
+      var ds = stateDays[entry.day.id] || {};
       if (ds.status === "reconstructed" && !Object.keys(ds.completed || {}).length) return;
       var phase = entry.week && entry.week.phase;
       (entry.day.exercises || []).forEach(function (exercise, exIndex) {
@@ -104,6 +119,7 @@
           var set = ds.completed[key];
           if (!isHardSet(set, exercise, phase)) return;
           Object.keys(allocation).forEach(function (group) {
+            if (!Object.prototype.hasOwnProperty.call(metrics, group)) return;
             metrics[group] += allocation[group] * factor;
           });
         });
@@ -114,8 +130,11 @@
   }
 
   function weeklyMetrics(ctx, referenceDate) {
-    var today = referenceDate || ctx.todayId();
+    var today = referenceDate || (ctx && typeof ctx.todayId === "function" && ctx.todayId()) || "";
     var currentStart = startOfWeek(today);
+    if (!currentStart) {
+      return { current: emptyMetrics(), last: emptyMetrics(), average4: emptyMetrics(), weekStart: "" };
+    }
     var current = rangeMetrics(ctx, currentStart, dateAdd(currentStart, 6));
     var lastStart = dateAdd(currentStart, -7);
     var last = rangeMetrics(ctx, lastStart, dateAdd(lastStart, 6));

@@ -3,8 +3,22 @@
 
   var root = window.LIFT_FEATURES = window.LIFT_FEATURES || {};
 
+  function fallbackEscapeHtml(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, function (ch) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[ch];
+    });
+  }
+
+  function esc(ctx, value) {
+    return ctx && typeof ctx.escapeHtml === "function" ? ctx.escapeHtml(value) : fallbackEscapeHtml(value);
+  }
+
   function epley(weight, reps) {
-    return Number(weight || 0) * (1 + Number(reps || 0) / 30);
+    var w = Number(weight || 0);
+    var r = Number(reps || 0);
+    if (!(r > 0) || !Number.isFinite(w) || !Number.isFinite(r)) return 0;
+    if (r === 1) return w;
+    return w * (1 + r / 30);
   }
 
   function normalize(name) {
@@ -17,12 +31,13 @@
 
   function performances(ctx, exerciseName, beforeDate, exclude) {
     var rows = [];
-    (ctx.allDays ? ctx.allDays() : []).forEach(function (entry) {
-      if (!entry || !entry.day || beforeDate && entry.day.id > beforeDate) return;
-      var ds = (ctx.state.days || {})[entry.day.id] || {};
+    var stateDays = (ctx && ctx.state && ctx.state.days) || {};
+    (ctx && ctx.allDays ? ctx.allDays() : []).forEach(function (entry) {
+      if (!entry || !entry.day || (beforeDate && entry.day.id > beforeDate)) return;
+      var ds = stateDays[entry.day.id] || {};
       if (ds.status === "reconstructed" && !Object.keys(ds.completed || {}).length) return;
       (entry.day.exercises || []).forEach(function (exercise, exIndex) {
-        if (normalize(exercise.name) !== normalize(exerciseName)) return;
+        if (!exercise || normalize(exercise.name) !== normalize(exerciseName)) return;
         Object.keys(ds.completed || {}).forEach(function (key) {
           if (key.split(".")[0] !== String(exIndex)) return;
           if (exclude && exclude.date === entry.day.id && exclude.key === key) return;
@@ -36,6 +51,9 @@
   }
 
   function evaluateSet(ctx, exercise, set, dayId, key) {
+    if (!exercise || !exercise.name || !set || !(Number(set.reps) > 0)) {
+      return { type: "none", types: [], isPr: false, reason: "No completed reps" };
+    }
     var prior = performances(ctx, exercise.name, dayId, { date: dayId, key: key });
     var assisted = isAssisted(exercise);
     var weight = Number(set.weight || 0);
@@ -70,11 +88,14 @@
 
   function scanRecords(ctx) {
     var map = {};
-    (ctx.allDays ? ctx.allDays() : []).forEach(function (entry) {
-      var day = entry.day;
-      var ds = (ctx.state.days || {})[day.id] || {};
+    var stateDays = (ctx && ctx.state && ctx.state.days) || {};
+    (ctx && ctx.allDays ? ctx.allDays() : []).forEach(function (entry) {
+      var day = entry && entry.day;
+      if (!day || !day.id) return;
+      var ds = stateDays[day.id] || {};
       if (ds.status === "reconstructed" && !Object.keys(ds.completed || {}).length) return;
       (day.exercises || []).forEach(function (exercise, exIndex) {
+        if (!exercise || !exercise.name) return;
         Object.keys(ds.completed || {}).forEach(function (key) {
           if (key.split(".")[0] !== String(exIndex)) return;
           var set = ds.completed[key] || {};
@@ -82,7 +103,7 @@
           var assisted = isAssisted(exercise);
           var score = assisted ? -Number(set.weight || 0) : epley(set.weight, set.reps);
           var current = map[exercise.name];
-          if (!current || score > current.score || score === current.score && Number(set.reps) > current.reps) {
+          if (!current || score > current.score || (score === current.score && Number(set.reps) > current.reps)) {
             map[exercise.name] = {
               name: exercise.name,
               weight: Number(set.weight || 0),
@@ -115,7 +136,7 @@
     if (!rows.length) return html + '<div class="overview-card"><strong>No records yet</strong><p>Complete sets to establish verified baselines.</p></div></div>';
     html += '<table class="mini-table"><thead><tr><th>Exercise</th><th>Top set</th><th>Record</th><th>Date</th></tr></thead><tbody>';
     rows.forEach(function (row) {
-      html += '<tr><td>' + ctx.escapeHtml(row.name) + '</td><td>' + ctx.escapeHtml(ctx.formatWeight(row.weight)) + ' ' + ctx.escapeHtml(ctx.unitLabel()) + (row.assisted ? ' assist' : '') + ' x ' + row.reps + '</td><td>' + ctx.escapeHtml(recordLabel(row.recordType)) + '</td><td>' + ctx.escapeHtml(row.date) + '</td></tr>';
+      html += '<tr><td>' + esc(ctx, row.name) + '</td><td>' + esc(ctx, ctx.formatWeight(row.weight)) + ' ' + esc(ctx, ctx.unitLabel()) + (row.assisted ? ' assist' : '') + ' x ' + esc(ctx, row.reps) + '</td><td>' + esc(ctx, recordLabel(row.recordType)) + '</td><td>' + esc(ctx, row.date) + '</td></tr>';
     });
     return html + '</tbody></table></div>';
   }
@@ -128,7 +149,9 @@
       if (found) found.value = Math.max(found.value, value);
       else acc.push({ date: row.date, value: value });
       return acc;
-    }, []);
+    }, []).sort(function (a, b) {
+      return String(a.date).localeCompare(String(b.date));
+    });
     if (!rows.length) return '<div class="overview-card"><strong>Estimated 1RM</strong><p>Log this exercise to plot a strength trend.</p></div>';
     var vals = rows.map(function (row) { return ctx.kgToDisplay(row.value); });
     var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);

@@ -34,8 +34,8 @@
 
   function openDb() {
     return new Promise(function (resolve, reject) {
-      if (!("indexedDB" in window)) return reject(new Error("IndexedDB unavailable"));
-      var request = indexedDB.open(DB_NAME, 1);
+      if (typeof window === "undefined" || !window.indexedDB) return reject(new Error("IndexedDB unavailable"));
+      var request = window.indexedDB.open(DB_NAME, 1);
       request.onupgradeneeded = function () {
         var db = request.result;
         if (!db.objectStoreNames.contains(STORE)) {
@@ -85,11 +85,17 @@
     }
   }
 
+  function sortSnapshots(rows) {
+    return rows.sort(function (a, b) {
+      return (b.createdAt - a.createdAt) || (Number(b.id || 0) - Number(a.id || 0));
+    });
+  }
+
   async function prune(db) {
     var tx = db.transaction(STORE, "readwrite");
     var store = tx.objectStore(STORE);
     var all = await requestPromise(store.getAll());
-    all.sort(function (a, b) { return b.createdAt - a.createdAt; });
+    sortSnapshots(all);
     await Promise.all(all.slice(MAX_SNAPSHOTS).map(function (row) {
       return requestPromise(store.delete(row.id));
     }));
@@ -97,22 +103,31 @@
   }
 
   async function forceSnapshot(state, reason) {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    pending = null;
     var record = createRecord(state, reason);
     if (record.digest === lastDigest && reason !== "pre-restore") return readMeta();
     lastDigest = record.digest;
     mirrorNative(record.json);
+    var db = null;
     try {
-      var db = await openDb();
+      db = await openDb();
       var tx = db.transaction(STORE, "readwrite");
       await requestPromise(tx.objectStore(STORE).add(record));
       var count = await prune(db);
-      db.close();
       var meta = { count: count, lastSnapshotAt: record.createdAt, storage: "indexeddb", digest: record.digest };
       writeMeta(meta);
       return meta;
     } catch (err) {
       storeFallback(record);
       return readMeta();
+    } finally {
+      if (db && typeof db.close === "function") {
+        try { db.close(); } catch (ignore) {}
+      }
     }
   }
 
@@ -129,7 +144,7 @@
 
   function mirrorNative(json) {
     try {
-      if (window.LiftAndroid && typeof window.LiftAndroid.saveStateMirror === "function") {
+      if (typeof window !== "undefined" && window.LiftAndroid && typeof window.LiftAndroid.saveStateMirror === "function") {
         return window.LiftAndroid.saveStateMirror(json) !== false;
       }
     } catch (err) {}
@@ -138,7 +153,7 @@
 
   function loadNativeMirror() {
     try {
-      if (window.LiftAndroid && typeof window.LiftAndroid.loadStateMirror === "function") {
+      if (typeof window !== "undefined" && window.LiftAndroid && typeof window.LiftAndroid.loadStateMirror === "function") {
         var raw = window.LiftAndroid.loadStateMirror();
         return raw ? String(raw) : "";
       }
@@ -147,12 +162,12 @@
   }
 
   async function listSnapshots() {
+    var db = null;
     try {
-      var db = await openDb();
+      db = await openDb();
       var tx = db.transaction(STORE, "readonly");
       var rows = await requestPromise(tx.objectStore(STORE).getAll());
-      db.close();
-      return rows.sort(function (a, b) { return b.createdAt - a.createdAt; });
+      return sortSnapshots(rows);
     } catch (err) {
       var fallback = [];
       for (var i = 0; i < 3; i += 1) {
@@ -161,7 +176,11 @@
           if (row) fallback.push(row);
         } catch (ignore) {}
       }
-      return fallback.sort(function (a, b) { return b.createdAt - a.createdAt; });
+      return sortSnapshots(fallback);
+    } finally {
+      if (db && typeof db.close === "function") {
+        try { db.close(); } catch (ignore) {}
+      }
     }
   }
 
@@ -187,11 +206,11 @@
 
   function deleteSnapshotDatabase() {
     return new Promise(function (resolve, reject) {
-      if (!("indexedDB" in window)) {
+      if (typeof window === "undefined" || !window.indexedDB) {
         resolve(false);
         return;
       }
-      var request = indexedDB.deleteDatabase(DB_NAME);
+      var request = window.indexedDB.deleteDatabase(DB_NAME);
       request.onsuccess = function () { resolve(true); };
       request.onerror = function () { reject(request.error || new Error("IndexedDB reset failed")); };
       request.onblocked = function () { reject(new Error("IndexedDB reset is blocked by another Lift tab")); };
@@ -208,7 +227,7 @@
       for (var i = 0; i < 3; i += 1) localStorage.removeItem(FALLBACK_PREFIX + i);
     } catch (err) {}
     try {
-      if (window.LiftAndroid && typeof window.LiftAndroid.clearStateMirror === "function") {
+      if (typeof window !== "undefined" && window.LiftAndroid && typeof window.LiftAndroid.clearStateMirror === "function") {
         window.LiftAndroid.clearStateMirror();
       }
     } catch (nativeErr) {}
