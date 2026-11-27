@@ -5,6 +5,8 @@
   var SCHEMA_VERSION = 4;
   var DAY_STATUSES = ["completed", "planned", "rest", "missed", "unknown", "reconstructed"];
   var GOAL_MODES = ["fat_loss", "recomposition", "maintenance", "muscle_gain"];
+  var COACH_TONES = ["analytical", "stoic", "hype"];
+  var QUOTE_TONES = ["auto", "grit", "stoic", "science", "hype", "analytical"];
 
   function isObject(value) {
     return !!value && typeof value === "object" && !Array.isArray(value);
@@ -180,6 +182,88 @@
     return plan;
   }
 
+  function normalizeFavoriteQuotes(input) {
+    if (!Array.isArray(input)) return [];
+    var seen = {};
+    var out = [];
+    input.forEach(function (item) {
+      var id = typeof item === "string" ? item.trim() : "";
+      if (id && !seen[id]) {
+        seen[id] = true;
+        out.push(id);
+      }
+    });
+    return out;
+  }
+
+  function normalizeCoachMemory(input) {
+    var raw = isObject(input) ? input : {};
+    var tone = COACH_TONES.indexOf(raw.tone) >= 0 ? raw.tone : "analytical";
+    var messages = Array.isArray(raw.messages)
+      ? raw.messages.filter(function (msg) {
+        return isObject(msg) && (msg.role === "user" || msg.role === "coach") && typeof msg.text === "string" && msg.text.length > 0;
+      }).map(function (msg) {
+        var next = {
+          id: String(msg.id || ("m-" + (msg.ts || Date.now()))),
+          role: msg.role,
+          text: msg.text,
+          ts: Number(msg.ts) || Date.now()
+        };
+        if (msg.actionType) next.actionType = String(msg.actionType);
+        if (msg.actionLabel) next.actionLabel = String(msg.actionLabel);
+        if (isObject(msg.actionPayload)) next.actionPayload = clone(msg.actionPayload);
+        return next;
+      }).slice(-30)
+      : [];
+    var checkins = Array.isArray(raw.checkins)
+      ? raw.checkins.filter(isObject).slice(-30).map(clone)
+      : [];
+    return {
+      tone: tone,
+      messages: messages,
+      checkins: checkins,
+      lastBriefDate: isDateId(raw.lastBriefDate) ? String(raw.lastBriefDate) : null
+    };
+  }
+
+  function normalizeEngagement(input) {
+    var raw = isObject(input) ? input : {};
+    var maxShields = Math.max(1, Math.round(Number(raw.maxShields) || 3));
+    var rawShields = raw.shields == null ? 1 : Math.round(Number(raw.shields) || 0);
+    var combo = Math.max(0, Math.round(Number(raw.combo) || 0));
+    var bestCombo = Math.max(combo, Math.round(Number(raw.bestCombo) || 0));
+    var shieldedDates = {};
+    if (isObject(raw.shieldedDates)) {
+      Object.keys(raw.shieldedDates).forEach(function (date) {
+        if (isDateId(date) && raw.shieldedDates[date]) shieldedDates[date] = true;
+      });
+    }
+    var quests = {};
+    if (isObject(raw.quests)) {
+      Object.keys(raw.quests).forEach(function (date) {
+        if (isDateId(date) && isObject(raw.quests[date])) quests[date] = clone(raw.quests[date]);
+      });
+    }
+    return {
+      xp: Math.max(0, Math.round(Number(raw.xp) || 0)),
+      shields: Math.max(0, Math.min(maxShields, rawShields)),
+      maxShields: maxShields,
+      combo: combo,
+      bestCombo: bestCombo,
+      shieldEarnedSessions: Math.max(0, Math.round(Number(raw.shieldEarnedSessions) || 0)),
+      quests: quests,
+      pledge: isObject(raw.pledge) ? clone(raw.pledge) : null,
+      pendingLoot: isObject(raw.pendingLoot) ? clone(raw.pendingLoot) : null,
+      unlockedLoot: Array.isArray(raw.unlockedLoot) ? raw.unlockedLoot.filter(isObject).map(clone) : [],
+      feed: Array.isArray(raw.feed) ? raw.feed.filter(isObject).slice(0, 40).map(clone) : [],
+      shieldedDates: shieldedDates,
+      lifetimeSessions: Math.max(0, Math.round(Number(raw.lifetimeSessions) || 0)),
+      lifetimeVolumeKg: Math.max(0, Math.round(Number(raw.lifetimeVolumeKg) || 0)),
+      hypes: Math.max(0, Math.round(Number(raw.hypes) || 0)),
+      lastWorkoutDate: isDateId(raw.lastWorkoutDate) ? String(raw.lastWorkoutDate) : null
+    };
+  }
+
   function migrateState(input) {
     var source = isObject(input) ? clone(input) : {};
     var fromVersion = Number(source.schemaVersion || source.v || 1) || 1;
@@ -223,6 +307,14 @@
       lastRestoreMode: null
     }, isObject(source.backup) ? source.backup : {});
     next.rollingPlan = normalizeRollingPlan(source.rollingPlan);
+    next.settings = isObject(source.settings) ? clone(source.settings) : {};
+    var vs = next.settings.visualStyle != null ? String(next.settings.visualStyle).trim().toLowerCase() : "expressive";
+    next.settings.visualStyle = ["classic", "expressive", "neural"].indexOf(vs) >= 0 ? vs : "expressive";
+    var qt = next.settings.quoteTone != null ? String(next.settings.quoteTone).trim().toLowerCase() : "auto";
+    next.settings.quoteTone = QUOTE_TONES.indexOf(qt) >= 0 ? qt : "auto";
+    next.engagement = normalizeEngagement(source.engagement);
+    next.coachMemory = normalizeCoachMemory(source.coachMemory);
+    next.favoriteQuotes = normalizeFavoriteQuotes(source.favoriteQuotes);
     return next;
   }
 
@@ -447,6 +539,98 @@
     return out;
   }
 
+  function mergeEngagement(leftEng, rightEng) {
+    var left = normalizeEngagement(leftEng);
+    var right = normalizeEngagement(rightEng);
+    var maxShields = Math.max(left.maxShields, right.maxShields, 3);
+    var mergedQuests = clone(left.quests);
+    Object.keys(right.quests).forEach(function (date) {
+      mergedQuests[date] = Object.assign({}, isObject(mergedQuests[date]) ? mergedQuests[date] : {}, right.quests[date]);
+    });
+    var lootMap = {};
+    var unlockedLoot = [];
+    left.unlockedLoot.concat(right.unlockedLoot).forEach(function (item) {
+      var key = item.id ? "id:" + String(item.id) : JSON.stringify(item);
+      if (lootMap[key]) return;
+      lootMap[key] = true;
+      unlockedLoot.push(clone(item));
+    });
+    var feedMap = {};
+    left.feed.concat(right.feed).forEach(function (item) {
+      var key = item.id ? "id:" + String(item.id) : JSON.stringify(item);
+      if (!feedMap[key]) {
+        feedMap[key] = clone(item);
+      } else {
+        feedMap[key] = Object.assign({}, feedMap[key], clone(item), {
+          hypes: Math.max(Number(feedMap[key].hypes || 0), Number(item.hypes || 0))
+        });
+      }
+    });
+    var feed = Object.keys(feedMap).map(function (k) { return feedMap[k]; }).sort(function (a, b) {
+      return Number(b.ts || 0) - Number(a.ts || 0);
+    }).slice(0, 40);
+    var pledge = right.pledge && left.pledge
+      ? (String(right.pledge.createdDate || "") >= String(left.pledge.createdDate || "") ? right.pledge : left.pledge)
+      : (right.pledge || left.pledge);
+    var pendingLoot = right.pendingLoot && left.pendingLoot
+      ? (Number(right.pendingLoot.createdAt || 0) >= Number(left.pendingLoot.createdAt || 0) ? right.pendingLoot : left.pendingLoot)
+      : (right.pendingLoot || left.pendingLoot);
+    var lastWorkoutDate = left.lastWorkoutDate && right.lastWorkoutDate
+      ? (left.lastWorkoutDate >= right.lastWorkoutDate ? left.lastWorkoutDate : right.lastWorkoutDate)
+      : (left.lastWorkoutDate || right.lastWorkoutDate);
+
+    return {
+      xp: Math.max(left.xp, right.xp),
+      shields: Math.min(maxShields, Math.max(left.shields, right.shields)),
+      maxShields: maxShields,
+      combo: Math.max(left.combo, right.combo),
+      bestCombo: Math.max(left.bestCombo, right.bestCombo),
+      shieldEarnedSessions: Math.max(left.shieldEarnedSessions, right.shieldEarnedSessions),
+      quests: mergedQuests,
+      pledge: clone(pledge),
+      pendingLoot: clone(pendingLoot),
+      unlockedLoot: unlockedLoot,
+      feed: feed,
+      shieldedDates: Object.assign({}, left.shieldedDates, right.shieldedDates),
+      lifetimeSessions: Math.max(left.lifetimeSessions, right.lifetimeSessions),
+      lifetimeVolumeKg: Math.max(left.lifetimeVolumeKg, right.lifetimeVolumeKg),
+      hypes: Math.max(left.hypes, right.hypes),
+      lastWorkoutDate: lastWorkoutDate
+    };
+  }
+
+  function mergeCoachMemory(leftMem, rightMem, rawIncomingMem) {
+    var left = normalizeCoachMemory(leftMem);
+    var right = normalizeCoachMemory(rightMem);
+    var msgMap = {};
+    left.messages.concat(right.messages).forEach(function (msg) {
+      var key = msg.id ? "id:" + String(msg.id) : [msg.role, msg.ts, msg.text].join("|");
+      if (!msgMap[key]) msgMap[key] = clone(msg);
+    });
+    var messages = Object.keys(msgMap).map(function (k) { return msgMap[k]; }).sort(function (a, b) {
+      return Number(a.ts || 0) - Number(b.ts || 0);
+    }).slice(-30);
+    var checkinSeen = {};
+    var checkins = left.checkins.concat(right.checkins).filter(function (item) {
+      var key = JSON.stringify(item);
+      if (checkinSeen[key]) return false;
+      checkinSeen[key] = true;
+      return true;
+    }).slice(-30);
+    var tone = isObject(rawIncomingMem) && COACH_TONES.indexOf(rawIncomingMem.tone) >= 0
+      ? right.tone
+      : left.tone;
+    var lastBriefDate = left.lastBriefDate && right.lastBriefDate
+      ? (left.lastBriefDate >= right.lastBriefDate ? left.lastBriefDate : right.lastBriefDate)
+      : (left.lastBriefDate || right.lastBriefDate);
+    return {
+      tone: tone,
+      messages: messages,
+      checkins: checkins,
+      lastBriefDate: lastBriefDate
+    };
+  }
+
   function mergeStates(current, incoming) {
     var rawIncoming = isObject(incoming) ? incoming : {};
     var left = migrateState(current);
@@ -493,6 +677,9 @@
     out.backup.lastExternalAt = Math.max(Number(left.backup && left.backup.lastExternalAt || 0), Number(right.backup && right.backup.lastExternalAt || 0)) || null;
     out.backup.lastRestoreAt = Date.now();
     out.backup.lastRestoreMode = "merge";
+    out.engagement = mergeEngagement(left.engagement, right.engagement);
+    out.coachMemory = mergeCoachMemory(left.coachMemory, right.coachMemory, rawIncoming.coachMemory);
+    out.favoriteQuotes = normalizeFavoriteQuotes((left.favoriteQuotes || []).concat(right.favoriteQuotes || []));
     return migrateState(out);
   }
 

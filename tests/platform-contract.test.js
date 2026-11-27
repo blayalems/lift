@@ -9,7 +9,7 @@ describe("PWA and Android durability contracts", () => {
   test("loads every new offline feature before the app entry point", () => {
     const index = read("index.html");
     const appPosition = index.indexOf('<script src="./app.js"></script>');
-    ["state", "history", "persistence", "progression", "volume", "cardio", "nutrition", "body", "program"].forEach((name) => {
+    ["state", "history", "persistence", "progression", "volume", "cardio", "nutrition", "body", "program", "reentry", "quotes", "engagement", "coach"].forEach((name) => {
       const script = `<script src="./features/${name}.js"></script>`;
       expect(index).toContain(script);
       expect(index.indexOf(script)).toBeLessThan(appPosition);
@@ -18,7 +18,7 @@ describe("PWA and Android durability contracts", () => {
 
   test("precaches the complete adaptive companion for offline use", () => {
     const worker = read("sw.js");
-    ["state", "history", "persistence", "progression", "volume", "cardio", "nutrition", "body", "program"].forEach((name) => {
+    ["state", "history", "persistence", "progression", "volume", "cardio", "nutrition", "body", "program", "reentry", "quotes", "engagement", "coach"].forEach((name) => {
       expect(worker).toContain(`"./features/${name}.js"`);
     });
     expect(worker).toContain("throw new Error(`Precache failed for ${path}: ${response.status}`)");
@@ -76,7 +76,7 @@ describe("PWA and Android durability contracts", () => {
   });
 
   test("core companion modules contain no silent upload implementation", () => {
-    ["state", "history", "persistence", "progression", "volume", "cardio", "nutrition", "body", "program"].forEach((name) => {
+    ["state", "history", "persistence", "progression", "volume", "cardio", "nutrition", "body", "program", "reentry", "quotes", "engagement", "coach"].forEach((name) => {
       expect(read("features", `${name}.js`)).not.toMatch(/\bfetch\s*\(/);
     });
   });

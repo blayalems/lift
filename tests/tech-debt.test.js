@@ -85,7 +85,7 @@ describe("tech-debt hygiene and accessibility contracts", () => {
       expect(csv).not.toContain("Legs; ");
     });
 
-    test("JSON exports resolve ctx.appVersion -> window.LIFT_APP_VERSION -> 1.9.1 without stale 1.4.0", () => {
+    test("JSON exports resolve ctx.appVersion -> window.LIFT_APP_VERSION -> 2.0.0 without stale 1.4.0", () => {
       const baseState = {
         days: {
           "2026-08-10": {
@@ -100,12 +100,12 @@ describe("tech-debt hygiene and accessibility contracts", () => {
       const fallbackFit = JSON.parse(healthkit.googleFitJson({ state: baseState, allDays }));
       const fallbackStrava = JSON.parse(healthkit.stravaPseudoTcx({ state: baseState, allDays }));
       const fallbackGeneric = JSON.parse(healthkit.genericJson({ state: baseState }));
-      expect(fallbackFit.sessions[0].application.version).toBe("1.9.1");
-      expect(fallbackStrava.version).toBe("1.9.1");
-      expect(fallbackGeneric.version).toBe("1.9.1");
+      expect(fallbackFit.sessions[0].application.version).toBe("2.0.0");
+      expect(fallbackStrava.version).toBe("2.0.0");
+      expect(fallbackGeneric.version).toBe("2.0.0");
 
-      const ctxFit = JSON.parse(healthkit.googleFitJson({ state: baseState, allDays, appVersion: "2.0.0" }));
-      expect(ctxFit.sessions[0].application.version).toBe("2.0.0");
+      const ctxFit = JSON.parse(healthkit.googleFitJson({ state: baseState, allDays, appVersion: "2.0.1" }));
+      expect(ctxFit.sessions[0].application.version).toBe("2.0.1");
 
       const source = read("features", "healthkit.js");
       expect(source).not.toContain('"1.4.0"');

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,viewport-fit=cover" />
-  <meta name="description" content="Offline progressive overload workout tracker for the May 2026-January 2027 cycle." />
+  <meta name="description" content="Offline adaptive AI Coach, habit momentum, live session quotes, Material 3 Expressive &amp; Android 17." />
   <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f2f3" />
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#161616" />
   <meta id="theme-color-active" name="theme-color" content="#f2f2f3" />
@@ -29,14 +29,14 @@
         document.documentElement.dataset.theme = resolved;
         document.documentElement.dataset.themeChoice = theme;
         var state = JSON.parse(localStorage.getItem("lift.v3.state") || "null");
-        var visualStyle = state && state.settings && state.settings.visualStyle ? state.settings.visualStyle : "neural";
-        document.documentElement.dataset.visualStyle = /^(classic|expressive|neural)$/.test(visualStyle) ? visualStyle : "neural";
+        var visualStyle = state && state.settings && state.settings.visualStyle ? state.settings.visualStyle : "expressive";
+        document.documentElement.dataset.visualStyle = /^(classic|expressive|neural)$/.test(visualStyle) ? visualStyle : "expressive";
         var meta = document.getElementById("theme-color-active");
         if (meta) meta.setAttribute("content", resolved === "dark" ? "#161616" : "#f2f2f3");
       } catch (err) {
         document.documentElement.dataset.theme = "light";
         document.documentElement.dataset.themeChoice = "system";
-        document.documentElement.dataset.visualStyle = "neural";
+        document.documentElement.dataset.visualStyle = "expressive";
       }
     })();
   </script>
@@ -3823,6 +3823,9 @@ html[data-visual-style="expressive"] .set-row {
   <script src="./features/forms.js"></script>
   <script src="./features/quickadd.js"></script>
   <script src="./features/reentry.js"></script>
+  <script src="./features/quotes.js"></script>
+  <script src="./features/engagement.js"></script>
+  <script src="./features/coach.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
