@@ -22,4 +22,17 @@
     <color name="md_surface_container">#FF1C1C1C</color>
     <color name="md_on_surface">#FFEBEBED</color>
     <color name="md_outline_variant">#FF48484A</color>
+
+    <!-- v2.0: Material 3 Expressive widget tonal day fallbacks (API < 31). -->
+    <color name="widget_background">#FFF4F4F7</color>
+    <color name="widget_background_high">#FFE8E8EC</color>
+    <color name="widget_outline">#FFD0D0D6</color>
+    <color name="widget_accent">#FF1C1C1E</color>
+    <color name="widget_on_accent">#FFFFFFFF</color>
+    <color name="widget_chip_bg">#FFE0E0E5</color>
+    <color name="widget_on_chip">#FF1C1C1E</color>
+    <color name="widget_on_surface">#FF1C1C1E</color>
+    <color name="widget_on_surface_variant">#FF48484A</color>
+    <color name="widget_rail_start">#FF1C1C1E</color>
+    <color name="widget_rail_end">#FF636366</color>
 </resources>
