@@ -108,6 +108,19 @@ function makePlan() {
 }
 
 describe("Lift v1.9 bug-fixer regressions", () => {
+  function manilaTodayId() {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Manila",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(new Date()).reduce((acc, part) => {
+      acc[part.type] = part.value;
+      return acc;
+    }, {});
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  }
+
   let docListeners = [];
   let winListeners = [];
   let intervalIds = [];
@@ -624,7 +637,7 @@ describe("Lift v1.9 bug-fixer regressions", () => {
 
     const saved = JSON.parse(localStorage.getItem("lift.v3.state"));
     expect(saved.strengthEstimates).toHaveLength(1);
-    expect(saved.strengthEstimates[0]).toMatchObject({ weightKg: 80, reps: 5, date: "2026-11-23" });
+    expect(saved.strengthEstimates[0]).toMatchObject({ weightKg: 80, reps: 5, date: manilaTodayId() });
     expect(saved.strengthEstimates[0].estimated1rmKg).toBeCloseTo(strength.average(80, 5), 2);
     expect(document.getElementById("sheet").textContent).toContain("Saved 1RM estimates");
   });
@@ -751,7 +764,7 @@ describe("Lift v1.9 bug-fixer regressions", () => {
     expect(document.querySelector("[data-protein-quick-meal]").value).toBe("lunch");
 
     const saved = JSON.parse(localStorage.getItem("lift.v3.state"));
-    expect(saved.nutrition["2026-11-23"].entries.map((e) => e.meal)).toEqual(["lunch", "lunch"]);
+    expect(saved.nutrition[manilaTodayId()].entries.map((e) => e.meal)).toEqual(["lunch", "lunch"]);
   });
 
   test("18. QA Phase A: past planned resolves unknown, layoff >14d breaks streak, summary skips 0-rep, state merges library/customWorkouts, reset-day clears lastLog", async () => {

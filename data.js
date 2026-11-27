@@ -87,7 +87,7 @@
       var light = deload || reentry;
       var specTag = reentry ? "reentry" : deload ? "deload" : null;
       var tuesday = (week.days || []).find(function (trainingDay) { return trainingDay.dow === "Tue"; });
-      if (tuesday && !tuesday.exercises.some(function (item) { return item.name === "45 Degree Back Extension"; })) {
+      if (tuesday && tuesday.type !== "rest" && !tuesday.exercises.some(function (item) { return item.name === "45 Degree Back Extension"; })) {
         tuesday.exercises.push(enrichExerciseMetadata(exercise({
           name: "45 Degree Back Extension",
           target: light ? "Bodyweight - 1 x 12 easy" : "10 kg - 2 x 12",
@@ -102,7 +102,7 @@
         })));
       }
       var saturday = (week.days || []).find(function (trainingDay) { return trainingDay.dow === "Sat"; });
-      if (saturday && !saturday.exercises.some(function (item) { return item.name === "Hanging Knee Raise"; })) {
+      if (saturday && saturday.type !== "rest" && !saturday.exercises.some(function (item) { return item.name === "Hanging Knee Raise"; })) {
         saturday.exercises.push(enrichExerciseMetadata(exercise({
           name: "Hanging Knee Raise",
           target: light ? "1 x 10 controlled" : "2 x 10-15",
@@ -2305,67 +2305,51 @@
         num: 21,
         title: "Week 21 - Gym Reentry Ramp",
         phase: "Reentry",
-        sub: "Rebuild grooves, leave 3+ RIR",
-        subtitle: "Rebuild grooves, leave 3+ RIR",
+        sub: "Compressed Fri/Sat full-body reentry, 3+ RIR",
+        subtitle: "Compressed Fri/Sat full-body reentry, 3+ RIR",
         dateRange: "Nov 23-29",
-        notice: "Welcome back after the 13-week break. Loads start at roughly 70-75% of your August working peaks with two working sets on main lifts so joints and tendons re-adapt cleanly. Leave 3+ reps in reserve on every set; mild soreness is normal, grinding is not.",
+        notice: "Membership renewed Friday Nov 27 - Week 21 is compressed into two complementary full-body reentry sessions (Full Body A on Friday, Full Body B on Saturday) at roughly 70-75% of your August working peaks. Leave 3+ reps in reserve on every set so quads and back get 72 hours before Week 22 starts Monday.",
         days: [
           day({
-            id: "2026-11-23", dow: "Mon", dom: 23, month: "Nov", type: "legs", title: "Quad-Dominant Legs & Core (Reentry)", warmup: "Bodyweight squats x 12 - Leg swings x 10/side - Leg press 40 kg x 1 x 10", footer: "Smooth 3-sec descent on leg press. Leave 3+ RIR across every set.",
+            id: "2026-11-23", dow: "Mon", dom: 23, month: "Nov", type: "rest", title: "Off / Pre-Renewal", footer: "Gym membership renewed Friday Nov 27. Reentry week compressed into Friday & Saturday.", exercises: []
+          }),
+          day({
+            id: "2026-11-24", dow: "Tue", dom: 24, month: "Nov", type: "rest", title: "Off / Pre-Renewal", footer: "Gym membership renewed Friday Nov 27. Reentry week compressed into Friday & Saturday.", exercises: []
+          }),
+          day({
+            id: "2026-11-25", dow: "Wed", dom: 25, month: "Nov", type: "rest", title: "Off / Pre-Renewal", footer: "Gym membership renewed Friday Nov 27. Reentry week compressed into Friday & Saturday.", exercises: []
+          }),
+          day({
+            id: "2026-11-26", dow: "Thu", dom: 26, month: "Nov", type: "rest", title: "Off / Pre-Renewal", footer: "Gym membership renewed Friday Nov 27. Reentry week compressed into Friday & Saturday.", exercises: []
+          }),
+          day({
+            id: "2026-11-27", dow: "Fri", dom: 27, month: "Nov", type: "legs", title: "Full Body A - Reentry (Quads, Pull & Upper Chest)", warmup: "Bodyweight squats x 12 - Leg swings x 10/side - Band pull-aparts x 15 - Leg press 40 kg x 1 x 10", footer: "Full Body A: quad-dominant legs, vertical & horizontal pull, light upper-chest primer, calves, biceps & abs. Leave 3+ RIR so Saturday Full Body B and Monday Week 22 feel fresh.",
             exercises: [
-              exercise({ name: "Machine Leg Press", target: "75 kg - 2 x 10", primary: true, tag: "reentry", defaultRest: 150, repRange: [8,10], note: "75% of August working peak. Two crisp sets; stop well before grind.", sets: repeatSet(2, 10, 75) }),
-              exercise({ name: "Smith Machine Squats", target: "30 kg - 2 x 10", defaultRest: 150, repRange: [10,12], sets: repeatSet(2, 10, 30) }),
+              exercise({ name: "Machine Leg Press", target: "75 kg - 2 x 10", primary: true, tag: "reentry", defaultRest: 150, repRange: [8,10], note: "75% of August working peak. Smooth 3-sec descent; 72h recovery before Monday Week 22 legs.", sets: repeatSet(2, 10, 75) }),
+              exercise({ name: "Lat Pulldown", target: "37.5 kg - 2 x 10", tag: "reentry", defaultRest: 120, repRange: [8,10], note: "Vertical pull groove; smooth scapular depression.", sets: repeatSet(2, 10, 37.5) }),
+              exercise({ name: "Incline DB Press", target: "16 kg total - 2 x 10", tag: "reentry", defaultRest: 120, repRange: [10,12], note: "8 kg per hand. Easy upper-chest primer ahead of Saturday's 20 kg press.", sets: repeatSet(2, 10, 16) }),
+              exercise({ name: "Seated Cable Row", target: "37.5 kg - 2 x 10", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 10, 37.5) }),
               exercise({ name: "Seated Leg Curls", target: "35 kg - 2 x 12", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 12, 35) }),
               exercise({ name: "Seated Calf Raises", target: "30 kg - 2 x 16", defaultRest: 90, repRange: [16,20], sets: repeatSet(2, 16, 30) }),
-              exercise({ name: "Abdominal Machine", target: "45 kg - 2 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 10, 45) })
+              exercise({ name: "DB Bicep Curls", target: "14 kg total - 1 x 12", tag: "arms", defaultRest: 90, repRange: [10,12], note: "7 kg per hand. Smooth curls, no swing.", sets: repeatSet(1, 12, 14) }),
+              exercise({ name: "Abdominal Machine", target: "45 kg - 1 x 12", defaultRest: 90, repRange: [10,12], note: "One crisp core set; Hanging Knee Raise follows Saturday.", sets: repeatSet(1, 12, 45) })
             ]
           }),
           day({
-            id: "2026-11-24", dow: "Tue", dom: 24, month: "Nov", type: "pull", title: "Back & Biceps (Reentry)", warmup: "Scapular pull-downs x 12 - Band pull-aparts x 15", footer: "Rebuild scapular rhythm and elbow comfort with 3+ RIR.",
+            id: "2026-11-28", dow: "Sat", dom: 28, month: "Nov", type: "chest", title: "Full Body B - Reentry (Chest, Hinge, Delts & Arms)", warmup: "Band dislocates x 12 - Glute bridges x 12 - Bodyweight good mornings x 10 - Light Incline DB 12 kg x 1 x 10", footer: "Full Body B: chest press, hip hinge, light unilateral legs, rear/side delts, triceps, erectors & abs. No Assisted Dips this week; leave 3+ RIR so Week 22 Monday legs feel fresh.",
             exercises: [
-              exercise({ name: "Lat Pulldown", target: "37.5 kg - 2 x 10", primary: true, tag: "reentry", defaultRest: 150, repRange: [8,10], sets: repeatSet(2, 10, 37.5) }),
-              exercise({ name: "Seated Cable Row", target: "37.5 kg - 2 x 10", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 10, 37.5) }),
-              exercise({ name: "High Cable Row / Face Pull", target: "32.5 kg - 2 x 12", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 12, 32.5) }),
-              exercise({ name: "DB Bicep Curls", target: "14 kg total - 2 x 10", defaultRest: 90, repRange: [10,12], note: "7 kg per hand. Smooth curls, no swing.", sets: repeatSet(2, 10, 14) })
-            ]
-          }),
-          day({
-            id: "2026-11-25", dow: "Wed", dom: 25, month: "Nov", type: "primer", title: "Upper Chest & Side Delts (Reentry)", footer: "Reentry primer: easy groove sets at 3+ RIR to prep shoulders for Saturday.",
-            exercises: [
-              exercise({ name: "Incline DB Press", target: "16 kg total - 2 x 10", primary: true, tag: "reentry", defaultRest: 120, repRange: [10,12], note: "8 kg per hand.", sets: repeatSet(2, 10, 16) }),
-              exercise({ name: "Cable Lateral Raises", target: "5 kg - 1 x 12", defaultRest: 75, repRange: [12,15], sets: repeatSet(1, 12, 5) })
-            ]
-          }),
-          day({
-            id: "2026-11-26", dow: "Thu", dom: 26, month: "Nov", type: "ham", title: "Hamstrings & Glutes (Reentry)", warmup: "Glute bridges x 12 - Bodyweight good mornings x 10", footer: "Prioritize clean hamstring tension on RDL; keep lower back fresh.",
-            exercises: [
-              exercise({ name: "DB Romanian Deadlift", target: "30 kg total - 2 x 10", primary: true, tag: "reentry", defaultRest: 150, repRange: [8,10], note: "15 kg per hand. Stop with 3+ RIR.", sets: repeatSet(2, 10, 30) }),
-              exercise({ name: "High/Wide Leg Press", target: "65 kg - 2 x 10", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 10, 65) }),
-              exercise({ name: "Lying Leg Curls", target: "35 kg - 2 x 8", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 8, 35) }),
-              exercise({ name: "Walking Lunges", target: "14 kg total - 2 x 10", defaultRest: 90, repRange: [8,10], sets: repeatSet(2, 10, 14) }),
-              exercise({ name: "Abdominal Machine", target: "45 kg - 2 x 10", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 10, 45) })
-            ]
-          }),
-          day({
-            id: "2026-11-27", dow: "Fri", dom: 27, month: "Nov", type: "primer", title: "Lats, Rear Delts & Arms (Reentry)", footer: "Single crisp set per movement so soreness stays mild.",
-            exercises: [
-              exercise({ name: "One-Arm Cable Pulldown", target: "15 kg - 1 x 10 / side", primary: true, tag: "reentry", defaultRest: 120, repRange: [10,12], sets: repeatSet(1, 10, 15) }),
-              exercise({ name: "Rear Delt Fly", target: "15 kg - 1 x 12", defaultRest: 90, repRange: [12,15], sets: repeatSet(1, 12, 15) }),
-              exercise({ name: "Incline DB Curls", target: "12 kg total - 1 x 12", tag: "arms", defaultRest: 90, repRange: [12,15], sets: repeatSet(1, 12, 12) }),
-              exercise({ name: "Tricep Pushdowns", target: "25 kg - 1 x 12", tag: "arms", defaultRest: 90, repRange: [10,12], sets: repeatSet(1, 12, 25) })
-            ]
-          }),
-          day({
-            id: "2026-11-28", dow: "Sat", dom: 28, month: "Nov", type: "chest", title: "Chest - Reentry Ramp", warmup: "Band dislocates x 12 - Scap push-ups x 10 - Light DB press 12 kg x 1 x 10", footer: "No Assisted Dips this week so shoulders re-acclimate cleanly. Leave 3+ RIR on every set.",
-            exercises: [
-              exercise({ name: "Incline DB Press", target: "20 kg total - 3 x 8", primary: true, tag: "reentry", defaultRest: 150, repRange: [8,10], note: "10 kg per hand for 3 smooth sets of 8.", sets: repeatSet(3, 8, 20) }),
+              exercise({ name: "Incline DB Press", target: "20 kg total - 3 x 8", primary: true, tag: "reentry", defaultRest: 150, repRange: [8,10], note: "10 kg per hand for 3 smooth sets of 8. Prime upper chest cleanly.", sets: repeatSet(3, 8, 20) }),
+              exercise({ name: "DB Romanian Deadlift", target: "30 kg total - 2 x 10", tag: "reentry", defaultRest: 150, repRange: [8,10], note: "15 kg per hand. Clean hamstring tension; stop with 3+ RIR to keep lower back fresh.", sets: repeatSet(2, 10, 30) }),
               exercise({ name: "Machine Chest Press", target: "25 kg - 2 x 10", defaultRest: 120, repRange: [8,10], sets: repeatSet(2, 10, 25) }),
-              exercise({ name: "Machine Pec Fly", target: "25 kg - 2 x 10", defaultRest: 120, repRange: [10,12], sets: repeatSet(2, 10, 25) }),
-              exercise({ name: "Cable Lateral Raises", target: "5 kg - 2 x 12", defaultRest: 75, repRange: [12,15], sets: repeatSet(2, 12, 5) })
+              exercise({ name: "High Cable Row / Face Pull", target: "32.5 kg - 2 x 12", defaultRest: 90, repRange: [10,12], sets: repeatSet(2, 12, 32.5) }),
+              exercise({ name: "Walking Lunges", target: "14 kg total - 1 x 10", defaultRest: 90, repRange: [8,10], note: "7 kg per hand. One light unilateral glute/quad groove set so Monday stays fresh.", sets: repeatSet(1, 10, 14) }),
+              exercise({ name: "Cable Lateral Raises", target: "5 kg - 2 x 12", defaultRest: 75, repRange: [12,15], sets: repeatSet(2, 12, 5) }),
+              exercise({ name: "Tricep Pushdowns", target: "25 kg - 1 x 12", tag: "arms", defaultRest: 90, repRange: [10,12], note: "One crisp set after pressing; stop 3 reps short of failure.", sets: repeatSet(1, 12, 25) }),
+              exercise({ name: "45 Degree Back Extension", target: "Bodyweight - 1 x 12 easy", tag: "reentry", defaultRest: 90, weightMode: "total", incrementKg: 2.5, repRange: [10,15], muscleGroups: { spinalErectors: 1, glutes: 0.5, hamstrings: 0.5 }, note: "One easy bodyweight groove set to wake up spinal erectors without fatigue.", sets: repeatSet(1, 12, 0) })
             ]
           }),
           day({
-            id: "2026-11-29", dow: "Sun", dom: 29, month: "Nov", type: "rest", title: "Full Rest", footer: "Full rest. Sleep and protein support Week 22 full-volume return.", exercises: []
+            id: "2026-11-29", dow: "Sun", dom: 29, month: "Nov", type: "rest", title: "Full Rest", footer: "Full rest. Sleep and protein support Week 22 full-volume return on Monday.", exercises: []
           })
         ]
       },
