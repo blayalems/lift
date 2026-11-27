@@ -1,29 +1,30 @@
 package io.github.blayalems.lift
 
 import android.Manifest
-import android.app.*
+import android.app.Activity
+import android.app.AlarmManager
 import android.content.ClipData
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.provider.MediaStore
-import android.util.Base64
+import android.provider.Settings
 import android.util.AtomicFile
+import android.util.Base64
 import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.webkit.JavascriptInterface
 import android.widget.Toast
-import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -36,8 +37,8 @@ import java.io.FileOutputStream
  * Exposed to the PWA as `window.LiftAndroid`.
  *
  * On API 35+ (Android 15+), workout state is routed through WorkoutService so the
- * notification runs under a foreground service — required for the Android 16 Live Update
- * status-bar chip. On API 26-34 notifications are posted directly via
+ * notification runs under a foreground service — required for Android 16/17 Live Update
+ * status-bar chips. On API 26-34 notifications are posted directly via
  * NotificationManagerCompat, keeping all foreground-service crash vectors off those devices.
  */
 class LiftBridge(private val context: Context) {
@@ -45,15 +46,16 @@ class LiftBridge(private val context: Context) {
     companion object {
         const val NOTIF_ID   = 42
         const val CHANNEL_ID = "lift_workout"
-        private const val LIFT_PINK = 0xFFE63B5D.toInt()
         private const val TAG = "LiftBridge"
         private const val HAPTIC_FALLBACK_MIN_MS = 60L
         private const val STATE_MIRROR_FILE = "lift_state.json"
         private const val MAX_STATE_MIRROR_BYTES = 20 * 1024 * 1024
+        private const val MAX_REMINDER_MINUTES = 60 * 24 * 30
     }
 
     init {
-        createChannel()
+        ensureWorkoutChannel(context, CHANNEL_ID)
+        HabitReminderReceiver.createChannel(context)
     }
 
     @Volatile private var lastFallbackHapticMs = 0L
@@ -97,7 +99,6 @@ class LiftBridge(private val context: Context) {
         Handler(Looper.getMainLooper()).post {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
                 runCatching { context.stopService(Intent(context, WorkoutService::class.java)) }
-                runCatching { NotificationManagerCompat.from(context).cancel(NOTIF_ID) }
             }
             runCatching { NotificationManagerCompat.from(context).cancel(NOTIF_ID) }
         }
@@ -114,12 +115,88 @@ class LiftBridge(private val context: Context) {
     }
 
     @JavascriptInterface
+    fun setBackConsumerActive(active: Boolean) {
+        (context as? MainActivity)?.setBackConsumerActive(active)
+    }
+
+    @JavascriptInterface
     fun getAndroidInfo(): String = JSONObject().apply {
-        put("sdk", Build.VERSION.SDK_INT)
+        val sdk = Build.VERSION.SDK_INT
+        put("sdk", sdk)
+        put("release", Build.VERSION.RELEASE ?: "")
         put("manufacturer", Build.MANUFACTURER ?: "")
         put("model", Build.MODEL ?: "")
         put("brand", Build.BRAND ?: "")
+        put("isAndroid17", sdk >= 37)
+        put("supportsLiveUpdates", sdk >= 36)
+        put("supportsWidgetPreview", sdk >= Build.VERSION_CODES.VANILLA_ICE_CREAM)
+        put("canPostPromotedNotifications", canPostPromotedNotifications(context))
+        put("isLargeScreen", isLargeScreenDevice())
+        put("notificationsEnabled", NotificationManagerCompat.from(context).areNotificationsEnabled())
     }.toString()
+
+    @JavascriptInterface
+    fun updateWidgetEngagement(json: String) {
+        val trimmed = json.trim()
+        if (trimmed.isEmpty() || trimmed == "null") {
+            runCatching { LiftWidgetProvider.updateEngagement(context, null) }
+                .onFailure { Log.w(TAG, "Widget engagement reset failed", it) }
+            return
+        }
+        val snap = runCatching { JSONObject(trimmed) }.getOrNull() ?: return
+        runCatching { LiftWidgetProvider.updateEngagement(context, snap) }
+            .onFailure { Log.w(TAG, "Widget engagement update failed", it) }
+    }
+
+    @JavascriptInterface
+    fun scheduleHabitReminder(delayMinutes: Int, title: String, body: String): Boolean {
+        if (delayMinutes <= 0) return false
+        val safeMinutes = delayMinutes.coerceAtMost(MAX_REMINDER_MINUTES)
+        return runCatching {
+            val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return false
+            val triggerAtMs = System.currentTimeMillis() + safeMinutes * 60_000L
+            val pi = HabitReminderReceiver.buildPendingIntent(context, title, body)
+            alarmManager.cancel(pi)
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, pi)
+            true
+        }.onFailure { Log.w(TAG, "Failed to schedule habit reminder", it) }
+            .getOrDefault(false)
+    }
+
+    @JavascriptInterface
+    fun cancelHabitReminder(): Boolean {
+        return runCatching {
+            val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return false
+            val pi = HabitReminderReceiver.buildExistingPendingIntent(context)
+            if (pi != null) {
+                alarmManager.cancel(pi)
+                pi.cancel()
+            }
+            NotificationManagerCompat.from(context).cancel(HabitReminderReceiver.NOTIF_ID)
+            true
+        }.onFailure { Log.w(TAG, "Failed to cancel habit reminder", it) }
+            .getOrDefault(false)
+    }
+
+    @JavascriptInterface
+    fun openNotificationSettings(): Boolean {
+        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            if (context !is Activity) {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        }
+        return try {
+            Handler(Looper.getMainLooper()).post {
+                runCatching { context.startActivity(intent) }
+                    .onFailure { Log.w(TAG, "Failed to open notification settings", it) }
+            }
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to post notification settings intent", e)
+            false
+        }
+    }
 
     /**
      * Keep the PWA's canonical state in app-private storage as a second durable
@@ -316,6 +393,14 @@ class LiftBridge(private val context: Context) {
         }
     }
 
+    private fun isLargeScreenDevice(): Boolean {
+        val config = context.resources.configuration
+        val screenSize = config.screenLayout and Configuration.SCREENLAYOUT_SIZE_MASK
+        return config.smallestScreenWidthDp >= 600 ||
+            screenSize == Configuration.SCREENLAYOUT_SIZE_LARGE ||
+            screenSize == Configuration.SCREENLAYOUT_SIZE_XLARGE
+    }
+
     private fun performFallbackHaptic(decor: android.view.View?) {
         val now = SystemClock.elapsedRealtime()
         if (now - lastFallbackHapticMs < HAPTIC_FALLBACK_MIN_MS) return
@@ -325,123 +410,14 @@ class LiftBridge(private val context: Context) {
         }
     }
 
-    // ── Notification builder ──────────────────────────────────────────────────
-
-    private fun buildNotification(snap: JSONObject): Notification {
-        if (Build.VERSION.SDK_INT >= 36) {
-            val progress = runCatching { buildProgressStyleNotification(context, snap, CHANNEL_ID) }
-            progress.getOrNull()?.let { return it }
-            progress.exceptionOrNull()?.let { err ->
-                Log.w(TAG, "Progress-style notification failed; falling back to compat", err)
-            }
-        }
-        val phase         = snap.optString("phase", "set-up-next")
-        val dayTitle      = snap.optString("dayTitle", "Workout")
-        val exName        = snap.optString("exName", "")
-        val setIndex      = snap.optInt("setIndex", 1)
-        val totalSets     = snap.optInt("totalSets", 1)
-        val curEx         = snap.optInt("currentExercise", 1)
-        val totEx         = snap.optInt("totalExercises", 1)
-        val weightText    = snap.optString("weightText", "")
-        val repsText      = snap.optString("repsText", "")
-        val unitLabel     = snap.optString("unitLabel", "kg")
-        val restRemaining = snap.optLong("restRemainingSec", 0L)
-        val elapsedMin    = snap.optInt("elapsedMin", 0)
-        val startedAt     = snap.optLong("startedAt", 0L)
-
-        val exProgress = "Ex $curEx/$totEx"
-        val setDetail  = if (weightText.isNotEmpty() && repsText.isNotEmpty())
-            "$weightText $unitLabel × $repsText" else ""
-
-        val (title, body) = when (phase) {
-            "resting" -> {
-                val m = restRemaining / 60; val s = restRemaining % 60
-                "Resting — %d:%02d".format(m, s) to
-                    "$exProgress · $exName · Set $setIndex/$totalSets · $setDetail".trim(' ', '·')
-            }
-            "rest-done" ->
-                "Rest done ✓" to
-                    "$exProgress · $exName · Set $setIndex/$totalSets · $setDetail — ready!".trim(' ', '·')
-            "complete" ->
-                "Workout complete" to "$exProgress · Finish workout when ready"
-            else ->
-                dayTitle to
-                    "$exProgress · ${exName.ifEmpty { "Workout running" }} · $elapsedMin min"
-        }
-
-        val openPi = PendingIntent.getActivity(
-            context, 0,
-            Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_dumbbell)
-            .setContentTitle(title)
-            .setContentText(body)
-            .setColor(LIFT_PINK)
-            .setColorized(true)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setContentIntent(openPi)
-            .setOnlyAlertOnce(true)
-
-        when (phase) {
-            "resting" -> builder
-                .setUsesChronometer(true)
-                .setChronometerCountDown(true)
-                .setWhen(System.currentTimeMillis() + restRemaining * 1000L)
-            else -> if (startedAt > 0L) builder
-                .setUsesChronometer(true)
-                .setChronometerCountDown(false)
-                .setWhen(startedAt)
-        }
-
-        when (phase) {
-            "resting" -> {
-                builder.addAction(notifAction("minus-15", "−15s"))
-                builder.addAction(notifAction("skip",     "Skip rest"))
-                builder.addAction(notifAction("plus-15",  "+15s"))
-            }
-            "rest-done" -> {
-                builder.addAction(notifAction("logged", "Logged it"))
-                builder.addAction(notifAction("finish", "Finish"))
-            }
-            "complete" -> builder.addAction(notifAction("finish", "Finish"))
-            else -> builder.addAction(notifAction("finish", "Finish workout"))
-        }
-
-        if (Build.VERSION.SDK_INT >= 36) {
-            builder.setCategory("live_update")
-        } else {
-            builder.setCategory(NotificationCompat.CATEGORY_PROGRESS)
-        }
-
-        return builder.build()
-    }
-
-    private fun notifAction(actionKey: String, label: String): NotificationCompat.Action {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(MainActivity.EXTRA_NOTIF_ACTION, actionKey)
-        }
-        val pi = PendingIntent.getActivity(
-            context, actionKey.hashCode(), intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        return NotificationCompat.Action.Builder(0, label, pi).build()
-    }
-
     private fun postFallbackNotification(snap: JSONObject) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED
         ) return
         try {
-            NotificationManagerCompat.from(context).notify(NOTIF_ID, buildNotification(snap))
+            NotificationManagerCompat.from(context)
+                .notify(NOTIF_ID, buildWorkoutNotification(context, snap, CHANNEL_ID))
         } catch (err: SecurityException) {
             Log.w(TAG, "Fallback notification permission changed", err)
         } catch (err: Exception) {
@@ -541,20 +517,5 @@ class LiftBridge(private val context: Context) {
             @Suppress("DEPRECATION")
             context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         }
-    }
-
-    // ── Channel (idempotent — safe to call on every bridge construction) ──────
-
-    private fun createChannel() {
-        val channel = NotificationChannel(
-            CHANNEL_ID, "Active Workout", NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "Shows current exercise, set, and rest timer while a workout is running"
-            lightColor = Color.parseColor("#E63B5D")
-            enableLights(true)
-            setShowBadge(false)
-        }
-        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .createNotificationChannel(channel)
     }
 }
