@@ -87,6 +87,7 @@
     historyDate: null,
     lastLog: null,
     focusBeforeSheet: null,
+    focusBeforeDrawer: null,
     recoveredFrom: null,
     recoveryCandidateAt: 0,
     snapshotRecoveryNeeded: false,
@@ -144,12 +145,11 @@
   }
 
   function isoWeekId(date) {
-    var d = new Date(date.getTime());
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
-    var week1 = new Date(d.getFullYear(), 0, 4);
-    var week = 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
-    return d.getFullYear() + "-W" + pad2(week);
+    var d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    d.setUTCDate(d.getUTCDate() + 3 - ((d.getUTCDay() + 6) % 7));
+    var week1 = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+    var week = 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getUTCDay() + 6) % 7)) / 7);
+    return d.getUTCFullYear() + "-W" + pad2(week);
   }
 
   function clamp(n, min, max) {
@@ -659,6 +659,7 @@
   }
 
   function dayState(dayId) {
+    if (!dayId) return { completed: {}, extraSets: {}, drafts: {}, exerciseFlags: {}, adaptiveTargets: {} };
     if (!state.days[dayId]) {
       var plannedDay = getDay(dayId);
       var status = plannedDay && !(plannedDay.exercises || []).length
@@ -708,7 +709,8 @@
   }
 
   function completedSetCount(day, sourceState) {
-    var ds = (sourceState || state).days[day.id] || {};
+    if (!day) return 0;
+    var ds = ((sourceState || state).days || {})[day.id] || {};
     var completed = ds.completed || {};
     return Object.keys(completed).filter(function (key) { return isCompletedSet(completed[key]); }).length;
   }
@@ -749,16 +751,18 @@
   }
 
   function completedVolume(day) {
-    var ds = state.days[day.id] || { completed: {} };
+    if (!day) return 0;
+    var ds = (state.days || {})[day.id] || { completed: {} };
     var volume = 0;
     Object.keys(ds.completed || {}).forEach(function (key) {
       var entry = ds.completed[key];
-      if (entry) volume += numberOr(entry.weight, 0) * numberOr(entry.reps, 0);
+      if (isCompletedSet(entry)) volume += Math.max(0, numberOr(entry.weight, 0)) * numberOr(entry.reps, 0);
     });
     return volume;
   }
 
   function workoutElapsed(dayId) {
+    if (!dayId) return 0;
     var ds = dayState(dayId);
     var before = numberOr(ds.elapsedBeforeStart, 0);
     if (ds.startedAt) {
@@ -769,6 +773,7 @@
   }
 
   function isWorkoutRunning(dayId) {
+    if (!dayId) return false;
     var ds = dayState(dayId);
     return !!(ds.startedAt && !ds.finishedAt);
   }
@@ -1027,7 +1032,7 @@
     if (total) {
       html += '<div class="section-head"><div><div class="section-title">Workout</div><div class="section-sub">' + (day.exercises || []).length + ' exercises - ' + percent + '% complete</div></div><div class="workout-head-actions">';
       html += '<button class="action-btn compact" data-action="open-sheet" data-sheet="quickadd">' + icon("plus") + ' Exercise</button>';
-      if (runtime.lastLog) html += '<button class="link-btn" data-action="undo-last">Undo last</button>';
+      if (runtime.lastLog && runtime.lastLog.dayId === day.id) html += '<button class="link-btn" data-action="undo-last">Undo last</button>';
       html += '<button class="link-btn" data-action="reset-day">Reset day</button></div></div>';
       html += '<section class="exercise-grid">';
       (day.exercises || []).forEach(function (ex, exIndex) {
@@ -1100,7 +1105,7 @@
   function renderFab() {
     var fab = document.getElementById("fab");
     if (!fab) return;
-    if ((runtime.activeTab || "today") === "today") {
+    if ((runtime.activeTab || "today") === "today" || (runtime.sheet && runtime.sheetMode !== "page")) {
       fab.dataset.hidden = "true";
       return;
     }
@@ -1123,12 +1128,44 @@
     fab.dataset.action = running ? "finish-workout" : "start-workout";
   }
 
+  function openDrawer() {
+    if (!runtime.drawerOpen && typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+      runtime.focusBeforeDrawer = document.activeElement;
+    }
+    runtime.drawerOpen = true;
+    renderNavDrawer();
+    setTimeout(function () {
+      if (!runtime.drawerOpen) return;
+      var drawer = document.getElementById("nav-drawer");
+      var first = drawer && drawer.querySelector(".nav-item, [data-action='close-drawer']");
+      if (first) first.focus();
+    }, 0);
+  }
+
+  function closeDrawer(restoreFocus) {
+    var returnFocus = restoreFocus === false ? null : runtime.focusBeforeDrawer;
+    runtime.drawerOpen = false;
+    runtime.focusBeforeDrawer = null;
+    renderNavDrawer();
+    if (returnFocus) {
+      setTimeout(function () {
+        var target = document.contains(returnFocus)
+          ? returnFocus
+          : document.querySelector('#app [data-action="open-drawer"]');
+        if (target && typeof target.focus === "function") target.focus();
+      }, 0);
+    }
+  }
+
   function renderNavDrawer() {
     var drawer = document.getElementById("nav-drawer");
     var backdrop = document.getElementById("drawer-backdrop");
     if (!drawer || !backdrop) return;
-    drawer.dataset.open = String(!!runtime.drawerOpen);
-    backdrop.dataset.open = String(!!runtime.drawerOpen);
+    var isOpen = !!runtime.drawerOpen;
+    drawer.dataset.open = String(isOpen);
+    drawer.setAttribute("aria-hidden", String(!isOpen));
+    drawer.setAttribute("tabindex", "-1");
+    backdrop.dataset.open = String(isOpen);
 
     var version = window.LIFT_APP_VERSION || APP_VERSION;
     var streaksMod = feature("streaks");
@@ -1187,6 +1224,9 @@
     html += '<div class="nav-drawer-foot"><span>Lift v' + escapeHtml(version) + '</span>' +
       '<button class="icon-btn" data-action="close-drawer" aria-label="Close menu">' + icon("close") + '</button></div>';
     drawer.innerHTML = html;
+    drawer.querySelectorAll("button, [href], input, select, textarea").forEach(function (node) {
+      node.tabIndex = isOpen ? 0 : -1;
+    });
   }
 
   function renderSummaryOverlay() {
@@ -1562,9 +1602,18 @@
     return '<button data-action="copy-scope" data-scope="' + value + '" data-active="' + String(active === value) + '">' + label + "</button>";
   }
 
+  function voiceApiSupported() {
+    var voiceMod = feature("voice");
+    if (voiceMod && typeof voiceMod.supported === "function") return !!voiceMod.supported();
+    return typeof window !== "undefined" &&
+      !!window.speechSynthesis &&
+      typeof window.speechSynthesis.speak === "function" &&
+      typeof window.SpeechSynthesisUtterance === "function";
+  }
+
   function settingsSheet() {
     var s = state.settings;
-    var voiceSupported = typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+    var voiceSupported = voiceApiSupported();
     return '<div class="settings-page">' +
       settingsHero() +
       settingsGroup("Display", [
@@ -1665,8 +1714,11 @@
   }
 
   function notificationStatusText() {
+    if (canNotifyNative()) {
+      return "Managed through the Android app live workout service.";
+    }
     var status = "Unavailable in this browser.";
-    if ("Notification" in window) {
+    if ("Notification" in window && window.Notification) {
       if (Notification.permission === "granted") status = "Allowed. Lift will keep one live workout notification active while you train.";
       else if (Notification.permission === "denied") status = "Blocked. Re-enable notifications from Chrome site settings for this app.";
       else status = state.settings.notifSkipped ? "Off. Turn this on to ask again next time." : "Ask on the next workout start.";
@@ -1780,7 +1832,9 @@
   }
 
   function openSheet(type, options, opts) {
-    if (!runtime.sheet && document.activeElement instanceof HTMLElement) runtime.focusBeforeSheet = document.activeElement;
+    if (!runtime.sheet && !runtime.focusBeforeSheet && document.activeElement instanceof HTMLElement) {
+      runtime.focusBeforeSheet = document.activeElement;
+    }
     runtime.sheet = type;
     runtime.sheetMode = (opts && opts.mode) || "modal";
     if (type === "history") runtime.historyDate = typeof options === "string" ? options : options && options.date || state.activeDayId;
@@ -1795,6 +1849,7 @@
     renderBottomNav();
     renderFab();
     setTimeout(function () {
+      if (!runtime.sheet) return;
       var first = sheet.querySelector("[data-action='close-sheet'], .sheet-back, button, input, select, textarea");
       (first || sheet).focus();
     }, 0);
@@ -1810,7 +1865,16 @@
     renderSheet();
     renderBottomNav();
     renderFab();
-    if (returnFocus && document.contains(returnFocus)) setTimeout(function () { returnFocus.focus(); }, 0);
+    if (returnFocus) {
+      setTimeout(function () {
+        var target = document.contains(returnFocus)
+          ? returnFocus
+          : (returnFocus.dataset && returnFocus.dataset.action === "open-drawer"
+            ? document.querySelector('#app [data-action="open-drawer"]')
+            : null);
+        if (target && typeof target.focus === "function") target.focus();
+      }, 0);
+    }
   }
 
   function isCaveatNote(note) {
@@ -1891,6 +1955,7 @@
   }
 
   function startWorkout(showToast) {
+    if (!state.activeDayId) return;
     var ds = dayState(state.activeDayId);
     if (ds.startedAt && !ds.finishedAt) return;
     if (ds.finishedAt) {
@@ -1914,11 +1979,12 @@
   }
 
   function finishWorkout() {
+    if (!state.activeDayId) return;
     var ds = dayState(state.activeDayId);
     if (!ds.startedAt) ds.startedAt = Date.now();
     ds.finishedAt = Date.now();
     var finishedDay = getDay(state.activeDayId);
-    var verifiedSets = completedSetCount(finishedDay, state);
+    var verifiedSets = finishedDay ? completedSetCount(finishedDay, state) : 0;
     if (verifiedSets > 0) {
       ds.status = "completed";
       ds.source = "verified-log";
@@ -2136,6 +2202,10 @@
     var snap = buildNotifSnapshot();
     runtime.lastNotifSig = snap.signature;
     runtime.lastNotifSnapshot = snap;
+    if (snap.phase === "idle") {
+      clearWorkoutNotification();
+      return;
+    }
     if (canNotifyNative()) {
       notifyNative(snap);
       return;
@@ -2145,8 +2215,10 @@
     var ctx = makeCtx();
     mod.ensurePermission(ctx).then(function (permission) {
       if (permission !== "granted") return;
-      mod.show(snap);
-    });
+      var latest = buildNotifSnapshot();
+      if (latest.phase === "idle") return;
+      mod.show(latest);
+    }).catch(function () {});
   }
 
   function updateWorkoutNotification(force) {
@@ -2154,7 +2226,11 @@
     var snap = buildNotifSnapshot();
     runtime.lastNotifSnapshot = snap;
     if (snap.phase === "idle") {
-      clearWorkoutNotification();
+      if (force || (runtime.lastNotifSig && runtime.lastNotifSig.indexOf("idle:") !== 0)) {
+        clearWorkoutNotification();
+      } else {
+        runtime.lastNotifSig = snap.signature;
+      }
       return;
     }
     if (!force && snap.signature === runtime.lastNotifSig) return;
@@ -2209,6 +2285,7 @@
 
   function updateSetValue(exIndex, setIndex, field, rawValue, isDisplayValue) {
     var day = getDay(state.activeDayId);
+    if (!day) return;
     var ds = dayState(day.id);
     var key = exIndex + "." + setIndex;
     var exercise = (day.exercises || [])[exIndex];
@@ -2221,6 +2298,8 @@
     if (ds.completed[key] && field === "reps" && value <= 0) {
       delete bucket.ts;
       delete bucket.pr;
+      delete bucket.recordType;
+      delete bucket.recordTypes;
       delete ds.completed[key];
       ds.drafts[key] = bucket;
     } else if (ds.completed[key]) {
@@ -2291,7 +2370,8 @@
   function toggleSet(exIndex, setIndex) {
     if (!requireWorkoutReady({ type: "toggle-set", exIndex: exIndex, setIndex: setIndex })) return;
     var day = getDay(state.activeDayId);
-    var ex = day.exercises[exIndex];
+    var ex = day && day.exercises && day.exercises[exIndex];
+    if (!day || !ex) return;
     var ds = dayState(day.id);
     var key = exIndex + "." + setIndex;
     if (ds.completed[key] && !isCompletedSet(ds.completed[key])) {
@@ -2299,7 +2379,7 @@
       delete ds.completed[key];
     }
     if (isCompletedSet(ds.completed[key])) {
-      runtime.lastLog = { dayId: day.id, key: key, previous: Object.assign({}, ds.completed[key]), action: "restore" };
+      runtime.lastLog = { dayId: day.id, key: key, previous: Object.assign({}, ds.completed[key]), draft: null, action: "restore" };
       delete ds.completed[key];
       haptic("warning");
       saveState();
@@ -2314,7 +2394,13 @@
       render();
       return;
     }
-    runtime.lastLog = { dayId: day.id, key: key, previous: ds.completed[key] ? Object.assign({}, ds.completed[key]) : null, action: "remove" };
+    runtime.lastLog = {
+      dayId: day.id,
+      key: key,
+      previous: ds.completed[key] ? Object.assign({}, ds.completed[key]) : null,
+      draft: ds.drafts[key] ? Object.assign({}, ds.drafts[key]) : null,
+      action: "remove"
+    };
     var recordMod = feature("records");
     var evaluation = recordMod && typeof recordMod.evaluateSet === "function"
       ? recordMod.evaluateSet(makeCtx(), ex, value, day.id, key)
@@ -2431,15 +2517,28 @@
 
   function undoLastLog() {
     var undo = runtime.lastLog;
-    if (!undo || !state.days[undo.dayId]) return;
-    var completed = state.days[undo.dayId].completed = state.days[undo.dayId].completed || {};
-    if (undo.action === "restore" && undo.previous) completed[undo.key] = undo.previous;
-    else if (undo.previous) completed[undo.key] = undo.previous;
-    else delete completed[undo.key];
+    if (!undo || !undo.dayId || !state.days || !state.days[undo.dayId]) return;
+    var dayRecord = state.days[undo.dayId];
+    var completed = dayRecord.completed = dayRecord.completed || {};
+    var drafts = dayRecord.drafts = dayRecord.drafts || {};
+    if (undo.action === "restore" && undo.previous) {
+      completed[undo.key] = undo.previous;
+    } else if (undo.previous) {
+      completed[undo.key] = undo.previous;
+    } else {
+      delete completed[undo.key];
+      if (undo.draft) drafts[undo.key] = undo.draft;
+    }
+    var undoDay = getDay(undo.dayId);
+    if (undoDay && completedSetCount(undoDay, state) === 0 && dayRecord.status === "completed") {
+      dayRecord.status = dayRecord.startedAt && !dayRecord.finishedAt ? "planned" : (undo.dayId < todayId() ? "unknown" : "planned");
+      dayRecord.trained = false;
+    }
     runtime.lastLog = null;
     saveState("undo-set");
     toast("Last set change undone.");
     render();
+    updateWorkoutNotification(true);
   }
 
   function addSet(exIndex) {
@@ -2519,6 +2618,9 @@
 
   function presetRest(seconds) {
     startRest(Math.max(1, numberOr(seconds, state.settings.defaultRest)), "Rest");
+    haptic("select");
+    render();
+    updateWorkoutNotification(true);
   }
 
   function completeRestIfNeeded() {
@@ -2735,6 +2837,9 @@
           var selection = chooseInitialSelection(state);
           state.activeWeekId = selection.weekId;
           state.activeDayId = selection.dayId;
+          runtime.lastLog = null;
+          runtime.summaryDayId = null;
+          runtime.cycleReview = false;
           saveState("restore-" + (merge ? "merge" : "replace"));
           applyTheme(state.settings.theme);
           applyVisualStyle(state.settings.visualStyle);
@@ -2771,6 +2876,9 @@
       var selection = chooseInitialSelection(state);
       state.activeWeekId = selection.weekId;
       state.activeDayId = selection.dayId;
+      runtime.lastLog = null;
+      runtime.summaryDayId = null;
+      runtime.cycleReview = false;
       saveState("rollback");
       applyTheme(state.settings.theme);
       applyVisualStyle(state.settings.visualStyle);
@@ -2850,14 +2958,16 @@
   function plannedSeries(name) {
     var rows = [];
     allDays().forEach(function (entry) {
-      (entry.day.exercises || []).forEach(function (ex) {
+      (entry.day.exercises || []).forEach(function (ex, exIndex) {
         if (ex.name !== name) return;
-        var plannedTop = Math.max.apply(null, (ex.sets || []).map(function (s) { return plannedSet(s).weight; }));
+        var plannedWeights = (ex.sets || []).map(function (s) { return plannedSet(s).weight; });
+        var plannedTop = plannedWeights.length ? Math.max.apply(null, plannedWeights) : 0;
         var actualTop = 0;
-        var exIndex = entry.day.exercises.indexOf(ex);
         var completed = ((state.days[entry.day.id] || {}).completed || {});
         Object.keys(completed).forEach(function (key) {
-          if (key.split(".")[0] === String(exIndex)) actualTop = Math.max(actualTop, numberOr(completed[key].weight, 0));
+          if (key.split(".")[0] === String(exIndex) && isCompletedSet(completed[key])) {
+            actualTop = Math.max(actualTop, numberOr(completed[key].weight, 0));
+          }
         });
         rows.push({ date: entry.day.id, week: entry.week.num, planned: plannedTop, actual: actualTop });
       });
@@ -3103,24 +3213,32 @@
   }
 
   function handleClick(event) {
-    var btn = event.target.closest("[data-action]");
+    var btn = event.target && event.target.closest ? event.target.closest("[data-action]") : null;
     if (!btn) return;
     var action = btn.dataset.action;
-    if (action !== "set-input") event.preventDefault();
+    var btnTag = btn.tagName;
+    var targetTag = event.target && event.target.tagName;
+    if (btnTag !== "INPUT" && btnTag !== "SELECT" && btnTag !== "TEXTAREA" &&
+        targetTag !== "INPUT" && targetTag !== "SELECT" && targetTag !== "TEXTAREA" && targetTag !== "OPTION" &&
+        typeof event.preventDefault === "function") {
+      event.preventDefault();
+    }
     if (action === "select-week") {
       var week = getWeek(btn.dataset.week);
       if (!week) return;
       state.activeWeekId = week.id;
       if (!(week.days || []).some(function (d) { return d.id === state.activeDayId; })) {
-        var open = firstIncompleteDay(week, state) || week.days[0];
-        state.activeDayId = open.id;
+        var open = firstIncompleteDay(week, state) || (week.days || [])[0];
+        if (open) state.activeDayId = open.id;
       }
       haptic(3);
       saveState();
       closeSheet();
       render();
     } else if (action === "select-day") {
-      state.activeDayId = btn.dataset.day;
+      var targetDayId = btn.dataset.day;
+      if (!targetDayId || !getDay(targetDayId)) return;
+      state.activeDayId = targetDayId;
       state.activeWeekId = (weekForDayId(state.activeDayId) || getWeek(state.activeWeekId)).id;
       haptic(3);
       saveState();
@@ -3209,9 +3327,11 @@
       removeSet(Number(btn.dataset.ex));
     } else if (action === "plate") {
       var day = getDay(state.activeDayId);
+      if (!day) return;
       var exIndex = Number(btn.dataset.ex);
       var setIndex = Number(btn.dataset.set || 0);
-      var ex = day.exercises[exIndex];
+      var ex = (day.exercises || [])[exIndex];
+      if (!ex) return;
       var current = getCurrentSetValue(day, exIndex, setIndex);
       openSheet("plate", { exerciseName: ex.name, targetKg: current.weight, barKg: state.settings.barWeight });
     } else if (action === "rest-adjust") {
@@ -3346,16 +3466,17 @@
       }
     } else if (action === "open-drawer") {
       haptic(3);
-      runtime.drawerOpen = true;
-      renderNavDrawer();
+      openDrawer();
     } else if (action === "close-drawer") {
       haptic(3);
-      runtime.drawerOpen = false;
-      renderNavDrawer();
+      closeDrawer(true);
     } else if (action === "drawer-open-sheet") {
       haptic(3);
-      runtime.drawerOpen = false;
-      renderNavDrawer();
+      var returnFocusFromDrawer = runtime.focusBeforeDrawer;
+      closeDrawer(false);
+      if (!runtime.sheet && returnFocusFromDrawer) {
+        runtime.focusBeforeSheet = returnFocusFromDrawer;
+      }
       openSheet(btn.dataset.sheet, null, { mode: "page" });
     } else if (action === "fab-tap") {
       // Resolved at render time to start-workout or finish-workout.
@@ -3703,7 +3824,44 @@
   }
 
   function handleKeydown(event) {
-    if (!runtime.sheet) return;
+    if (runtime.drawerOpen && !runtime.sheet) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeDrawer(true);
+        return;
+      }
+      if (event.key === "Tab") {
+        var drawer = document.getElementById("nav-drawer");
+        if (!drawer) return;
+        var drawerFocusable = Array.from(drawer.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter(function (node) {
+          return node.offsetParent !== null || node === document.activeElement;
+        });
+        if (!drawerFocusable.length) {
+          event.preventDefault();
+          drawer.focus();
+          return;
+        }
+        var dFirst = drawerFocusable[0];
+        var dLast = drawerFocusable[drawerFocusable.length - 1];
+        if (event.shiftKey && document.activeElement === dFirst) {
+          event.preventDefault();
+          dLast.focus();
+        } else if (!event.shiftKey && document.activeElement === dLast) {
+          event.preventDefault();
+          dFirst.focus();
+        }
+      }
+      return;
+    }
+    if (!runtime.sheet) {
+      if (event.key === "Escape" && runtime.summaryDayId) {
+        event.preventDefault();
+        runtime.summaryDayId = null;
+        runtime.cycleReview = false;
+        renderSummaryOverlay();
+      }
+      return;
+    }
     if (event.key === "Escape") {
       event.preventDefault();
       closeSheet();
@@ -3736,7 +3894,7 @@
     else if (key === "barWeight") state.settings.barWeight = displayToKg(value);
     else if (key === "haptics" || key === "sound") state.settings[key] = value === "true";
     else if (key === "autoStartRest" || key === "voiceRestCue") {
-      if (key === "voiceRestCue" && value === "true" && !(typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window)) {
+      if (key === "voiceRestCue" && value === "true" && !voiceApiSupported()) {
         state.settings[key] = false;
       } else {
         state.settings[key] = value === "true";
@@ -3750,7 +3908,9 @@
       state.settings.notifSkipped = value !== "true";
       saveState();
       if (value === "true") {
-        if ("Notification" in window && Notification.permission === "denied") {
+        if (canNotifyNative()) {
+          if (isWorkoutRunning(state.activeDayId)) updateWorkoutNotification(true);
+        } else if ("Notification" in window && window.Notification && Notification.permission === "denied") {
           toast("Notifications are blocked. Re-enable them in Chrome site settings.");
         } else {
           var notifications = feature("notifications");
@@ -3758,7 +3918,7 @@
             notifications.ensurePermission(makeCtx()).then(function (permission) {
               if (permission === "granted" && isWorkoutRunning(state.activeDayId)) updateWorkoutNotification(true);
               renderSheet();
-            });
+            }).catch(function () {});
           }
         }
       } else {
@@ -3789,10 +3949,10 @@
         var online = data && data.version;
         if (online && online !== APP_VERSION) {
           toast("Update available (v" + online + "). Applying…");
-          if ("serviceWorker" in navigator) {
+          if ("serviceWorker" in navigator && navigator.serviceWorker && navigator.serviceWorker.ready && typeof navigator.serviceWorker.ready.then === "function") {
             navigator.serviceWorker.ready.then(function (reg) {
-              reg.update().catch(function () {});
-            });
+              if (reg && typeof reg.update === "function") reg.update().catch(function () {});
+            }).catch(function () {});
           }
         } else {
           toast("Already on the latest version (v" + APP_VERSION + ").");
@@ -3823,20 +3983,22 @@
   }
 
   function registerServiceWorker() {
-    if (!("serviceWorker" in navigator)) return;
+    if (!("serviceWorker" in navigator) || !navigator.serviceWorker || typeof navigator.serviceWorker.register !== "function") return;
     if (!location.protocol.startsWith("http")) {
       console.info("Service worker skipped outside http/https.");
       return;
     }
     navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then(function (registration) {
       console.info("Lift service worker registered.");
-      registration.update().catch(function () {});
+      if (registration && typeof registration.update === "function") registration.update().catch(function () {});
     }).catch(function (err) {
       console.warn("Lift service worker registration failed.", err);
     });
-    navigator.serviceWorker.addEventListener("controllerchange", function () {
-      applyPendingReload();
-    });
+    if (typeof navigator.serviceWorker.addEventListener === "function") {
+      navigator.serviceWorker.addEventListener("controllerchange", function () {
+        applyPendingReload();
+      });
+    }
   }
 
   function bindNotificationActionMessages() {
@@ -3849,7 +4011,10 @@
     (window.__liftPendingNativeActions || []).splice(0).forEach(function (action) {
       if (action) handleNotifAction(String(action));
     });
-    if (!("serviceWorker" in navigator)) return;
+    window.addEventListener("liftHandleColdAction", function () {
+      handleColdNotificationAction();
+    });
+    if (!("serviceWorker" in navigator) || !navigator.serviceWorker || typeof navigator.serviceWorker.addEventListener !== "function") return;
     navigator.serviceWorker.addEventListener("message", function (event) {
       if (!event.data) return;
       if (event.data.type === "LIFT_NOTIF_ACTION") {
@@ -3857,9 +4022,6 @@
       } else if (event.data.type === "LIFT_SW_UPDATED") {
         applyPendingReload();
       }
-    });
-    window.addEventListener("liftHandleColdAction", function () {
-      handleColdNotificationAction();
     });
   }
 
@@ -3933,8 +4095,7 @@
     var drawerBackdrop = document.getElementById("drawer-backdrop");
     if (drawerBackdrop) {
       drawerBackdrop.addEventListener("click", function () {
-        runtime.drawerOpen = false;
-        renderNavDrawer();
+        closeDrawer(true);
       });
     }
     // Swipe from left edge to open the drawer.
@@ -3953,8 +4114,7 @@
       var dx = t.clientX - edgeSwipe.startX;
       var dy = Math.abs(t.clientY - edgeSwipe.startY);
       if (dx > 60 && dx > dy * 1.5) {
-        runtime.drawerOpen = true;
-        renderNavDrawer();
+        openDrawer();
         edgeSwipe = null;
       }
     }, { passive: true });
@@ -3994,7 +4154,11 @@
       sheet.style.transform = "";
     });
     document.addEventListener("visibilitychange", function () {
-      if (document.visibilityState === "visible" && isWorkoutRunning(state.activeDayId)) requestWakeLock();
+      if (document.visibilityState === "visible") {
+        completeRestIfNeeded();
+        refreshTimers();
+        if (isWorkoutRunning(state.activeDayId)) requestWakeLock();
+      }
       if (document.visibilityState !== "visible") releaseWakeLock();
     });
     if (window.matchMedia) {

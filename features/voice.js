@@ -6,22 +6,35 @@
   var root = window.LIFT_FEATURES = window.LIFT_FEATURES || {};
 
   function supported() {
-    return typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+    return typeof window !== "undefined" &&
+      !!window.speechSynthesis &&
+      typeof window.speechSynthesis.speak === "function" &&
+      typeof window.SpeechSynthesisUtterance === "function";
   }
 
   function speak(text, opts) {
-    if (!supported()) return;
+    if (!supported()) return false;
+    var message = String(text == null ? "" : text).trim();
+    if (!message) return false;
     try {
       // Cancel any queued speech so we never stack utterances.
-      window.speechSynthesis.cancel();
-      var u = new SpeechSynthesisUtterance(String(text || ""));
-      u.rate = (opts && opts.rate) || 1.0;
-      u.pitch = (opts && opts.pitch) || 1.0;
-      u.volume = (opts && opts.volume) != null ? opts.volume : 1.0;
+      if (typeof window.speechSynthesis.cancel === "function") {
+        window.speechSynthesis.cancel();
+      }
+      var u = new window.SpeechSynthesisUtterance(message);
+      var rate = Number(opts && opts.rate);
+      var pitch = Number(opts && opts.pitch);
+      var volume = (opts && opts.volume != null) ? Number(opts.volume) : 1.0;
+      u.rate = Number.isFinite(rate) && rate > 0 ? rate : 1.0;
+      u.pitch = Number.isFinite(pitch) && pitch >= 0 ? pitch : 1.0;
+      u.volume = Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 1.0;
       u.lang = (opts && opts.lang) || "en-US";
+      u.onerror = function () {};
       window.speechSynthesis.speak(u);
+      return true;
     } catch (err) {
       // Best-effort — voice is non-essential.
+      return false;
     }
   }
 
@@ -54,4 +67,6 @@
     speakCountdown: speakCountdown,
     testVoice: testVoice
   };
+
+  if (typeof module !== "undefined" && module.exports) module.exports = root.voice;
 })();

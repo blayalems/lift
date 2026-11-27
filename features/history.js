@@ -31,6 +31,15 @@
     return status === "completed" || status === "reconstructed";
   }
 
+  function syncReconstructedCount(state) {
+    if (!state || !state.days) return 0;
+    state.history = state.history || {};
+    state.history.reconstructedCount = Object.keys(state.days).filter(function (id) {
+      return state.days[id] && state.days[id].status === "reconstructed" && state.days[id].trained !== false;
+    }).length;
+    return state.history.reconstructedCount;
+  }
+
   function markReconstructed(state, date, workoutType, notes) {
     state.days = state.days || {};
     var ds = state.days[date] = state.days[date] || {};
@@ -42,10 +51,7 @@
     ds.notes = String(notes || "").trim();
     // Do not add a completed-set bucket or inferred performance. Existing
     // verified sets, if any, remain untouched and take precedence in status.
-    state.history = state.history || {};
-    state.history.reconstructedCount = Object.keys(state.days).filter(function (id) {
-      return state.days[id] && state.days[id].status === "reconstructed" && state.days[id].trained !== false;
-    }).length;
+    syncReconstructedCount(state);
     return ds;
   }
 
@@ -59,16 +65,18 @@
     ds.source = "user-marked";
     ds.trained = status === "completed";
     if (notes != null) ds.notes = String(notes).trim();
+    syncReconstructedCount(state);
     return ds;
   }
 
   function adherence(ctx, asOf) {
-    var today = asOf || (ctx.todayId && ctx.todayId()) || "9999-12-31";
+    var today = asOf || (ctx && ctx.todayId && ctx.todayId()) || "9999-12-31";
     var result = { completed: 0, reconstructed: 0, missed: 0, unknown: 0, rest: 0, planned: 0, reliable: 0, adherencePct: null };
-    (ctx.allDays ? ctx.allDays() : []).forEach(function (entry) {
-      if (!entry || !entry.day || entry.day.id > today) return;
-      var status = resolveStatus(entry.day, (ctx.state.days || {})[entry.day.id], today);
-      result[status] += 1;
+    var stateDays = (ctx && ctx.state && ctx.state.days) || {};
+    (ctx && ctx.allDays ? ctx.allDays() : []).forEach(function (entry) {
+      if (!entry || !entry.day || !entry.day.id || entry.day.id > today) return;
+      var status = resolveStatus(entry.day, stateDays[entry.day.id], today);
+      if (Object.prototype.hasOwnProperty.call(result, status)) result[status] += 1;
       if (status === "completed" || status === "reconstructed" || status === "missed") result.reliable += 1;
     });
     if (result.reliable) result.adherencePct = Math.round(((result.completed + result.reconstructed) / result.reliable) * 100);
@@ -83,9 +91,10 @@
   }
 
   function streakMetrics(ctx, asOf) {
-    var today = asOf || (ctx.todayId && ctx.todayId()) || "9999-12-31";
-    var entries = (ctx.allDays ? ctx.allDays() : []).filter(function (entry) {
-      return entry && entry.day && entry.day.id <= today && (entry.day.exercises || []).length;
+    var today = asOf || (ctx && ctx.todayId && ctx.todayId()) || "9999-12-31";
+    var stateDays = (ctx && ctx.state && ctx.state.days) || {};
+    var entries = (ctx && ctx.allDays ? ctx.allDays() : []).filter(function (entry) {
+      return entry && entry.day && entry.day.id && entry.day.id <= today && (entry.day.exercises || []).length;
     }).sort(function (a, b) { return b.day.id.localeCompare(a.day.id); });
     var combined = 0;
     var reconstructed = 0;
@@ -93,7 +102,7 @@
     var anchorDate = today !== "9999-12-31" ? today : (entries[0] ? entries[0].day.id : null);
     for (var i = 0; i < entries.length; i += 1) {
       var entryId = entries[i].day.id;
-      var status = resolveStatus(entries[i].day, (ctx.state.days || {})[entryId], today);
+      var status = resolveStatus(entries[i].day, stateDays[entryId], today);
       if (entryId === today && status === "planned" && !started) continue;
       if (anchorDate && dateDistanceDays(entryId, anchorDate) > 14) break;
       if (status === "unknown") continue;
@@ -110,7 +119,7 @@
     var verifiedRun = 0;
     var longestVerified = 0;
     ascending.forEach(function (entry) {
-      var status = resolveStatus(entry.day, (ctx.state.days || {})[entry.day.id], today);
+      var status = resolveStatus(entry.day, stateDays[entry.day.id], today);
       if (status === "completed") {
         verifiedRun += 1;
         longestVerified = Math.max(longestVerified, verifiedRun);
