@@ -60,7 +60,7 @@
     var best = s.best ? ctx.escapeHtml(s.best.name + " - " + ctx.formatWeight(s.best.weight) + " " + ctx.unitLabel() + " x " + s.best.reps) : "No sets";
     var html = '<div class="summary-panel" role="dialog" aria-modal="true"><button class="icon-btn summary-close" data-action="dismiss-summary" aria-label="Close summary">' + ctx.icon("close") + '</button>';
     html += '<div class="summary-hero"><div class="eyebrow">Workout complete</div><h2>' + ctx.escapeHtml(s.day.title || "Workout") + '</h2><p>' + ctx.escapeHtml(s.day.id) + '</p></div>';
-    html += '<div class="sheet-grid" style="margin-top:14px">';
+    html += '<div class="sheet-grid summary-body-grid">';
     html += '<div class="metric-grid">';
     html += metric("Volume", ctx.cleanNumber(ctx.kgToDisplay(s.volume), 0) + " " + ctx.unitLabel());
     html += metric("Sets", s.done + "/" + s.planned);
