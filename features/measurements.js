@@ -150,11 +150,11 @@
     // Quick add row.
     html += '<div class="overview-card">' +
       '<strong>Log new entry</strong>' +
-      '<div class="field-block" style="margin-top:10px"><label for="m-date">Date</label>' +
+      '<div class="field-block measure-date-field"><label for="m-date">Date</label>' +
       '<input id="m-date" type="date" data-m-date value="' + ctx.escapeHtml(today) + '"></div>';
     FIELDS.forEach(function (f) {
       var key = ctx.escapeHtml(f.key);
-      html += '<div class="measure-input-row" style="margin-top:8px">' +
+      html += '<div class="measure-input-row measure-field-row">' +
         '<div class="field-block"><label for="m-field-' + key + '">' + ctx.escapeHtml(f.label) + ' (' + unit + ')</label>' +
         '<input id="m-field-' + key + '" type="number" step="0.1" min="0" data-m-field="' + key + '" placeholder="-"></div>' +
         '<div class="field-block"><label for="m-note-' + key + '">Note</label>' +
@@ -170,7 +170,7 @@
       var t = trendFor(records, f.key);
       if (!t) {
         html += '<div class="measure-card"><label>' + ctx.escapeHtml(f.label) + '</label>' +
-          '<div class="measure-val"><span style="color:var(--md-on-surface-variant)">-</span><span class="unit">' + unit + '</span></div>' +
+          '<div class="measure-val"><span class="measure-empty">-</span><span class="unit">' + unit + '</span></div>' +
           '<div class="measure-delta">No data yet</div></div>';
         return;
       }
@@ -190,7 +190,7 @@
     // History table.
     if (records.length) {
       html += '<div class="overview-card"><strong>Recent entries</strong>' +
-        '<table class="mini-table" style="margin-top:6px"><thead><tr><th>Date</th><th>Field</th><th>Value</th><th></th></tr></thead><tbody>';
+        '<table class="mini-table measure-history-table"><thead><tr><th>Date</th><th>Field</th><th>Value</th><th></th></tr></thead><tbody>';
       var flat = [];
       records.slice().reverse().forEach(function (r) {
         FIELDS.forEach(function (f) {
