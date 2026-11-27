@@ -108,4 +108,3 @@ New v2 modules and refactored Wave 1 modules MUST emit these exact semantic clas
 3. **Streak ring inline ratio layout**: Update `.streak-ring .label-num` from `display: grid` to `display: flex; align-items: baseline; justify-content: center;` so `count` and `.streak-ring-goal` (`/goal`) sit inline rather than stacking vertically.
 4. **Calendar phase badges & style parity**: Improve contrast on `.calendar-week[data-phase="consolidate"]` and `[data-phase="load"]`, give `html[data-visual-style="expressive"]` distinct Material 3 Expressive surface/motion polish, and add clean desktop scroll affordance on `.week-strip`.
 5. **Refactored class styling verification**: Confirm every Wave 1 and Wave 2 class in Section 2 renders cleanly across `320x568`, `390x844`, and `1280x800` in Light & Dark modes.
-

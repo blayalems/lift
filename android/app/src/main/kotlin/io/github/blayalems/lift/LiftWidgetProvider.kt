@@ -267,15 +267,25 @@ class LiftWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        private fun widgetSignature(snap: JSONObject): String = listOf(
-            snap.optString("phase", "idle"),
-            snap.optString("dayTitle", ""),
-            snap.optString("exName", ""),
-            snap.optInt("currentExercise", 0).toString(),
-            snap.optInt("setIndex", 0).toString(),
-            snap.optInt("totalSets", 0).toString(),
-            snap.optString("quote", ""),
-        ).joinToString("|")
+        private fun widgetSignature(snap: JSONObject): String {
+            val phase = snap.optString("phase", "idle")
+            val restEndToken = if (phase == "resting" && snap.optLong("restRemainingSec", 0L) > 0L) {
+                val endsAt = snap.optLong("restEndsAt", snap.optLong("restEndEpochMs", 0L))
+                if (endsAt > 0L) endsAt.toString() else "resting"
+            } else {
+                "0"
+            }
+            return listOf(
+                phase,
+                snap.optString("dayTitle", ""),
+                snap.optString("exName", ""),
+                snap.optInt("currentExercise", 0).toString(),
+                snap.optInt("setIndex", 0).toString(),
+                snap.optInt("totalSets", 0).toString(),
+                snap.optString("quote", ""),
+                restEndToken,
+            ).joinToString("|")
+        }
 
         private fun loadActiveSnap(context: Context): JSONObject? {
             val raw = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

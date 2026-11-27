@@ -97,10 +97,16 @@
     return now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
   }
 
+  function finiteNum(value, fallback) {
+    var num = Number(value);
+    return Number.isFinite(num) ? num : (fallback === undefined ? 0 : fallback);
+  }
+
   function validCompletedKeys(ds) {
     var completed = isObject(ds && ds.completed) ? ds.completed : {};
     return Object.keys(completed).filter(function (key) {
-      return Number((completed[key] || {}).reps) > 0;
+      var reps = finiteNum((completed[key] || {}).reps, 0);
+      return reps > 0;
     });
   }
 
@@ -128,6 +134,7 @@
       unlockedLoot: [],
       feed: [],
       shieldedDates: {},
+      rewardedWorkoutDates: {},
       lifetimeSessions: 0,
       lifetimeVolumeKg: 0,
       hypes: 0,
@@ -138,14 +145,16 @@
   function isHistoricalSession(ds) {
     if (!isObject(ds)) return false;
     if (ds.status === "reconstructed" && ds.trained !== false) return true;
+    if (ds.startedAt && !ds.finishedAt && ds.status !== "completed") return false;
     if (validCompletedKeys(ds).length === 0) return false;
     return !!ds.finishedAt || ds.status === "completed" || !ds.status;
   }
 
-  function seedFromHistory(state) {
+  function seedFromHistory(state, skipDateId) {
     if (!isObject(state)) return defaultEngagement();
     var eng = isObject(state.engagement) ? state.engagement : (state.engagement = defaultEngagement());
-    if (Number(eng.xp || 0) > 0 || Number(eng.lifetimeSessions || 0) > 0) return eng;
+    if (finiteNum(eng.xp, 0) > 0 || finiteNum(eng.lifetimeSessions, 0) > 0) return eng;
+    if (!isObject(eng.rewardedWorkoutDates)) eng.rewardedWorkoutDates = {};
 
     var days = isObject(state.days) ? state.days : {};
     var dates = Object.keys(days).filter(isValidDateId).sort();
@@ -155,18 +164,20 @@
     var lastDate = null;
 
     dates.forEach(function (date) {
+      if (skipDateId && date === skipDateId) return;
       var ds = days[date];
       if (!isHistoricalSession(ds)) return;
       var keys = validCompletedKeys(ds);
       sessions += 1;
       lastDate = date;
+      eng.rewardedWorkoutDates[date] = true;
       if (keys.length > 0) {
         var prs = 0;
         var rirs = 0;
         keys.forEach(function (k) {
           var set = ds.completed[k] || {};
-          var reps = Math.max(0, Number(set.reps) || 0);
-          var weight = Math.max(0, Number(set.weight) || 0);
+          var reps = Math.max(0, finiteNum(set.reps, 0));
+          var weight = Math.max(0, finiteNum(set.weight, 0));
           totalVolumeKg += weight * reps;
           if (set.pr) prs += 1;
           if (set.rir != null && set.rir !== "") rirs += 1;
@@ -200,38 +211,42 @@
     return eng;
   }
 
-  function ensureEngagement(state) {
+  function ensureEngagement(state, skipDateId) {
     if (!isObject(state)) return defaultEngagement();
     var eng = isObject(state.engagement) ? state.engagement : (state.engagement = {});
-    var maxShields = Math.max(1, Math.round(Number(eng.maxShields) || 3));
-    var shieldsVal = eng.shields == null ? 1 : Math.round(Number(eng.shields) || 0);
+    var maxShields = Math.max(1, Math.round(finiteNum(eng.maxShields, 3)));
+    var shieldsVal = eng.shields == null ? 1 : Math.round(finiteNum(eng.shields, 0));
 
-    eng.xp = Math.max(0, Math.round(Number(eng.xp) || 0));
+    eng.xp = Math.max(0, Math.round(finiteNum(eng.xp, 0)));
     eng.maxShields = maxShields;
     eng.shields = Math.max(0, Math.min(maxShields, shieldsVal));
-    eng.combo = Math.max(0, Math.round(Number(eng.combo) || 0));
-    eng.bestCombo = Math.max(0, Math.round(Number(eng.bestCombo) || 0));
+    eng.combo = Math.max(0, Math.round(finiteNum(eng.combo, 0)));
+    eng.bestCombo = Math.max(0, Math.round(finiteNum(eng.bestCombo, 0)));
     if (eng.combo > eng.bestCombo) eng.bestCombo = eng.combo;
-    eng.shieldEarnedSessions = Math.max(0, Math.round(Number(eng.shieldEarnedSessions) || 0));
+    eng.shieldEarnedSessions = Math.max(0, Math.round(finiteNum(eng.shieldEarnedSessions, 0)));
     eng.quests = isObject(eng.quests) ? eng.quests : {};
     eng.pledge = isObject(eng.pledge) ? eng.pledge : null;
     eng.pendingLoot = isObject(eng.pendingLoot) ? eng.pendingLoot : null;
     eng.unlockedLoot = Array.isArray(eng.unlockedLoot) ? eng.unlockedLoot : [];
-    eng.feed = Array.isArray(eng.feed) ? eng.feed.slice(0, FEED_CAP) : [];
+    eng.feed = Array.isArray(eng.feed) ? eng.feed.slice(0, FEED_CAP).map(function (item) {
+      if (isObject(item)) item.hypes = Math.max(0, Math.round(finiteNum(item.hypes, 0)));
+      return item;
+    }) : [];
     eng.shieldedDates = isObject(eng.shieldedDates) ? eng.shieldedDates : {};
-    eng.lifetimeSessions = Math.max(0, Math.round(Number(eng.lifetimeSessions) || 0));
-    eng.lifetimeVolumeKg = Math.max(0, Math.round(Number(eng.lifetimeVolumeKg) || 0));
-    eng.hypes = Math.max(0, Math.round(Number(eng.hypes) || 0));
+    eng.rewardedWorkoutDates = isObject(eng.rewardedWorkoutDates) ? eng.rewardedWorkoutDates : {};
+    eng.lifetimeSessions = Math.max(0, Math.round(finiteNum(eng.lifetimeSessions, 0)));
+    eng.lifetimeVolumeKg = Math.max(0, Math.round(finiteNum(eng.lifetimeVolumeKg, 0)));
+    eng.hypes = Math.max(0, Math.round(finiteNum(eng.hypes, 0)));
     eng.lastWorkoutDate = isValidDateId(eng.lastWorkoutDate) ? eng.lastWorkoutDate : null;
 
     if (eng.xp === 0 && eng.lifetimeSessions === 0 && isObject(state.days)) {
-      seedFromHistory(state);
+      seedFromHistory(state, skipDateId);
     }
     return eng;
   }
 
   function levelInfo(xp) {
-    var safeXp = Math.max(0, Math.round(Number(xp) || 0));
+    var safeXp = Math.max(0, Math.round(finiteNum(xp, 0)));
     var entry = RANKS[0];
     for (var i = 0; i < RANKS.length; i += 1) {
       if (safeXp >= RANKS[i].minXp) entry = RANKS[i];
@@ -424,6 +439,40 @@
     var eng = ensureEngagement(state);
     var dateId = isValidDateId(info.dayId) ? info.dayId : (isValidDateId(state.activeDayId) ? state.activeDayId : currentTodayId(ctx));
 
+    var invalidReps = info.reps != null && (!Number.isFinite(Number(info.reps)) || Number(info.reps) <= 0);
+    var invalidWeight = info.weight != null && (!Number.isFinite(Number(info.weight)) || Number(info.weight) < 0);
+    if (invalidReps || invalidWeight) {
+      return {
+        xpGained: 0,
+        combo: eng.combo,
+        multiplier: comboMultiplier(eng.combo),
+        leveledUp: false,
+        levelInfo: levelInfo(eng.xp),
+        questsDone: [],
+        celebrationText: ""
+      };
+    }
+
+    if (!isObject(eng.quests[dateId])) eng.quests[dateId] = {};
+    var bucket = eng.quests[dateId];
+    var setKey = info.setKey != null && String(info.setKey).trim() ? String(info.setKey).trim() : "";
+    if (setKey) {
+      if (!isObject(bucket._rewardedSetKeys)) bucket._rewardedSetKeys = {};
+      if (bucket._rewardedSetKeys[setKey]) {
+        return {
+          xpGained: 0,
+          combo: eng.combo,
+          multiplier: comboMultiplier(eng.combo),
+          leveledUp: false,
+          levelInfo: levelInfo(eng.xp),
+          questsDone: [],
+          celebrationText: "",
+          alreadyRewarded: true
+        };
+      }
+      bucket._rewardedSetKeys[setKey] = true;
+    }
+
     var prevLevel = levelInfo(eng.xp);
     eng.combo += 1;
     if (eng.combo > eng.bestCombo) eng.bestCombo = eng.combo;
@@ -432,9 +481,7 @@
     var isPr = !!(info.pr || info.isPr);
     var hasRir = info.rir != null && info.rir !== "";
 
-    if (!isObject(eng.quests[dateId])) eng.quests[dateId] = {};
-    var bucket = eng.quests[dateId];
-    bucket._sets = Number(bucket._sets || 0) + 1;
+    bucket._sets = Math.max(0, Math.round(finiteNum(bucket._sets, 0))) + 1;
     if (hasRir) bucket._cue = true;
 
     var baseSetXp = Math.round(10 * multiplier);
@@ -447,7 +494,7 @@
     quests.forEach(function (q) {
       if (q.done && !(bucket[q.id] && bucket[q.id].rewarded)) {
         bucket[q.id] = { done: true, rewarded: true, completedAt: Date.now(), xpReward: q.xpReward };
-        questXp += Number(q.xpReward || 0);
+        questXp += Math.max(0, Math.round(finiteNum(q.xpReward, 0)));
         questsDone.push(Object.assign({}, q));
       }
     });
@@ -462,7 +509,9 @@
     if (isPr) {
       var detailParts = [];
       if (info.weight != null && info.reps != null) {
-        detailParts.push(formatLoad(ctx, info.weight) + " x " + info.reps);
+        var safeWeight = Math.max(0, finiteNum(info.weight, 0));
+        var safeReps = Math.max(0, Math.round(finiteNum(info.reps, 0)));
+        detailParts.push(formatLoad(ctx, safeWeight) + " x " + safeReps);
       }
       detailParts.push("+" + xpGained + " XP");
       pushFeed(eng, {
@@ -631,8 +680,29 @@
 
   function onWorkoutFinished(ctx, dayId, options) {
     var state = (ctx && ctx.state) || {};
-    var eng = ensureEngagement(state);
-    var dateId = isValidDateId(dayId) ? dayId : (isValidDateId(state.activeDayId) ? state.activeDayId : currentTodayId(ctx));
+    var rawDateId = isValidDateId(dayId) ? dayId : (isValidDateId(state.activeDayId) ? state.activeDayId : currentTodayId(ctx));
+    var eng = ensureEngagement(state, rawDateId);
+    var dateId = rawDateId;
+    if (isObject(eng.rewardedWorkoutDates) && eng.rewardedWorkoutDates[dateId]) {
+      return {
+        alreadyRewarded: true,
+        xpGained: 0,
+        adherenceBonus: 0,
+        pledgeFulfilled: false,
+        pledgeBonus: 0,
+        sessionVolume: 0,
+        lifetimeSessions: eng.lifetimeSessions,
+        lifetimeVolumeKg: eng.lifetimeVolumeKg,
+        tonnageLabel: tonnageEquivalent(eng.lifetimeVolumeKg),
+        shieldEarned: false,
+        shields: eng.shields,
+        pendingLoot: eng.pendingLoot,
+        leveledUp: false,
+        levelInfo: levelInfo(eng.xp),
+        feedItem: null
+      };
+    }
+
     var ds = (isObject(state.days) && isObject(state.days[dateId])) ? state.days[dateId] : {};
     var day = resolveDay(ctx, dateId);
     var keys = validCompletedKeys(ds);
@@ -641,10 +711,10 @@
     if (keys.length > 0) {
       keys.forEach(function (k) {
         var set = ds.completed[k] || {};
-        sessionVolume += Math.max(0, Number(set.weight) || 0) * Math.max(0, Number(set.reps) || 0);
+        sessionVolume += Math.max(0, finiteNum(set.weight, 0)) * Math.max(0, finiteNum(set.reps, 0));
       });
     } else if (day && ctx && typeof ctx.completedVolume === "function") {
-      sessionVolume = Math.max(0, Number(ctx.completedVolume(day)) || 0);
+      sessionVolume = Math.max(0, finiteNum(ctx.completedVolume(day), 0));
     }
 
     var plannedSets = countPlannedSets(day, ds);
@@ -664,7 +734,7 @@
       if (matchesTarget || matchesToday) {
         eng.pledge.status = "fulfilled";
         eng.pledge.fulfilledDate = dateId;
-        pledgeBonus = Number(eng.pledge.bonusXp || 150);
+        pledgeBonus = Math.max(0, Math.round(finiteNum(eng.pledge.bonusXp, 150)));
         pledgeFulfilled = true;
       }
     }
@@ -674,6 +744,8 @@
     var xpGained = baseXp + adherenceBonus + pledgeBonus;
     eng.xp += xpGained;
 
+    if (!isObject(eng.rewardedWorkoutDates)) eng.rewardedWorkoutDates = {};
+    eng.rewardedWorkoutDates[dateId] = true;
     eng.lifetimeSessions += 1;
     eng.lifetimeVolumeKg = Math.round(eng.lifetimeVolumeKg + sessionVolume);
     if (!eng.lastWorkoutDate || dateId > eng.lastWorkoutDate) eng.lastWorkoutDate = dateId;
@@ -1266,7 +1338,7 @@
         if (item.detail) html += '<div class="feed-detail">' + esc(ctx, item.detail) + '</div>';
         if (item.date) html += '<div class="feed-date">' + esc(ctx, item.date) + '</div>';
         html += '</div>';
-        html += '<button type="button" class="tool-btn feed-hype-btn" data-action="hype-feed" data-item-id="' + esc(ctx, item.id) + '" aria-label="Hype milestone">' + svgBolt() + '<span>Hype</span> <strong>' + Number(item.hypes || 0) + '</strong></button>';
+        html += '<button type="button" class="tool-btn feed-hype-btn" data-action="hype-feed" data-item-id="' + esc(ctx, item.id) + '" aria-label="Hype milestone">' + svgBolt() + '<span>Hype</span> <strong>' + Math.max(0, Math.round(finiteNum(item.hypes, 0))) + '</strong></button>';
         html += '</article>';
       });
       html += '</div>';

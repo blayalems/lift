@@ -436,8 +436,16 @@
   function migrateToV3(loaded) {
     var stateMod = window.LIFT_FEATURES && window.LIFT_FEATURES.state;
     if (stateMod && typeof stateMod.migrateState === "function") return stateMod.migrateState(loaded);
-    if (!loaded || typeof loaded !== "object") loaded = {};
-    return Object.assign({}, loaded, { v: 4, schemaVersion: 4 });
+    var safe = {};
+    if (loaded && typeof loaded === "object" && !Array.isArray(loaded)) {
+      Object.keys(loaded).forEach(function (key) {
+        if (key === "__proto__" || key === "constructor" || key === "prototype") return;
+        safe[key] = loaded[key];
+      });
+    }
+    safe.v = 4;
+    safe.schemaVersion = 4;
+    return safe;
   }
 
   function migrateV1(next) {
@@ -2169,6 +2177,12 @@
       openSheet("coach");
     } else {
       renderSheet();
+      if (sheet) {
+        var chatLog = sheet.querySelector(".coach-chat-log");
+        if (chatLog) chatLog.scrollTop = chatLog.scrollHeight;
+        var sheetBodyEl = sheet.querySelector(".sheet-body");
+        if (sheetBodyEl) sheetBodyEl.scrollTop = sheetBodyEl.scrollHeight;
+      }
       var bodyEl = document.getElementById("sheet-body");
       if (bodyEl) bodyEl.scrollTop = bodyEl.scrollHeight;
     }
@@ -2384,6 +2398,7 @@
       pendingExIndex: next ? next.exIndex : null,
       pendingSetIndex: next ? next.setIndex : null,
       restRemainingSec: remaining,
+      restEndsAt: (rest.running && remaining > 0) ? numberOr(rest.endsAt, 0) : 0,
       restLabel: formatDuration(remaining),
       unitLabel: unitLabel(),
       setText: setText,
@@ -2529,6 +2544,8 @@
       return;
     }
     if (action === "finish") {
+      var finishDs = state.activeDayId && state.days ? state.days[state.activeDayId] : null;
+      if (!finishDs || finishDs.finishedAt) return;
       finishWorkout();
       return;
     }
@@ -2695,6 +2712,7 @@
     var setXp = engagementMod && typeof engagementMod.onSetCompleted === "function"
       ? engagementMod.onSetCompleted(Object.assign({}, makeCtx(), { saveState: null }), {
           dayId: day.id,
+          setKey: key,
           pr: pr,
           rir: value.rir,
           weight: value.weight,
@@ -2760,7 +2778,7 @@
       var entry = tagSetExercise({ reps: target.reps, weight: target.weight, rir: draft.rir == null ? null : clamp(Math.round(numberOr(draft.rir, 2)), 0, 4), ts: Date.now(), pr: pr, recordType: evaluation.type, recordTypes: evaluation.types }, ex);
       ds.completed[key] = entry;
       delete ds.drafts[key];
-      loggedSets.push({ dayId: day.id, pr: pr, rir: entry.rir, weight: entry.weight, reps: entry.reps, exerciseName: ex.name });
+      loggedSets.push({ dayId: day.id, setKey: key, pr: pr, rir: entry.rir, weight: entry.weight, reps: entry.reps, exerciseName: ex.name });
     });
     if (prCount) {
       var assisted = (feature("records") && typeof feature("records").isAssisted === "function" && feature("records").isAssisted(ex)) ||
@@ -3514,6 +3532,10 @@
   }
 
   function toast(message) {
+    if (!toastRoot) return;
+    while (toastRoot.children && toastRoot.children.length >= 3) {
+      toastRoot.removeChild(toastRoot.firstChild);
+    }
     var node = document.createElement("div");
     node.className = "toast";
     node.textContent = message;
@@ -3617,9 +3639,21 @@
       finishWorkout();
     } else if (action === "reset-day") {
       if (confirm("Reset this day's logged sets, timer, readiness, and notes?")) {
-        delete state.days[state.activeDayId];
-        if (runtime.lastLog && runtime.lastLog.dayId === state.activeDayId) runtime.lastLog = null;
+        var resetDayId = state.activeDayId;
+        delete state.days[resetDayId];
+        if (runtime.lastLog && runtime.lastLog.dayId === resetDayId) runtime.lastLog = null;
+        if (runtime.summaryDayId === resetDayId) runtime.summaryDayId = null;
+        runtime.sessionQuote = null;
+        if (state.engagement) {
+          if (state.engagement.quests) delete state.engagement.quests[resetDayId];
+          if (state.engagement.rewardedWorkoutDates) delete state.engagement.rewardedWorkoutDates[resetDayId];
+        }
+        rest = idleRest();
+        saveRest();
         saveState();
+        clearWorkoutNotification();
+        releaseWakeLock();
+        syncNativeWidgetEngagement();
         render();
       }
     } else if (action === "toggle-set") {

@@ -217,10 +217,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun isTrustedOrigin(uri: Uri?): Boolean {
+        if (uri == null) return false
+        val path = uri.path
+        return uri.scheme == "https" && uri.host == "blayalems.github.io" && (uri.port == -1 || uri.port == 443) &&
+            (path.isNullOrEmpty() || path == "/" || path == "/lift" || path.startsWith("/lift/"))
+    }
+
     // ── WebView clients ────────────────────────────────────────────────────────
 
     private inner class LiftWebViewClient : WebViewClient() {
-        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = false
+        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+            val target = request.url
+            if (isTrustedOrigin(target)) return false
+            if (request.isForMainFrame && (target.scheme == "https" || target.scheme == "http")) {
+                runCatching { startActivity(Intent(Intent.ACTION_VIEW, target)) }
+            }
+            return true
+        }
 
         override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
             super.doUpdateVisitedHistory(view, url, isReload)
@@ -229,6 +243,8 @@ class MainActivity : AppCompatActivity() {
 
         override fun onPageFinished(view: WebView, url: String) {
             super.onPageFinished(view, url)
+            val parsed = runCatching { Uri.parse(url) }.getOrNull()
+            if (!isTrustedOrigin(parsed)) return
             view.evaluateJavascript("""
                 (function(){
                     window.LIFT_ANDROID_SDK=${Build.VERSION.SDK_INT};
@@ -270,8 +286,7 @@ class MainActivity : AppCompatActivity() {
 
     private inner class LiftChromeClient : WebChromeClient() {
         override fun onPermissionRequest(request: PermissionRequest) {
-            val uri = request.origin
-            if (uri != null && uri.scheme == "https" && uri.host == "blayalems.github.io" && (uri.port == -1 || uri.port == 443)) {
+            if (isTrustedOrigin(request.origin)) {
                 request.grant(request.resources)
             } else {
                 request.deny()

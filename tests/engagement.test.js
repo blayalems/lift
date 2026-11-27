@@ -54,6 +54,7 @@ describe("habit psychology & momentum engagement engine", () => {
       unlockedLoot: [],
       feed: [],
       shieldedDates: {},
+      rewardedWorkoutDates: {},
       lifetimeSessions: 0,
       lifetimeVolumeKg: 0,
       hypes: 0,
@@ -252,9 +253,10 @@ describe("habit psychology & momentum engagement engine", () => {
     expect(fourth.shieldEarned).toBe(true);
     expect(ctx.state.engagement.shields).toBe(2);
 
-    // Feed never exceeds 40 entries
+    // Feed never exceeds 40 entries (distinct session dates)
     for (let i = 0; i < 45; i += 1) {
-      engagement.onWorkoutFinished(ctx, "2026-12-01");
+      const dateId = new Date(Date.UTC(2026, 11, 1 + i)).toISOString().slice(0, 10);
+      engagement.onWorkoutFinished(ctx, dateId);
     }
     expect(ctx.state.engagement.feed.length).toBeLessThanOrEqual(40);
     expect(ctx.state.engagement.shields).toBe(3); // capped at maxShields

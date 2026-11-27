@@ -565,21 +565,27 @@
       ? Math.round((trained7 / planned7) * 100)
       : (isTrainedSession(stateDays[refDate]) ? 100 : (daysSinceLast != null && daysSinceLast >= 7 ? 0 : adherence14d));
 
-    // Walk backward through past training days (< refDate) for consecutive missed/unlogged sessions
+    // Walk backward through past training days (< refDate) for consecutive missed/unlogged sessions.
+    // Training today breaks any missed streak; unknown data-loss placeholders and extended-layoff
+    // historical gaps (>= 14d without activity) never fabricate an active missed streak.
     var missedStreak = 0;
-    var pastTraining = entries.filter(function (e) {
-      return e.day.id < refDate && (e.day.exercises || []).length > 0;
-    }).sort(function (a, b) { return b.day.id.localeCompare(a.day.id); });
-    for (var i = 0; i < pastTraining.length; i += 1) {
-      var id = pastTraining[i].day.id;
-      var ds = stateDays[id] || {};
-      if (isTrainedSession(ds)) break;
-      if (ds.status === "missed" || (lastWorkoutDate && id > lastWorkoutDate)) {
-        missedStreak += 1;
-      } else if (!hasTrainingHistory) {
-        break;
-      } else {
-        missedStreak += 1;
+    if (!isTrainedSession(stateDays[refDate])) {
+      var pastTraining = entries.filter(function (e) {
+        return e.day.id < refDate && (e.day.exercises || []).length > 0;
+      }).sort(function (a, b) { return b.day.id.localeCompare(a.day.id); });
+      var extendedLayoff = daysSinceLast != null && daysSinceLast >= 14;
+      for (var i = 0; i < pastTraining.length; i += 1) {
+        var id = pastTraining[i].day.id;
+        if (lastWorkoutDate && id <= lastWorkoutDate) break;
+        var ds = stateDays[id] || {};
+        if (isTrainedSession(ds) || ds.status === "unknown") break;
+        if (ds.status === "missed") {
+          missedStreak += 1;
+        } else if (hasTrainingHistory && !extendedLayoff && lastWorkoutDate && id > lastWorkoutDate) {
+          missedStreak += 1;
+        } else {
+          break;
+        }
       }
     }
 
@@ -593,7 +599,7 @@
     if (daysSinceLast == null) {
       risk += phase === "reentry" ? 10 : 0;
     } else if (daysSinceLast >= 30) {
-      risk += 45;
+      risk += 55;
     } else if (daysSinceLast >= 14) {
       risk += 42;
     } else if (daysSinceLast >= 7) {
@@ -1274,6 +1280,10 @@
     if (actionType === "autoregulate-light") {
       var modifiedLight = 0;
       day.exercises.forEach(function (ex, exIndex) {
+        var existingTarget = ds.adaptiveTargets[String(exIndex)];
+        if (existingTarget && (existingTarget._lightened || existingTarget.action === "reduced-volume")) {
+          return;
+        }
         var base = currentExerciseBaseline(ctx, day, ds, ex, exIndex);
         var plannedLen = (ex.sets || []).length || base.sets || 1;
         var currentSets = Math.min(plannedLen, base.sets || plannedLen);
@@ -1283,6 +1293,7 @@
         var nextSets = Math.max(1, doneCount, currentSets - 1);
         ds.adaptiveTargets[String(exIndex)] = {
           action: "reduced-volume",
+          _lightened: true,
           weight: nextWeight,
           reps: base.reps,
           sets: nextSets,
