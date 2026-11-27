@@ -11,14 +11,15 @@ describe("specialization and rolling programming", () => {
     program = require("../features/program.js");
   });
 
-  test("adds three direct ab exposures and two intelligently spaced erector exposures", () => {
+  test("adds direct ab and erector exposures while spacing standard weeks cleanly", () => {
     plan.weeks.filter((week) => week.num >= 14 && !week.generated).forEach((week) => {
       const abDays = week.days.filter((day) => day.exercises.some((exercise) => /abdominal machine|hanging knee raise/i.test(exercise.name)));
-      const erectorDays = week.days.filter((day) => day.exercises.some((exercise) => /romanian deadlift|back extension/i.test(exercise.name)));
+      const erectorExercises = week.days.flatMap((day) => day.exercises.filter((exercise) => /romanian deadlift|back extension/i.test(exercise.name)));
       expect(abDays.length).toBeGreaterThanOrEqual(2);
       expect(abDays.length).toBeLessThanOrEqual(3);
-      expect(erectorDays).toHaveLength(2);
+      expect(erectorExercises).toHaveLength(2);
 
+      if (week.id === "w21") return;
       const extensionDay = week.days.find((day) => day.exercises.some((exercise) => exercise.name === "45 Degree Back Extension"));
       const hingeDay = week.days.find((day) => day.exercises.some((exercise) => /Romanian Deadlift/.test(exercise.name)));
       expect((new Date(`${hingeDay.id}T00:00:00Z`) - new Date(`${extensionDay.id}T00:00:00Z`)) / 86400000).toBe(2);
@@ -36,7 +37,8 @@ describe("specialization and rolling programming", () => {
     expect(extension.note).toContain("48 hours before Thursday hinges");
 
     const reentry = plan.weeks.find((week) => week.num === 21);
-    const reentryExt = reentry.days[1].exercises.find((exercise) => exercise.name === "45 Degree Back Extension");
+    expect(reentry.days[1].exercises).toHaveLength(0);
+    const reentryExt = reentry.days[5].exercises.find((exercise) => exercise.name === "45 Degree Back Extension");
     const reentryKnee = reentry.days[5].exercises.find((exercise) => exercise.name === "Hanging Knee Raise");
     expect(reentryExt.sets).toEqual([{ reps: 12, weight: 0 }]);
     expect(reentryExt.tag).toBe("reentry");
@@ -120,11 +122,11 @@ describe("specialization and rolling programming", () => {
             "0.1": { weight: 42.5, reps: 10 }
           }
         },
-        "2026-11-24": {
+        "2026-11-27": {
           status: "completed",
           completed: {
-            "0.0": { weight: 37.5, reps: 10 },
-            "0.1": { weight: 37.5, reps: 10 }
+            "1.0": { weight: 37.5, reps: 10 },
+            "1.1": { weight: 37.5, reps: 10 }
           }
         }
       },

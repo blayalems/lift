@@ -36,21 +36,43 @@ describe("May 2026-January 2027 training plan", () => {
     expect(bridge.days[5].exercises[0].sets).toEqual([{ reps: 8, weight: 25 }, { reps: 8, weight: 25 }]);
   });
 
-  test("uses six training days, fixed main days, and Sunday rest in Weeks 11-30", () => {
+  test("uses six training days, fixed main days, and Sunday rest in standard Weeks 11-30 with Week 21 compressed to Fri-Sat", () => {
     plan.weeks.slice(10).forEach((week) => {
       expect(week.days).toHaveLength(7);
       expect(week.days.map((day) => day.dow)).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
+      if (week.id === "w21") {
+        expect(week.days.map((day) => day.type)).toEqual(["rest", "rest", "rest", "rest", "legs", "chest", "rest"]);
+        expect(week.days.filter((day) => day.exercises.length > 0).map((day) => day.dow)).toEqual(["Fri", "Sat"]);
+        expect(week.days.filter((day) => day.type === "rest").map((day) => day.dow)).toEqual(["Mon", "Tue", "Wed", "Thu", "Sun"]);
+        return;
+      }
       expect(week.days.map((day) => day.type)).toEqual(["legs", "pull", "primer", "ham", "primer", "chest", "rest"]);
       expect(week.days.filter((day) => day.exercises.length > 0).map((day) => day.dow)).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]);
       expect(week.days.filter((day) => day.type === "rest").map((day) => day.dow)).toEqual(["Sun"]);
     });
   });
 
-  test("trains each priority area and arms at least twice weekly in Weeks 14-30", () => {
+  test("trains each priority area and arms at least twice weekly in standard Weeks 14-30 and covers them cleanly in compressed Week 21", () => {
     plan.weeks.slice(13).forEach((week) => {
       const exposureDays = (pattern) => week.days
         .filter((day) => day.exercises.some((exercise) => pattern.test(exercise.name)))
         .map((day) => day.dow);
+
+      if (week.id === "w21") {
+        expect(exposureDays(/^Incline DB Press$/)).toEqual(["Fri", "Sat"]);
+        expect(exposureDays(/^Machine Leg Press$/)).toEqual(["Fri"]);
+        expect(exposureDays(/^Lat Pulldown$/)).toEqual(["Fri"]);
+        expect(exposureDays(/^Seated Cable Row$/)).toEqual(["Fri"]);
+        expect(exposureDays(/^DB Bicep Curls$/)).toEqual(["Fri"]);
+        expect(exposureDays(/^Abdominal Machine$/)).toEqual(["Fri"]);
+        expect(exposureDays(/^DB Romanian Deadlift$/)).toEqual(["Sat"]);
+        expect(exposureDays(/^High Cable Row \/ Face Pull$/)).toEqual(["Sat"]);
+        expect(exposureDays(/^Cable Lateral Raises$/)).toEqual(["Sat"]);
+        expect(exposureDays(/^Tricep Pushdowns$/)).toEqual(["Sat"]);
+        expect(exposureDays(/^45 Degree Back Extension$/)).toEqual(["Sat"]);
+        expect(exposureDays(/^Hanging Knee Raise$/)).toEqual(["Sat"]);
+        return;
+      }
 
       expect(exposureDays(/^Incline DB Press$/)).toEqual(["Wed", "Sat"]);
       expect(exposureDays(/^(Lat Pulldown|One-Arm Cable Pulldown)$/)).toEqual(["Tue", "Fri"]);
@@ -122,9 +144,22 @@ describe("May 2026-January 2027 training plan", () => {
     ]);
     expect(reentryBlock[0].title).toBe("Week 21 - Gym Reentry Ramp");
     expect(reentryBlock[0].notice).toContain("70-75%");
-    expect(reentryBlock[0].days[0].exercises[0].sets).toEqual([{ reps: 10, weight: 75 }, { reps: 10, weight: 75 }]);
+    expect(reentryBlock[0].days.slice(0, 4).every((d) => d.type === "rest" && d.exercises.length === 0)).toBe(true);
+    expect(reentryBlock[0].days[4].id).toBe("2026-11-27");
+    expect(reentryBlock[0].days[4].exercises[0].name).toBe("Machine Leg Press");
+    expect(reentryBlock[0].days[4].exercises[0].sets).toEqual([{ reps: 10, weight: 75 }, { reps: 10, weight: 75 }]);
+    expect(reentryBlock[0].days[4].exercises[1].name).toBe("Lat Pulldown");
+    expect(reentryBlock[0].days[4].exercises[1].sets).toEqual([{ reps: 10, weight: 37.5 }, { reps: 10, weight: 37.5 }]);
+    expect(reentryBlock[0].days[4].exercises[2].name).toBe("Incline DB Press");
+    expect(reentryBlock[0].days[4].exercises[2].sets).toEqual([{ reps: 10, weight: 16 }, { reps: 10, weight: 16 }]);
+    expect(reentryBlock[0].days[5].id).toBe("2026-11-28");
+    expect(reentryBlock[0].days[5].exercises[0].name).toBe("Incline DB Press");
     expect(reentryBlock[0].days[5].exercises[0].sets).toEqual([
       { reps: 8, weight: 20 }, { reps: 8, weight: 20 }, { reps: 8, weight: 20 }
+    ]);
+    expect(reentryBlock[0].days[5].exercises[1].name).toBe("DB Romanian Deadlift");
+    expect(reentryBlock[0].days[5].exercises[1].sets).toEqual([
+      { reps: 10, weight: 30 }, { reps: 10, weight: 30 }
     ]);
     expect(reentryBlock[0].days[5].exercises.some((ex) => ex.name === "Assisted Dips")).toBe(false);
     expect(reentryBlock[4].days[5].exercises.some((ex) => ex.name === "Assisted Dips")).toBe(false);

@@ -35,7 +35,7 @@
   }
 
   function resolveVersion(ctx) {
-    return (ctx && ctx.appVersion) || window.LIFT_APP_VERSION || "1.9.0";
+    return (ctx && ctx.appVersion) || window.LIFT_APP_VERSION || "1.9.1";
   }
 
   function csvCell(value) {

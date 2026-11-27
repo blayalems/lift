@@ -1,6 +1,6 @@
 {
   "name": "app",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "description": "Local-first adaptive hypertrophy and recomposition companion with honest history recovery, workout progression, cardio, protein, body trends, and layered backups.",
   "main": "app.js",
   "directories": {
